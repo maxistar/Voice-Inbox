@@ -1,3 +1,5 @@
+import java.io.File
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -13,6 +15,9 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -33,6 +38,18 @@ android {
     kotlinOptions {
         jvmTarget = "11"
     }
+    sourceSets {
+        getByName("main") {
+            jniLibs.srcDirs("src/main/jniLibs")
+        }
+    }
+    packaging {
+        jniLibs {
+            useLegacyPackaging = false
+            keepDebugSymbols += "**/*.so"
+        }
+    }
+    ndkVersion = "30.0.14904198"
 }
 
 dependencies {
@@ -42,7 +59,65 @@ dependencies {
     implementation(libs.material)
     implementation(libs.androidx.activity)
     implementation(libs.androidx.constraintlayout)
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.22.0")
+    implementation("androidx.work:work-runtime-ktx:2.10.1")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+}
+
+val ortNative: Configuration by configurations.creating
+dependencies {
+    ortNative("com.microsoft.onnxruntime:onnxruntime-android:1.22.0")
+}
+
+val extractOrt by tasks.registering(Copy::class) {
+    from(ortNative.elements.map { files -> files.map { zipTree(it) } })
+    into(layout.buildDirectory.dir("ort-extracted"))
+}
+
+val cargoNdkBuild by tasks.registering(Exec::class) {
+    dependsOn(extractOrt)
+    inputs.files(
+        rootProject.fileTree("src") { include("**/*.rs") },
+        rootProject.file("Cargo.toml"),
+        rootProject.file("Cargo.lock"),
+        rootProject.file("build.rs"),
+        rootProject.fileTree("transcribe-rs") { include("**/*.rs", "**/Cargo.toml") },
+    )
+    workingDir = rootProject.projectDir
+
+    val ndkDir = project.findProperty("ndk.dir")?.toString()
+        ?: System.getenv("ANDROID_NDK_HOME")
+        ?: System.getenv("ANDROID_NDK")
+        ?: android.ndkDirectory.absolutePath
+    environment("ANDROID_NDK_HOME", ndkDir)
+
+    val extractDir = layout.buildDirectory.dir("ort-extracted").get().asFile
+    environment("ORT_LIB_LOCATION", File(extractDir, "jni/arm64-v8a").absolutePath)
+    environment("ORT_INCLUDE_DIR", File(extractDir, "headers").absolutePath)
+
+    val jniLibsDir = project.file("src/main/jniLibs")
+    commandLine(
+        "cargo", "ndk",
+        "-t", "arm64-v8a",
+        "-o", jniLibsDir.absolutePath,
+        "build", "--release",
+    )
+
+    doLast {
+        val prebuiltDir = file("$ndkDir/toolchains/llvm/prebuilt")
+        val libcpp = prebuiltDir.listFiles()
+            ?.map { File(it, "sysroot/usr/lib/aarch64-linux-android/libc++_shared.so") }
+            ?.firstOrNull(File::exists)
+            ?: throw GradleException("libc++_shared.so not found under ${prebuiltDir.absolutePath}")
+        val destination = File(jniLibsDir, "arm64-v8a").apply { mkdirs() }
+        libcpp.copyTo(File(destination, "libc++_shared.so"), overwrite = true)
+    }
+    outputs.dir(jniLibsDir)
+}
+
+tasks.named("preBuild") {
+    dependsOn(cargoNdkBuild)
 }
