@@ -2,9 +2,18 @@ package me.maxistar.watchface.notesrecognition
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertArrayEquals
 import org.junit.Test
 
 class FileSelectionRulesTest {
+    @Test
+    fun outputPickerAcceptsPlainTextAndMarkdown() {
+        assertArrayEquals(
+            arrayOf("text/plain", "text/markdown", "text/x-markdown"),
+            FileSelectionRules.outputMimeTypes,
+        )
+    }
+
     @Test
     fun providerDisplayNameWins() {
         assertEquals("notes.txt", FileSelectionRules.displayName("notes.txt", "fallback"))

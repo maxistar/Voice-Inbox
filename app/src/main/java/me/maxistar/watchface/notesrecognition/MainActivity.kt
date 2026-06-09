@@ -67,7 +67,7 @@ class MainActivity : AppCompatActivity() {
         documentAccess = DocumentAccess(contentResolver)
 
         downloadModel.setOnClickListener { SpeechModelDownloadWorker.enqueue(this) }
-        selectOutput.setOnClickListener { outputPicker.launch(arrayOf("text/plain")) }
+        selectOutput.setOnClickListener { outputPicker.launch(FileSelectionRules.outputMimeTypes) }
         selectAudio.setOnClickListener { audioPicker.launch(SUPPORTED_AUDIO_MIME_TYPES) }
 
         observeModelInstallation()

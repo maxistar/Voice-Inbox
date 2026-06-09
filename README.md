@@ -1,12 +1,12 @@
 # Notes Recognition
 
 Android application for offline transcription of existing audio recordings into
-an existing plain-text file.
+an existing plain-text (`.txt`) or Markdown (`.md`) file.
 
 ## Workflow
 
 1. Download and verify the speech model on first launch.
-2. Select an existing writable text file.
+2. Select an existing writable `.txt` or `.md` file.
 3. Select an audio file.
 4. The application transcribes the recording in foreground work and appends one
    entry containing the audio filename, recording time, and recognized text.
