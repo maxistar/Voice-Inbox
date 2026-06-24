@@ -1,3 +1,11 @@
 <resources>
     <string name="app_name">Notes Recognition</string>
+    <string name="menu_select_output">Select output file</string>
+    <string name="menu_change_output">Change output file</string>
+    <string name="menu_select_folder">Select audio folder</string>
+    <string name="menu_change_folder">Change audio folder</string>
+    <string name="output_not_selected">Output: not selected. Use the menu to select an output file.</string>
+    <string name="output_selected">Output: %1$s</string>
+    <string name="folder_not_selected">Audio folder: not selected. Use the menu to select an audio folder.</string>
+    <string name="folder_selected">Audio folder: %1$s</string>
 </resources>

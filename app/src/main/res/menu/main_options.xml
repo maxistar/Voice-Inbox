@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/menuSelectOutput"
+        android:title="@string/menu_select_output" />
+
+    <item
+        android:id="@+id/menuSelectFolder"
+        android:title="@string/menu_select_folder" />
+</menu>

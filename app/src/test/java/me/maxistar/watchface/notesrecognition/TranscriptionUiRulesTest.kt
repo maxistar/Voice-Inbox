@@ -5,11 +5,59 @@ import org.junit.Test
 
 class TranscriptionUiRulesTest {
     @Test
-    fun controlsRequireModelAndOutputInOrder() {
-        assertEquals(FileControlState(false, false), TranscriptionUiRules.fileControls(false, false, false))
-        assertEquals(FileControlState(true, false), TranscriptionUiRules.fileControls(true, false, false))
-        assertEquals(FileControlState(true, true), TranscriptionUiRules.fileControls(true, true, false))
-        assertEquals(FileControlState(false, false), TranscriptionUiRules.fileControls(true, true, true))
+    fun controlsRequireModelSelectionsPendingWorkAndIdleState() {
+        assertEquals(
+            CatalogControlState(false, false, false, false, false),
+            controls(modelReady = false),
+        )
+        assertEquals(
+            CatalogControlState(true, true, false, false, false),
+            controls(modelReady = true),
+        )
+        assertEquals(
+            CatalogControlState(true, true, true, false, true),
+            controls(modelReady = true, output = true, folder = true),
+        )
+        assertEquals(
+            CatalogControlState(true, true, true, true, true),
+            controls(modelReady = true, output = true, folder = true, pending = 2),
+        )
+        assertEquals(
+            CatalogControlState(false, false, false, false, false),
+            controls(
+                modelReady = true,
+                output = true,
+                folder = true,
+                pending = 2,
+                active = true,
+            ),
+        )
+    }
+
+    @Test
+    fun selectionControlsAreDisabledWhileScanningOrTranscribing() {
+        assertEquals(
+            CatalogControlState(false, false, false, false, false),
+            TranscriptionUiRules.catalogControls(
+                modelReady = true,
+                outputSelected = true,
+                folderSelected = true,
+                pendingCount = 2,
+                transcriptionActive = true,
+                scanning = false,
+            ),
+        )
+        assertEquals(
+            CatalogControlState(false, false, false, false, false),
+            TranscriptionUiRules.catalogControls(
+                modelReady = true,
+                outputSelected = true,
+                folderSelected = true,
+                pendingCount = 2,
+                transcriptionActive = false,
+                scanning = true,
+            ),
+        )
     }
 
     @Test
@@ -18,4 +66,19 @@ class TranscriptionUiRulesTest {
         assertEquals(100, TranscriptionUiRules.percent(20_000, 10_000))
         assertEquals(null, TranscriptionUiRules.percent(1, null))
     }
+
+    private fun controls(
+        modelReady: Boolean,
+        output: Boolean = false,
+        folder: Boolean = false,
+        pending: Int = 0,
+        active: Boolean = false,
+    ) = TranscriptionUiRules.catalogControls(
+        modelReady,
+        output,
+        folder,
+        pending,
+        active,
+        scanning = false,
+    )
 }

@@ -31,4 +31,18 @@ class FileSelectionRulesTest {
         assertNull(FileSelectionRules.restoredOutputUri("content://output", false))
         assertNull(FileSelectionRules.restoredOutputUri(null, true))
     }
+
+    @Test
+    fun supportedAudioUsesMimeOrKnownExtensionAndRejectsDirectories() {
+        assertEquals(true, FileSelectionRules.isSupportedAudio("audio/wav", "recording.bin"))
+        assertEquals(true, FileSelectionRules.isSupportedAudio(null, "recording.M4A"))
+        assertEquals(false, FileSelectionRules.isSupportedAudio("text/plain", "notes.txt"))
+        assertEquals(
+            false,
+            FileSelectionRules.isSupportedAudio(
+                "vnd.android.document/directory",
+                "nested.wav",
+            ),
+        )
+    }
 }

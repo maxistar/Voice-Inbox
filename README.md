@@ -1,19 +1,42 @@
 # Notes Recognition
 
-Android application for offline transcription of existing audio recordings into
-an existing plain-text (`.txt`) or Markdown (`.md`) file.
+Android application for incrementally transcribing a folder of audio recordings
+into an existing plain-text (`.txt`) or Markdown (`.md`) file.
 
 ## Workflow
 
 1. Download and verify the speech model on first launch.
 2. Select an existing writable `.txt` or `.md` file.
-3. Select an audio file.
-4. The application transcribes the recording in foreground work and appends one
-   entry containing the audio filename, recording time, and recognized text.
+3. Select a folder containing audio recordings.
+4. Review discovered recordings in the **New** tab and choose **Transcribe all**.
+5. The application processes new recordings sequentially in foreground work and
+   appends one entry per successful file containing its filename, recording
+   time, and recognized text.
 
 File selection remains disabled until the model is installed and loaded. The
 application preserves existing text and separates each new entry with one blank
-line.
+line. Folder scanning runs when the application starts and when **Refresh** is
+selected. It scans direct children only and does not traverse nested folders.
+
+## Incremental Catalog
+
+The application stores folder entries and processing state in a private SQLite
+database. The **New** tab contains new, changed, processing, and failed files.
+The **Processed** tab contains successful files. A failed file is excluded from
+**Transcribe all** until its individual **Retry** action is selected.
+
+Files are identified by provider URI and considered changed when their reported
+size or modification time changes. Providers that do not expose reliable
+metadata can therefore hide a content-only change. Full content hashing is not
+performed. Missing files remain in private catalog history but are hidden from
+both tabs.
+
+Every successful reprocessing appends a new entry. The application never
+searches, replaces, or deletes previous Markdown content because the document
+may be edited independently. A process failure after an append succeeds but
+before SQLite records success can make the same file eligible again and produce
+a duplicate entry; generic document providers cannot make those two updates
+atomic.
 
 ## Supported Audio
 
