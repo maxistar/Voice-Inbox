@@ -74,29 +74,13 @@
             android:layout_marginTop="4dp"
             android:text="@string/folder_not_selected" />
 
-        <LinearLayout
+        <Button
+            android:id="@+id/transcribeAll"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:orientation="horizontal">
-
-            <Button
-                android:id="@+id/refreshFolder"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:enabled="false"
-                android:text="Refresh" />
-
-            <Button
-                android:id="@+id/transcribeAll"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:layout_weight="1"
-                android:enabled="false"
-                android:text="Transcribe all" />
-        </LinearLayout>
+            android:enabled="false"
+            android:text="Transcribe all" />
 
         <LinearLayout
             android:layout_width="match_parent"

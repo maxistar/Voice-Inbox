@@ -26,7 +26,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusProgress: ProgressBar
     private lateinit var statusMeta: TextView
     private lateinit var downloadModel: Button
-    private lateinit var refreshFolder: Button
     private lateinit var transcribeAll: Button
     private lateinit var outputName: TextView
     private lateinit var folderName: TextView
@@ -102,7 +101,6 @@ class MainActivity : AppCompatActivity() {
         catalog = AudioCatalogRepository(catalogDatabase)
 
         downloadModel.setOnClickListener { SpeechModelDownloadWorker.enqueue(this) }
-        refreshFolder.setOnClickListener { scanFolder() }
         transcribeAll.setOnClickListener {
             val folder = folderUri ?: return@setOnClickListener
             val output = outputUri ?: return@setOnClickListener
@@ -136,6 +134,12 @@ class MainActivity : AppCompatActivity() {
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean =
         when (item.itemId) {
+            R.id.menuRefreshFolder -> {
+                if (currentControls().refreshEnabled) {
+                    scanFolder()
+                }
+                true
+            }
             R.id.menuSelectOutput -> {
                 if (currentControls().outputEnabled) {
                     outputPicker.launch(FileSelectionRules.outputMimeTypes)
@@ -162,7 +166,6 @@ class MainActivity : AppCompatActivity() {
         statusProgress = findViewById(R.id.statusProgress)
         statusMeta = findViewById(R.id.statusMeta)
         downloadModel = findViewById(R.id.downloadModel)
-        refreshFolder = findViewById(R.id.refreshFolder)
         transcribeAll = findViewById(R.id.transcribeAll)
         outputName = findViewById(R.id.outputName)
         folderName = findViewById(R.id.folderName)
@@ -521,7 +524,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateControls() {
         val controls = currentControls()
-        refreshFolder.isEnabled = controls.refreshEnabled
         transcribeAll.isEnabled = controls.transcribeAllEnabled
         for (index in 0 until fileList.childCount) {
             val row = fileList.getChildAt(index) as? LinearLayout ?: continue
@@ -575,6 +577,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateMenu(menu: Menu) {
         val controls = currentControls()
+        menu.findItem(R.id.menuRefreshFolder)?.isEnabled = controls.refreshEnabled
         menu.findItem(R.id.menuSelectOutput)?.apply {
             isEnabled = controls.outputEnabled
             setTitle(if (outputUri == null) R.string.menu_select_output else R.string.menu_change_output)

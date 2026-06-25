@@ -19,6 +19,10 @@ class TranscriptionUiRulesTest {
             controls(modelReady = true, output = true, folder = true),
         )
         assertEquals(
+            CatalogControlState(true, true, true, false, false),
+            controls(modelReady = true, folder = true),
+        )
+        assertEquals(
             CatalogControlState(true, true, true, true, true),
             controls(modelReady = true, output = true, folder = true, pending = 2),
         )

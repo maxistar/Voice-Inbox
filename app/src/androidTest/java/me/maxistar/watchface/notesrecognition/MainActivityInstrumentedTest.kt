@@ -5,6 +5,7 @@ import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.Espresso.openActionBarOverflowOrOptionsMenu
 import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.espresso.matcher.ViewMatchers.withContentDescription
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.espresso.matcher.ViewMatchers.withText
@@ -21,7 +22,7 @@ class MainActivityInstrumentedTest {
             onView(withId(R.id.statusTitle)).check(matches(isDisplayed()))
             onView(withText(R.string.output_not_selected)).check(matches(isDisplayed()))
             onView(withText(R.string.folder_not_selected)).check(matches(isDisplayed()))
-            onView(withId(R.id.refreshFolder)).check(matches(isDisplayed()))
+            onView(withContentDescription(R.string.menu_refresh_folder)).check(matches(isDisplayed()))
             onView(withId(R.id.transcribeAll)).check(matches(isDisplayed()))
 
             openActionBarOverflowOrOptionsMenu(
