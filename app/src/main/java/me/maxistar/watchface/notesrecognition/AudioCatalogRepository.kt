@@ -10,11 +10,11 @@ class AudioCatalogRepository(
     fun newEntries(folderUri: String): List<AudioCatalogEntry> =
         query(
             folderUri,
-            setOf(AudioFileState.PENDING, AudioFileState.PROCESSING, AudioFileState.FAILED),
+            setOf(AudioFileState.PENDING, AudioFileState.PROCESSING),
         )
 
     fun processedEntries(folderUri: String): List<AudioCatalogEntry> =
-        query(folderUri, setOf(AudioFileState.PROCESSED))
+        query(folderUri, setOf(AudioFileState.PROCESSED, AudioFileState.FAILED))
 
     fun missingEntries(folderUri: String): List<AudioCatalogEntry> =
         query(folderUri, setOf(AudioFileState.MISSING))

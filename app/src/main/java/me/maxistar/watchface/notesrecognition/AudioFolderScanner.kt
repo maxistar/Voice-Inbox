@@ -72,8 +72,10 @@ class AudioFolderScanner(
             val modifiedIndex =
                 it.getColumnIndex(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
             while (it.moveToNext()) {
+                val displayName = it.getString(nameIndex)
+                if (displayName?.startsWith(".") == true) continue
                 val mime = it.getString(mimeIndex)
-                if (!FileSelectionRules.isSupportedAudio(mime, it.getString(nameIndex))) continue
+                if (!FileSelectionRules.isSupportedAudio(mime, displayName)) continue
                 val childUri = DocumentsContract.buildDocumentUriUsingTree(
                     treeUri,
                     it.getString(idIndex),
@@ -81,7 +83,7 @@ class AudioFolderScanner(
                 results += ScannedAudioFile(
                     folderUri = folderUri,
                     documentUri = childUri.toString(),
-                    displayName = it.getString(nameIndex) ?: "audio",
+                    displayName = displayName ?: "audio",
                     mimeType = mime,
                     fingerprint = AudioFileFingerprint(
                         sizeBytes = it.nullableLong(sizeIndex),

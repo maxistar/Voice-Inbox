@@ -9,6 +9,7 @@ import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.hamcrest.Matchers.containsString
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -28,6 +29,35 @@ class MainActivityInstrumentedTest {
             )
             onView(withText(R.string.menu_select_output)).check(matches(isDisplayed()))
             onView(withText(R.string.menu_select_folder)).check(matches(isDisplayed()))
+        }
+    }
+
+    @Test
+    fun failedRowsShowErrorAndRetryAction() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val entry = AudioCatalogEntry(
+                    id = 42,
+                    folderUri = "content://folder",
+                    documentUri = "content://audio/broken.wav",
+                    displayName = "broken.wav",
+                    mimeType = "audio/wav",
+                    fingerprint = AudioFileFingerprint(sizeBytes = 1024, modifiedMillis = 10),
+                    state = AudioFileState.FAILED,
+                    stateBeforeMissing = null,
+                    lastError = "decode failed",
+                    processedAtMillis = null,
+                )
+                val row = MainActivity::class.java
+                    .getDeclaredMethod("createEntryView", AudioCatalogEntry::class.java)
+                    .apply { isAccessible = true }
+                    .invoke(activity, entry) as android.view.View
+                activity.findViewById<android.widget.LinearLayout>(R.id.fileList).addView(row)
+            }
+
+            onView(withText("broken.wav")).check(matches(isDisplayed()))
+            onView(withText(containsString("decode failed"))).check(matches(isDisplayed()))
+            onView(withText("Retry")).check(matches(isDisplayed()))
         }
     }
 }

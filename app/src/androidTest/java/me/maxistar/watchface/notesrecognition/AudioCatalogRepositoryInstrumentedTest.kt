@@ -73,19 +73,25 @@ class AudioCatalogRepositoryInstrumentedTest {
         repository.markFailed(entry.id, "decode failed")
 
         repository.reconcile(FOLDER, listOf(scanned("one.wav", 10)))
-        assertEquals(AudioFileState.FAILED, repository.newEntries(FOLDER).single().state)
+        assertTrue(repository.newEntries(FOLDER).isEmpty())
+        val failed = repository.processedEntries(FOLDER).single()
+        assertEquals(AudioFileState.FAILED, failed.state)
+        assertEquals("decode failed", failed.lastError)
 
         repository.reconcile(FOLDER, emptyList())
         assertTrue(repository.newEntries(FOLDER).isEmpty())
+        assertTrue(repository.processedEntries(FOLDER).isEmpty())
         assertEquals(AudioFileState.MISSING, repository.missingEntries(FOLDER).single().state)
 
         repository.reconcile(FOLDER, listOf(scanned("one.wav", 10)))
-        val restored = repository.newEntries(FOLDER).single()
+        assertTrue(repository.newEntries(FOLDER).isEmpty())
+        val restored = repository.processedEntries(FOLDER).single()
         assertEquals(AudioFileState.FAILED, restored.state)
         assertEquals("decode failed", restored.lastError)
 
         assertTrue(repository.resetForRetry(restored.id))
         assertEquals(AudioFileState.PENDING, repository.newEntries(FOLDER).single().state)
+        assertTrue(repository.processedEntries(FOLDER).isEmpty())
     }
 
     @Test

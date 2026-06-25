@@ -51,6 +51,7 @@ class TestAudioDocumentsProvider : DocumentsProvider() {
             ROOT_ID -> {
                 addDocument(WAV_ID, "recording.wav", "audio/wav", 100, 10)
                 addDocument(M4A_ID, "recording.m4a", "audio/mp4", 200, 20)
+                addDocument(HIDDEN_AUDIO_ID, ".hidden.wav", "audio/wav", 400, 50)
                 addDocument(TEXT_ID, "notes.txt", "text/plain", 20, 30)
                 addDocument(NESTED_ID, "nested", DocumentsContract.Document.MIME_TYPE_DIR)
             }
@@ -93,6 +94,7 @@ class TestAudioDocumentsProvider : DocumentsProvider() {
         const val ROOT_ID = "root"
         private const val WAV_ID = "wav"
         private const val M4A_ID = "m4a"
+        private const val HIDDEN_AUDIO_ID = "hidden"
         private const val TEXT_ID = "text"
         private const val NESTED_ID = "nested"
         private const val NESTED_AUDIO_ID = "nested/audio"
