@@ -21,16 +21,15 @@ import androidx.work.WorkManager
 import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
-    private lateinit var modelStatus: TextView
-    private lateinit var modelProgress: ProgressBar
+    private lateinit var statusTitle: TextView
+    private lateinit var statusDetail: TextView
+    private lateinit var statusProgress: ProgressBar
+    private lateinit var statusMeta: TextView
     private lateinit var downloadModel: Button
     private lateinit var refreshFolder: Button
     private lateinit var transcribeAll: Button
     private lateinit var outputName: TextView
     private lateinit var folderName: TextView
-    private lateinit var transcriptionStatus: TextView
-    private lateinit var transcriptionProgress: ProgressBar
-    private lateinit var progressDetails: TextView
     private lateinit var newTab: Button
     private lateinit var processedTab: Button
     private lateinit var fileList: LinearLayout
@@ -52,6 +51,22 @@ class MainActivity : AppCompatActivity() {
     private var pendingCount = 0
     private var selectedTab = CatalogTab.NEW
     private var lastCatalogWorkState: String? = null
+    private var modelMessage = "Checking speech model"
+    private var modelLoading = true
+    private var modelDownloadAvailable = false
+    private var modelDownloadProgress: Int? = null
+    private var scanMessage: String? = null
+    private var transcriptionFinished = false
+    private var transcriptionPhase: String? = null
+    private var transcriptionFilename: String? = null
+    private var transcriptionIndeterminate = true
+    private var transcriptionProgressValue = 0
+    private var processedUs = -1L
+    private var durationUs = -1L
+    private var completedFiles = 0
+    private var totalFiles = 0
+    private var failedFiles = 0
+    private var statusError: String? = null
 
     private val outputPicker = registerForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -142,16 +157,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun bindViews() {
-        modelStatus = findViewById(R.id.modelStatus)
-        modelProgress = findViewById(R.id.modelProgress)
+        statusTitle = findViewById(R.id.statusTitle)
+        statusDetail = findViewById(R.id.statusDetail)
+        statusProgress = findViewById(R.id.statusProgress)
+        statusMeta = findViewById(R.id.statusMeta)
         downloadModel = findViewById(R.id.downloadModel)
         refreshFolder = findViewById(R.id.refreshFolder)
         transcribeAll = findViewById(R.id.transcribeAll)
         outputName = findViewById(R.id.outputName)
         folderName = findViewById(R.id.folderName)
-        transcriptionStatus = findViewById(R.id.transcriptionStatus)
-        transcriptionProgress = findViewById(R.id.transcriptionProgress)
-        progressDetails = findViewById(R.id.progressDetails)
         newTab = findViewById(R.id.newTab)
         processedTab = findViewById(R.id.processedTab)
         fileList = findViewById(R.id.fileList)
@@ -211,7 +225,8 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     outputUri = uri
                     updateOutputSummary(metadata.displayName)
-                    transcriptionStatus.text = "Ready"
+                    statusError = null
+                    renderStatusBlock()
                     updateControls()
                 }
             }.onFailure { showError(it.message ?: "Output file is not writable") }
@@ -231,7 +246,8 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     folderUri = uri
                     updateFolderSummary(name)
-                    transcriptionStatus.text = "Folder selected"
+                    statusError = null
+                    renderStatusBlock()
                     updateControls()
                     scanFolder()
                 }
@@ -243,7 +259,18 @@ class MainActivity : AppCompatActivity() {
         val folder = folderUri ?: return
         if (scanning || transcriptionActive) return
         scanning = true
-        transcriptionStatus.text = "Scanning folder"
+        scanMessage = "Scanning folder"
+        transcriptionFinished = false
+        transcriptionPhase = null
+        transcriptionFilename = null
+        transcriptionProgressValue = 0
+        processedUs = -1L
+        durationUs = -1L
+        completedFiles = 0
+        totalFiles = 0
+        failedFiles = 0
+        statusError = null
+        renderStatusBlock()
         updateControls()
         executor.execute {
             runCatching {
@@ -253,7 +280,7 @@ class MainActivity : AppCompatActivity() {
             }.onSuccess { count ->
                 runOnUiThread {
                     scanning = false
-                    transcriptionStatus.text = "Scan complete: $count audio files"
+                    scanMessage = "Scan complete: $count audio files"
                     refreshCatalog()
                 }
             }.onFailure { error ->
@@ -270,6 +297,7 @@ class MainActivity : AppCompatActivity() {
         if (folder == null) {
             pendingCount = 0
             renderEntries(emptyList())
+            renderStatusBlock()
             updateControls()
             return
         }
@@ -283,6 +311,7 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 pendingCount = newEntries.count { it.state == AudioFileState.PENDING }
                 renderEntries(entries)
+                renderStatusBlock()
                 updateControls()
             }
         }
@@ -381,10 +410,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setModelUi(message: String, loading: Boolean, canDownload: Boolean) {
-        modelStatus.text = message
-        modelProgress.visibility = if (loading) View.VISIBLE else View.GONE
-        modelProgress.isIndeterminate = loading
-        downloadModel.visibility = if (canDownload) View.VISIBLE else View.GONE
+        modelMessage = message
+        modelLoading = loading
+        modelDownloadAvailable = canDownload
+        modelDownloadProgress = null
+        renderStatusBlock()
     }
 
     private fun observeModelInstallation() {
@@ -403,13 +433,13 @@ class MainActivity : AppCompatActivity() {
                             SpeechModelDownloadWorker.KEY_TOTAL_BYTES,
                             EmbeddedSpeechModel.manifest.totalSizeBytes,
                         )
-                        modelStatus.text =
+                        modelMessage =
                             info.progress.getString(SpeechModelDownloadWorker.KEY_MESSAGE)
                                 ?: "Downloading speech model"
-                        modelProgress.visibility = View.VISIBLE
-                        modelProgress.isIndeterminate = false
-                        modelProgress.progress = ((bytes * 100) / total.coerceAtLeast(1)).toInt()
-                        downloadModel.visibility = View.GONE
+                        modelLoading = true
+                        modelDownloadAvailable = false
+                        modelDownloadProgress = ((bytes * 100) / total.coerceAtLeast(1)).toInt()
+                        renderStatusBlock()
                         updateControls()
                     }
                     WorkInfo.State.SUCCEEDED -> refreshModel()
@@ -444,8 +474,9 @@ class MainActivity : AppCompatActivity() {
                     WorkInfo.State.BLOCKED,
                     WorkInfo.State.RUNNING,
                 )
+                transcriptionFinished = info.state.isFinished
                 val data = if (info.state.isFinished) info.outputData else info.progress
-                val phase = data.getString(TranscriptionWorker.KEY_PHASE)
+                transcriptionPhase = data.getString(TranscriptionWorker.KEY_PHASE)
                     ?: when (info.state) {
                         WorkInfo.State.ENQUEUED -> "Queued"
                         WorkInfo.State.RUNNING -> "Transcribing"
@@ -454,29 +485,21 @@ class MainActivity : AppCompatActivity() {
                             data.getString(TranscriptionWorker.KEY_ERROR) ?: "Failed"
                         else -> info.state.name
                     }
-                val filename = data.getString(TranscriptionWorker.KEY_FILENAME)
-                transcriptionStatus.text = if (filename == null) phase else "$filename: $phase"
-                val indeterminate = data.getBoolean(TranscriptionWorker.KEY_INDETERMINATE, true)
-                transcriptionProgress.visibility =
-                    if (transcriptionActive || info.state.isFinished) View.VISIBLE else View.GONE
-                transcriptionProgress.isIndeterminate = transcriptionActive && indeterminate
-                transcriptionProgress.progress =
-                    data.getInt(TranscriptionWorker.KEY_PROGRESS, 0)
-                val processed = data.getLong(TranscriptionWorker.KEY_PROCESSED_US, -1L)
-                val duration = data.getLong(TranscriptionWorker.KEY_DURATION_US, -1L)
-                val completed = data.getInt(TranscriptionWorker.KEY_COMPLETED_FILES, 0)
-                val total = data.getInt(TranscriptionWorker.KEY_TOTAL_FILES, 0)
-                val failed = data.getInt(TranscriptionWorker.KEY_FAILED_FILES, 0)
-                progressDetails.text = buildString {
-                    if (processed >= 0 && duration > 0) {
-                        append("${formatDuration(processed)} / ${formatDuration(duration)}")
-                    }
-                    if (total > 0) {
-                        if (isNotEmpty()) append(" • ")
-                        append("$completed / $total files")
-                    }
+                transcriptionFilename = data.getString(TranscriptionWorker.KEY_FILENAME)
+                transcriptionIndeterminate =
+                    transcriptionActive && data.getBoolean(TranscriptionWorker.KEY_INDETERMINATE, true)
+                transcriptionProgressValue = data.getInt(TranscriptionWorker.KEY_PROGRESS, 0)
+                processedUs = data.getLong(TranscriptionWorker.KEY_PROCESSED_US, -1L)
+                durationUs = data.getLong(TranscriptionWorker.KEY_DURATION_US, -1L)
+                completedFiles = data.getInt(TranscriptionWorker.KEY_COMPLETED_FILES, 0)
+                totalFiles = data.getInt(TranscriptionWorker.KEY_TOTAL_FILES, 0)
+                failedFiles = data.getInt(TranscriptionWorker.KEY_FAILED_FILES, 0)
+                if (transcriptionActive || transcriptionFinished) {
+                    scanMessage = null
+                    statusError = null
                 }
-                val catalogState = "${info.id}:${info.state}:$completed:$failed"
+                renderStatusBlock()
+                val catalogState = "${info.id}:${info.state}:$completedFiles:$failedFiles"
                 if (catalogState != lastCatalogWorkState) {
                     lastCatalogWorkState = catalogState
                     refreshCatalog()
@@ -509,6 +532,47 @@ class MainActivity : AppCompatActivity() {
         invalidateOptionsMenu()
     }
 
+    private fun renderStatusBlock() {
+        val state = TranscriptionUiRules.statusProgressBlock(
+            StatusProgressInput(
+                modelMessage = modelMessage,
+                modelLoading = modelLoading,
+                modelDownloadAvailable = modelDownloadAvailable,
+                modelDownloadProgress = modelDownloadProgress,
+                modelReady = modelReady,
+                outputSelected = outputUri != null,
+                folderSelected = folderUri != null,
+                pendingCount = pendingCount,
+                scanning = scanning,
+                scanMessage = scanMessage,
+                transcriptionActive = transcriptionActive,
+                transcriptionFinished = transcriptionFinished,
+                transcriptionPhase = transcriptionPhase,
+                transcriptionFilename = transcriptionFilename,
+                transcriptionIndeterminate = transcriptionIndeterminate,
+                transcriptionProgress = transcriptionProgressValue,
+                processedUs = processedUs,
+                durationUs = durationUs,
+                completedFiles = completedFiles,
+                totalFiles = totalFiles,
+                failedFiles = failedFiles,
+                errorMessage = statusError,
+            ),
+        )
+        statusTitle.text = state.title
+        setOptionalText(statusDetail, state.detail)
+        setOptionalText(statusMeta, state.meta)
+        statusProgress.visibility = if (state.progressVisible) View.VISIBLE else View.GONE
+        statusProgress.isIndeterminate = state.progressIndeterminate
+        statusProgress.progress = state.progress
+        downloadModel.visibility = if (state.downloadVisible) View.VISIBLE else View.GONE
+    }
+
+    private fun setOptionalText(view: TextView, value: String?) {
+        view.text = value.orEmpty()
+        view.visibility = if (value.isNullOrBlank()) View.GONE else View.VISIBLE
+    }
+
     private fun updateMenu(menu: Menu) {
         val controls = currentControls()
         menu.findItem(R.id.menuSelectOutput)?.apply {
@@ -539,14 +603,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun showError(message: String) {
         runOnUiThread {
-            transcriptionStatus.text = message
+            statusError = message
+            renderStatusBlock()
             updateControls()
         }
-    }
-
-    private fun formatDuration(microseconds: Long): String {
-        val totalSeconds = microseconds / 1_000_000
-        return "%d:%02d".format(totalSeconds / 60, totalSeconds % 60)
     }
 
     private fun formatSize(bytes: Long): String =

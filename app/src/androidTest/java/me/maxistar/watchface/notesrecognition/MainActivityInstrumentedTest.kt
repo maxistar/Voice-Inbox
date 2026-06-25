@@ -18,7 +18,7 @@ class MainActivityInstrumentedTest {
     @Test
     fun selectionSummariesAndMenuActionsAreVisible() {
         ActivityScenario.launch(MainActivity::class.java).use {
-            onView(withId(R.id.modelStatus)).check(matches(isDisplayed()))
+            onView(withId(R.id.statusTitle)).check(matches(isDisplayed()))
             onView(withText(R.string.output_not_selected)).check(matches(isDisplayed()))
             onView(withText(R.string.folder_not_selected)).check(matches(isDisplayed()))
             onView(withId(R.id.refreshFolder)).check(matches(isDisplayed()))
