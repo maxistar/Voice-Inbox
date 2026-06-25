@@ -205,6 +205,64 @@ class TranscriptionUiRulesTest {
         )
     }
 
+    @Test
+    fun modelLoadingHasPriorityOverFolderWork() {
+        assertEquals(
+            StatusProgressBlockState(
+                title = "Checking speech model",
+                progressVisible = true,
+                progressIndeterminate = true,
+            ),
+            status(
+                modelMessage = "Checking speech model",
+                modelLoading = true,
+                modelReady = false,
+                output = true,
+                folder = true,
+                folderChecking = true,
+                scanning = true,
+                scanMessage = "Scanning folder",
+            ),
+        )
+    }
+
+    @Test
+    fun folderCheckingIsDistinctFromFolderScanning() {
+        assertEquals(
+            StatusProgressBlockState(
+                title = "Checking audio folder",
+                progressVisible = true,
+                progressIndeterminate = true,
+            ),
+            status(
+                modelReady = true,
+                output = true,
+                folder = true,
+                folderChecking = true,
+                scanning = false,
+            ),
+        )
+    }
+
+    @Test
+    fun queuedFolderScanDoesNotRenderScanningUntilActive() {
+        assertEquals(
+            StatusProgressBlockState(
+                title = "Ready",
+                detail = "2 files ready to transcribe",
+            ),
+            status(
+                modelReady = true,
+                output = true,
+                folder = true,
+                pending = 2,
+                folderChecking = false,
+                scanning = false,
+                scanMessage = null,
+            ),
+        )
+    }
+
     private fun controls(
         modelReady: Boolean,
         output: Boolean = false,
@@ -229,6 +287,7 @@ class TranscriptionUiRulesTest {
         output: Boolean = false,
         folder: Boolean = false,
         pending: Int = 0,
+        folderChecking: Boolean = false,
         scanning: Boolean = false,
         scanMessage: String? = null,
         transcriptionActive: Boolean = false,
@@ -253,6 +312,7 @@ class TranscriptionUiRulesTest {
             outputSelected = output,
             folderSelected = folder,
             pendingCount = pending,
+            folderChecking = folderChecking,
             scanning = scanning,
             scanMessage = scanMessage,
             transcriptionActive = transcriptionActive,

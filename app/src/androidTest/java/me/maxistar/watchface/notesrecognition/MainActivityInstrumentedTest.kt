@@ -1,8 +1,10 @@
 package me.maxistar.watchface.notesrecognition
 
+import android.content.Context
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.Espresso.openActionBarOverflowOrOptionsMenu
+import androidx.test.espresso.action.ViewActions.scrollTo
 import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.espresso.matcher.ViewMatchers.withContentDescription
@@ -18,6 +20,7 @@ import org.junit.runner.RunWith
 class MainActivityInstrumentedTest {
     @Test
     fun selectionSummariesAndMenuActionsAreVisible() {
+        clearActivityState()
         ActivityScenario.launch(MainActivity::class.java).use {
             onView(withId(R.id.statusTitle)).check(matches(isDisplayed()))
             onView(withText(R.string.output_not_selected)).check(matches(isDisplayed()))
@@ -34,7 +37,18 @@ class MainActivityInstrumentedTest {
     }
 
     @Test
+    fun activityRecreationKeepsStatusBlockVisible() {
+        clearActivityState()
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.recreate()
+
+            onView(withId(R.id.statusTitle)).check(matches(isDisplayed()))
+        }
+    }
+
+    @Test
     fun failedRowsShowErrorAndRetryAction() {
+        clearActivityState()
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 val entry = AudioCatalogEntry(
@@ -56,10 +70,19 @@ class MainActivityInstrumentedTest {
                 activity.findViewById<android.widget.LinearLayout>(R.id.fileList).addView(row)
             }
 
-            onView(withText("broken.wav")).check(matches(isDisplayed()))
-            onView(withText(containsString("decode failed"))).check(matches(isDisplayed()))
-            onView(withText("Play")).check(matches(isDisplayed()))
-            onView(withText("Retry")).check(matches(isDisplayed()))
+            onView(withText("broken.wav")).perform(scrollTo()).check(matches(isDisplayed()))
+            onView(withText(containsString("decode failed"))).perform(scrollTo()).check(matches(isDisplayed()))
+            onView(withText("Play")).perform(scrollTo()).check(matches(isDisplayed()))
+            onView(withText("Retry")).perform(scrollTo()).check(matches(isDisplayed()))
         }
+    }
+
+    private fun clearActivityState() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        context.getSharedPreferences(DocumentSelectionStore.PREFERENCES_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .clear()
+            .commit()
+        context.deleteDatabase(AudioCatalogDatabase.DATABASE_NAME)
     }
 }

@@ -17,6 +17,7 @@ data class StatusProgressInput(
     val outputSelected: Boolean,
     val folderSelected: Boolean,
     val pendingCount: Int,
+    val folderChecking: Boolean,
     val scanning: Boolean,
     val scanMessage: String?,
     val transcriptionActive: Boolean,
@@ -100,16 +101,21 @@ object TranscriptionUiRules {
     fun statusProgressBlock(input: StatusProgressInput): StatusProgressBlockState =
         when {
             input.transcriptionActive -> activeTranscription(input)
-            input.scanning -> StatusProgressBlockState(
-                title = input.scanMessage ?: "Scanning folder",
-                progressVisible = true,
-                progressIndeterminate = true,
-            )
             input.modelLoading -> StatusProgressBlockState(
                 title = input.modelMessage,
                 progressVisible = true,
                 progressIndeterminate = input.modelDownloadProgress == null,
                 progress = input.modelDownloadProgress ?: 0,
+            )
+            input.folderChecking -> StatusProgressBlockState(
+                title = "Checking audio folder",
+                progressVisible = true,
+                progressIndeterminate = true,
+            )
+            input.scanning -> StatusProgressBlockState(
+                title = input.scanMessage ?: "Scanning folder",
+                progressVisible = true,
+                progressIndeterminate = true,
             )
             !input.modelReady -> StatusProgressBlockState(
                 title = input.modelMessage,

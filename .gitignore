@@ -17,3 +17,4 @@ local.properties
 /transcribe-rs/target
 /app/src/main/jniLibs/arm64-v8a
 .idea
+

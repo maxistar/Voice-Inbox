@@ -36,18 +36,20 @@ class MainActivity : AppCompatActivity() {
     private lateinit var fileList: LinearLayout
     private lateinit var emptyList: TextView
 
-    private lateinit var modelRepository: SpeechModelRepository
     private lateinit var selectionStore: DocumentSelectionStore
     private lateinit var documentAccess: DocumentAccess
     private lateinit var folderScanner: AudioFolderScanner
     private lateinit var catalogDatabase: AudioCatalogDatabase
     private lateinit var catalog: AudioCatalogRepository
-    private val executor = Executors.newSingleThreadExecutor()
+    private lateinit var modelReadiness: SpeechModelReadinessManager
+    private val folderExecutor = Executors.newSingleThreadExecutor()
 
     private var modelReady = false
     private var outputUri: Uri? = null
     private var folderUri: Uri? = null
     private var transcriptionActive = false
+    private var folderChecking = false
+    private var folderScanQueued = false
     private var scanning = false
     private var pendingCount = 0
     private var selectedTab = CatalogTab.NEW
@@ -71,6 +73,7 @@ class MainActivity : AppCompatActivity() {
     private var previewPlayer: MediaPlayer? = null
     private var previewEntryId: Long? = null
     private var previewState = PreviewPlaybackState.IDLE
+    private var activityDestroyed = false
 
     private val outputPicker = registerForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -96,7 +99,6 @@ class MainActivity : AppCompatActivity() {
         }
         bindViews()
 
-        modelRepository = SpeechModelRepository(noBackupFilesDir.resolve("models"))
         selectionStore = DocumentSelectionStore(
             getSharedPreferences(DocumentSelectionStore.PREFERENCES_NAME, MODE_PRIVATE),
         )
@@ -104,6 +106,7 @@ class MainActivity : AppCompatActivity() {
         folderScanner = AudioFolderScanner(contentResolver)
         catalogDatabase = AudioCatalogDatabase(this)
         catalog = AudioCatalogRepository(catalogDatabase)
+        modelReadiness = getSharedModelReadiness(SpeechModelRepository(noBackupFilesDir.resolve("models")))
 
         downloadModel.setOnClickListener { SpeechModelDownloadWorker.enqueue(this) }
         transcribeAll.setOnClickListener {
@@ -162,8 +165,9 @@ class MainActivity : AppCompatActivity() {
         }
 
     override fun onDestroy() {
+        activityDestroyed = true
         stopPreviewPlayback(render = false)
-        executor.shutdown()
+        folderExecutor.shutdown()
         super.onDestroy()
     }
 
@@ -184,12 +188,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun restoreSelections() {
         selectionStore.loadOutputUri()?.let(Uri::parse)?.let { stored ->
-            executor.execute {
+            folderExecutor.execute {
                 runCatching {
                     documentAccess.requireAppendable(stored)
                     documentAccess.metadata(stored)
                 }.onSuccess { metadata ->
                     runOnUiThread {
+                        if (activityDestroyed) return@runOnUiThread
                         outputUri = stored
                         updateOutputSummary(metadata.displayName)
                         updateControls()
@@ -200,12 +205,20 @@ class MainActivity : AppCompatActivity() {
             }
         }
         selectionStore.loadFolderUri()?.let(Uri::parse)?.let { stored ->
-            executor.execute {
+            folderExecutor.execute {
+                runOnUiThread {
+                    if (activityDestroyed) return@runOnUiThread
+                    folderChecking = true
+                    renderStatusBlock()
+                    updateControls()
+                }
                 runCatching {
                     folderScanner.requireReadable(stored)
                     folderScanner.folderName(stored)
                 }.onSuccess { name ->
                     runOnUiThread {
+                        if (activityDestroyed) return@runOnUiThread
+                        folderChecking = false
                         folderUri = stored
                         updateFolderSummary(name)
                         updateControls()
@@ -213,6 +226,10 @@ class MainActivity : AppCompatActivity() {
                     }
                 }.onFailure {
                     selectionStore.clearFolderUri()
+                    runOnUiThread {
+                        if (activityDestroyed) return@runOnUiThread
+                        folderChecking = false
+                    }
                     showError(it.message ?: "Audio folder is not readable")
                 }
             }
@@ -226,13 +243,14 @@ class MainActivity : AppCompatActivity() {
                 Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
             )
         }
-        executor.execute {
+        folderExecutor.execute {
             runCatching {
                 documentAccess.requireAppendable(uri)
                 documentAccess.metadata(uri)
             }.onSuccess { metadata ->
                 selectionStore.saveOutputUri(uri.toString())
                 runOnUiThread {
+                    if (activityDestroyed) return@runOnUiThread
                     outputUri = uri
                     updateOutputSummary(metadata.displayName)
                     statusError = null
@@ -247,13 +265,21 @@ class MainActivity : AppCompatActivity() {
         runCatching {
             contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        executor.execute {
+        folderExecutor.execute {
+            runOnUiThread {
+                if (activityDestroyed) return@runOnUiThread
+                folderChecking = true
+                renderStatusBlock()
+                updateControls()
+            }
             runCatching {
                 folderScanner.requireReadable(uri)
                 folderScanner.folderName(uri)
             }.onSuccess { name ->
                 selectionStore.saveFolderUri(uri.toString())
                 runOnUiThread {
+                    if (activityDestroyed) return@runOnUiThread
+                    folderChecking = false
                     folderUri = uri
                     updateFolderSummary(name)
                     statusError = null
@@ -261,15 +287,20 @@ class MainActivity : AppCompatActivity() {
                     updateControls()
                     scanFolder()
                 }
-            }.onFailure { showError(it.message ?: "Audio folder is not readable") }
+            }.onFailure {
+                runOnUiThread {
+                    if (activityDestroyed) return@runOnUiThread
+                    folderChecking = false
+                }
+                showError(it.message ?: "Audio folder is not readable")
+            }
         }
     }
 
     private fun scanFolder() {
         val folder = folderUri ?: return
-        if (scanning || transcriptionActive) return
-        scanning = true
-        scanMessage = "Scanning folder"
+        if (folderChecking || folderScanQueued || scanning || transcriptionActive) return
+        folderScanQueued = true
         transcriptionFinished = false
         transcriptionPhase = null
         transcriptionFilename = null
@@ -282,19 +313,31 @@ class MainActivity : AppCompatActivity() {
         statusError = null
         renderStatusBlock()
         updateControls()
-        executor.execute {
+        folderExecutor.execute {
+            runOnUiThread {
+                if (activityDestroyed) return@runOnUiThread
+                folderScanQueued = false
+                scanning = true
+                scanMessage = "Scanning folder"
+                renderStatusBlock()
+                updateControls()
+            }
             runCatching {
                 val files = folderScanner.scan(folder)
                 catalog.reconcile(folder.toString(), files)
                 files.size
             }.onSuccess { count ->
                 runOnUiThread {
+                    if (activityDestroyed) return@runOnUiThread
+                    folderScanQueued = false
                     scanning = false
                     scanMessage = "Scan complete: $count audio files"
                     refreshCatalog()
                 }
             }.onFailure { error ->
                 runOnUiThread {
+                    if (activityDestroyed) return@runOnUiThread
+                    folderScanQueued = false
                     scanning = false
                     showError(error.message ?: "Folder scan failed")
                 }
@@ -303,6 +346,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshCatalog() {
+        if (activityDestroyed) return
         val folder = folderUri?.toString()
         if (folder == null) {
             pendingCount = 0
@@ -311,7 +355,7 @@ class MainActivity : AppCompatActivity() {
             updateControls()
             return
         }
-        executor.execute {
+        folderExecutor.execute {
             val newEntries = catalog.newEntries(folder)
             val entries = if (selectedTab == CatalogTab.NEW) {
                 newEntries
@@ -319,6 +363,7 @@ class MainActivity : AppCompatActivity() {
                 catalog.processedEntries(folder)
             }
             runOnUiThread {
+                if (activityDestroyed) return@runOnUiThread
                 pendingCount = newEntries.count { it.state == AudioFileState.PENDING }
                 renderEntries(entries)
                 renderStatusBlock()
@@ -380,7 +425,7 @@ class MainActivity : AppCompatActivity() {
                     activeEntryId = previewEntryId,
                     playbackState = previewState,
                     transcriptionActive = transcriptionActive,
-                    scanning = scanning,
+                    scanning = folderBusy(),
                 )
                 text = control.label
                 isEnabled = control.enabled
@@ -428,34 +473,36 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshModel() {
-        setModelUi("Checking speech model", loading = true, canDownload = false)
-        executor.execute {
-            modelRepository.cleanupStaleState()
-            when (val state = modelRepository.inspect()) {
-                is InstalledSpeechModelState.Ready -> {
-                    val loaded = runCatching {
-                        NativeTranscriptionBridge.initialize(state.directory.absolutePath)
-                    }.getOrDefault(false)
-                    runOnUiThread {
-                        modelReady = loaded
-                        setModelUi(
-                            if (loaded) "Speech model ready" else "Speech model failed to load",
-                            loading = false,
-                            canDownload = !loaded,
-                        )
-                        updateControls()
-                    }
-                }
-                InstalledSpeechModelState.Missing -> runOnUiThread {
-                    modelReady = false
-                    setModelUi("Speech model is not installed", false, true)
-                    updateControls()
-                }
-                is InstalledSpeechModelState.Invalid -> runOnUiThread {
-                    modelReady = false
-                    setModelUi("Invalid speech model: ${state.reason}", false, true)
-                    updateControls()
-                }
+        modelReadiness.refresh { state ->
+            runOnUiThread {
+                if (activityDestroyed) return@runOnUiThread
+                applyModelState(state)
+                updateControls()
+            }
+        }
+    }
+
+    private fun applyModelState(state: SpeechModelReadinessState) {
+        when (state) {
+            SpeechModelReadinessState.Checking -> {
+                modelReady = false
+                setModelUi("Checking speech model", loading = true, canDownload = false)
+            }
+            is SpeechModelReadinessState.Ready -> {
+                modelReady = true
+                setModelUi("Speech model ready", loading = false, canDownload = false)
+            }
+            SpeechModelReadinessState.Missing -> {
+                modelReady = false
+                setModelUi("Speech model is not installed", loading = false, canDownload = true)
+            }
+            is SpeechModelReadinessState.Invalid -> {
+                modelReady = false
+                setModelUi("Invalid speech model: ${state.reason}", loading = false, canDownload = true)
+            }
+            is SpeechModelReadinessState.Failed -> {
+                modelReady = false
+                setModelUi(state.message, loading = false, canDownload = true)
             }
         }
     }
@@ -493,7 +540,12 @@ class MainActivity : AppCompatActivity() {
                         renderStatusBlock()
                         updateControls()
                     }
-                    WorkInfo.State.SUCCEEDED -> refreshModel()
+                    WorkInfo.State.SUCCEEDED -> {
+                        if (shouldHandleModelInstallSuccess(info.id.toString())) {
+                            modelReadiness.invalidate()
+                        }
+                        refreshModel()
+                    }
                     WorkInfo.State.FAILED -> {
                         modelReady = false
                         setModelUi(
@@ -570,8 +622,10 @@ class MainActivity : AppCompatActivity() {
             folderSelected = folderUri != null,
             pendingCount = pendingCount,
             transcriptionActive = transcriptionActive,
-            scanning = scanning,
+            scanning = folderBusy(),
         )
+
+    private fun folderBusy(): Boolean = folderChecking || folderScanQueued || scanning
 
     private fun updateControls() {
         val controls = currentControls()
@@ -591,7 +645,7 @@ class MainActivity : AppCompatActivity() {
                                 activeEntryId = previewEntryId,
                                 playbackState = previewState,
                                 transcriptionActive = transcriptionActive,
-                                scanning = scanning,
+                                scanning = folderBusy(),
                             )
                             button.text = preview.label
                             button.isEnabled = preview.enabled
@@ -604,7 +658,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startPreviewPlayback(entry: AudioCatalogEntry) {
-        if (scanning || transcriptionActive) return
+        if (folderBusy() || transcriptionActive) return
         stopPreviewPlayback(render = false)
         previewEntryId = entry.id
         previewState = PreviewPlaybackState.LOADING
@@ -665,6 +719,7 @@ class MainActivity : AppCompatActivity() {
                 outputSelected = outputUri != null,
                 folderSelected = folderUri != null,
                 pendingCount = pendingCount,
+                folderChecking = folderChecking,
                 scanning = scanning,
                 scanMessage = scanMessage,
                 transcriptionActive = transcriptionActive,
@@ -726,6 +781,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun showError(message: String) {
         runOnUiThread {
+            if (activityDestroyed) return@runOnUiThread
             statusError = message
             renderStatusBlock()
             updateControls()
@@ -746,5 +802,23 @@ class MainActivity : AppCompatActivity() {
 
     private companion object {
         const val RETRY_BUTTON_TAG = "retry"
+
+        @Volatile
+        private var sharedModelReadiness: SpeechModelReadinessManager? = null
+        private val handledModelInstallSuccessIds = mutableSetOf<String>()
+
+        fun getSharedModelReadiness(repository: SpeechModelRepository): SpeechModelReadinessManager =
+            sharedModelReadiness ?: synchronized(this) {
+                sharedModelReadiness ?: SpeechModelReadinessManager(
+                    repository = repository,
+                    initializeModel = { directory ->
+                        NativeTranscriptionBridge.initialize(directory.absolutePath)
+                    },
+                    executor = Executors.newSingleThreadExecutor(),
+                ).also { sharedModelReadiness = it }
+            }
+
+        fun shouldHandleModelInstallSuccess(id: String): Boolean =
+            synchronized(this) { handledModelInstallSuccessIds.add(id) }
     }
 }
