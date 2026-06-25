@@ -43,6 +43,17 @@ data class StatusProgressBlockState(
     val downloadVisible: Boolean = false,
 )
 
+enum class PreviewPlaybackState {
+    IDLE,
+    LOADING,
+    PLAYING,
+}
+
+data class PreviewControlState(
+    val label: String,
+    val enabled: Boolean,
+)
+
 object TranscriptionUiRules {
     fun catalogControls(
         modelReady: Boolean,
@@ -67,6 +78,24 @@ object TranscriptionUiRules {
         durationUs
             ?.takeIf { it > 0 }
             ?.let { ((processedUs.coerceIn(0, it) * 100) / it).toInt() }
+
+    fun previewControl(
+        entryId: Long,
+        activeEntryId: Long?,
+        playbackState: PreviewPlaybackState,
+        transcriptionActive: Boolean,
+        scanning: Boolean,
+    ): PreviewControlState {
+        val activeForEntry = entryId == activeEntryId
+        val blocked = transcriptionActive || scanning
+        return when {
+            activeForEntry && playbackState == PreviewPlaybackState.LOADING ->
+                PreviewControlState("Loading...", enabled = true)
+            activeForEntry && playbackState == PreviewPlaybackState.PLAYING ->
+                PreviewControlState("Stop", enabled = true)
+            else -> PreviewControlState("Play", enabled = !blocked)
+        }
+    }
 
     fun statusProgressBlock(input: StatusProgressInput): StatusProgressBlockState =
         when {

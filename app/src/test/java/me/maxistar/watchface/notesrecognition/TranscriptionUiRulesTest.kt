@@ -72,6 +72,50 @@ class TranscriptionUiRulesTest {
     }
 
     @Test
+    fun previewControlsReflectPlaybackAndWorkState() {
+        assertEquals(
+            PreviewControlState("Play", enabled = true),
+            TranscriptionUiRules.previewControl(
+                entryId = 1,
+                activeEntryId = null,
+                playbackState = PreviewPlaybackState.IDLE,
+                transcriptionActive = false,
+                scanning = false,
+            ),
+        )
+        assertEquals(
+            PreviewControlState("Play", enabled = false),
+            TranscriptionUiRules.previewControl(
+                entryId = 1,
+                activeEntryId = null,
+                playbackState = PreviewPlaybackState.IDLE,
+                transcriptionActive = true,
+                scanning = false,
+            ),
+        )
+        assertEquals(
+            PreviewControlState("Loading...", enabled = true),
+            TranscriptionUiRules.previewControl(
+                entryId = 1,
+                activeEntryId = 1,
+                playbackState = PreviewPlaybackState.LOADING,
+                transcriptionActive = false,
+                scanning = false,
+            ),
+        )
+        assertEquals(
+            PreviewControlState("Stop", enabled = true),
+            TranscriptionUiRules.previewControl(
+                entryId = 1,
+                activeEntryId = 1,
+                playbackState = PreviewPlaybackState.PLAYING,
+                transcriptionActive = false,
+                scanning = false,
+            ),
+        )
+    }
+
+    @Test
     fun statusBlockShowsModelDownloadProgress() {
         assertEquals(
             StatusProgressBlockState(

@@ -2,8 +2,10 @@ package me.maxistar.watchface.notesrecognition
 
 import android.content.Intent
 import android.graphics.Typeface
+import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Bundle
+import android.view.Gravity
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
@@ -66,6 +68,9 @@ class MainActivity : AppCompatActivity() {
     private var totalFiles = 0
     private var failedFiles = 0
     private var statusError: String? = null
+    private var previewPlayer: MediaPlayer? = null
+    private var previewEntryId: Long? = null
+    private var previewState = PreviewPlaybackState.IDLE
 
     private val outputPicker = registerForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -104,6 +109,7 @@ class MainActivity : AppCompatActivity() {
         transcribeAll.setOnClickListener {
             val folder = folderUri ?: return@setOnClickListener
             val output = outputUri ?: return@setOnClickListener
+            stopPreviewPlayback(render = true)
             TranscriptionWorker.enqueueAll(this, folder, output)
         }
         newTab.setOnClickListener {
@@ -156,6 +162,7 @@ class MainActivity : AppCompatActivity() {
         }
 
     override fun onDestroy() {
+        stopPreviewPlayback(render = false)
         executor.shutdown()
         super.onDestroy()
     }
@@ -337,23 +344,63 @@ class MainActivity : AppCompatActivity() {
 
     private fun createEntryView(entry: AudioCatalogEntry): View =
         LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
             setPadding(0, dp(12), 0, dp(12))
 
-            addView(TextView(context).apply {
-                text = entry.displayName
-                setTypeface(typeface, Typeface.BOLD)
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(
+                    0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    1f,
+                )
+                addView(TextView(context).apply {
+                    text = entry.displayName
+                    setTypeface(typeface, Typeface.BOLD)
+                })
+                addView(TextView(context).apply {
+                    text = entryDescription(entry)
+                })
             })
-            addView(TextView(context).apply {
-                text = entryDescription(entry)
+            val actions = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    marginStart = dp(12)
+                }
+            }
+            actions.addView(Button(context).apply {
+                tag = PreviewButtonTag(entry.id)
+                val control = TranscriptionUiRules.previewControl(
+                    entryId = entry.id,
+                    activeEntryId = previewEntryId,
+                    playbackState = previewState,
+                    transcriptionActive = transcriptionActive,
+                    scanning = scanning,
+                )
+                text = control.label
+                isEnabled = control.enabled
+                setOnClickListener {
+                    if (entry.id == previewEntryId && previewState != PreviewPlaybackState.IDLE) {
+                        stopPreviewPlayback(render = true)
+                    } else {
+                        startPreviewPlayback(entry)
+                    }
+                }
             })
             if (entry.state == AudioFileState.FAILED) {
-                addView(Button(context).apply {
+                actions.addView(Button(context).apply {
+                    tag = RETRY_BUTTON_TAG
                     text = "Retry"
                     isEnabled = currentControls().retryEnabled
                     setOnClickListener {
                         val folder = folderUri ?: return@setOnClickListener
                         val output = outputUri ?: return@setOnClickListener
+                        stopPreviewPlayback(render = true)
                         TranscriptionWorker.enqueueRetry(
                             this@MainActivity,
                             folder,
@@ -363,6 +410,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 })
             }
+            addView(actions)
         }
 
     private fun entryDescription(entry: AudioCatalogEntry): String = buildString {
@@ -477,6 +525,9 @@ class MainActivity : AppCompatActivity() {
                     WorkInfo.State.BLOCKED,
                     WorkInfo.State.RUNNING,
                 )
+                if (transcriptionActive && previewState != PreviewPlaybackState.IDLE) {
+                    stopPreviewPlayback(render = true)
+                }
                 transcriptionFinished = info.state.isFinished
                 val data = if (info.state.isFinished) info.outputData else info.progress
                 transcriptionPhase = data.getString(TranscriptionWorker.KEY_PHASE)
@@ -524,14 +575,83 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateControls() {
         val controls = currentControls()
+        transcribeAll.visibility = View.VISIBLE
         transcribeAll.isEnabled = controls.transcribeAllEnabled
         for (index in 0 until fileList.childCount) {
             val row = fileList.getChildAt(index) as? LinearLayout ?: continue
             for (childIndex in 0 until row.childCount) {
-                (row.getChildAt(childIndex) as? Button)?.isEnabled = controls.retryEnabled
+                val actions = row.getChildAt(childIndex) as? LinearLayout ?: continue
+                for (buttonIndex in 0 until actions.childCount) {
+                    val button = actions.getChildAt(buttonIndex) as? Button ?: continue
+                    when (val tag = button.tag) {
+                        RETRY_BUTTON_TAG -> button.isEnabled = controls.retryEnabled
+                        is PreviewButtonTag -> {
+                            val preview = TranscriptionUiRules.previewControl(
+                                entryId = tag.entryId,
+                                activeEntryId = previewEntryId,
+                                playbackState = previewState,
+                                transcriptionActive = transcriptionActive,
+                                scanning = scanning,
+                            )
+                            button.text = preview.label
+                            button.isEnabled = preview.enabled
+                        }
+                    }
+                }
             }
         }
         invalidateOptionsMenu()
+    }
+
+    private fun startPreviewPlayback(entry: AudioCatalogEntry) {
+        if (scanning || transcriptionActive) return
+        stopPreviewPlayback(render = false)
+        previewEntryId = entry.id
+        previewState = PreviewPlaybackState.LOADING
+        refreshCatalog()
+        val player = MediaPlayer()
+        previewPlayer = player
+        runCatching {
+            player.setDataSource(this, Uri.parse(entry.documentUri))
+            player.setOnPreparedListener { prepared ->
+                if (previewPlayer != prepared || previewEntryId != entry.id) return@setOnPreparedListener
+                previewState = PreviewPlaybackState.PLAYING
+                prepared.start()
+                refreshCatalog()
+            }
+            player.setOnCompletionListener { completed ->
+                if (previewPlayer == completed) {
+                    stopPreviewPlayback(render = true)
+                }
+            }
+            player.setOnErrorListener { failed, _, _ ->
+                if (previewPlayer == failed) {
+                    showError("Cannot play ${entry.displayName}")
+                    stopPreviewPlayback(render = true)
+                }
+                true
+            }
+            player.prepareAsync()
+        }.onFailure {
+            showError("Cannot play ${entry.displayName}")
+            stopPreviewPlayback(render = true)
+        }
+    }
+
+    private fun stopPreviewPlayback(render: Boolean) {
+        previewPlayer?.let { player ->
+            runCatching {
+                player.setOnPreparedListener(null)
+                player.setOnCompletionListener(null)
+                player.setOnErrorListener(null)
+                if (player.isPlaying) player.stop()
+                player.release()
+            }
+        }
+        previewPlayer = null
+        previewEntryId = null
+        previewState = PreviewPlaybackState.IDLE
+        if (render) refreshCatalog()
     }
 
     private fun renderStatusBlock() {
@@ -620,5 +740,11 @@ class MainActivity : AppCompatActivity() {
     private enum class CatalogTab {
         NEW,
         PROCESSED,
+    }
+
+    private data class PreviewButtonTag(val entryId: Long)
+
+    private companion object {
+        const val RETRY_BUTTON_TAG = "retry"
     }
 }

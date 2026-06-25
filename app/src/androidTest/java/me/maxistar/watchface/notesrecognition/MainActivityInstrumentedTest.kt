@@ -58,6 +58,7 @@ class MainActivityInstrumentedTest {
 
             onView(withText("broken.wav")).check(matches(isDisplayed()))
             onView(withText(containsString("decode failed"))).check(matches(isDisplayed()))
+            onView(withText("Play")).check(matches(isDisplayed()))
             onView(withText("Retry")).check(matches(isDisplayed()))
         }
     }
