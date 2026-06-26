@@ -148,7 +148,7 @@ class SpeechModelDownloadWorker(
         }
         val notification = NotificationCompat.Builder(applicationContext, NOTIFICATION_CHANNEL)
             .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setContentTitle("Notes Recognition")
+            .setContentTitle("Voice Inbox")
             .setContentText(message)
             .setOnlyAlertOnce(true)
             .setOngoing(true)

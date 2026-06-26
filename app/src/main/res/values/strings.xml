@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Notes Recognition</string>
+    <string name="app_name">Voice Inbox</string>
     <string name="menu_select_output">Select output file</string>
     <string name="menu_change_output">Change output file</string>
     <string name="menu_select_folder">Select audio folder</string>

@@ -1,4 +1,4 @@
-# Notes Recognition
+# Voice Inbox
 
 Android application for incrementally transcribing a folder of audio recordings
 into an existing plain-text (`.txt`) or Markdown (`.md`) file.
