@@ -1,6 +1,7 @@
 package me.maxistar.watchface.notesrecognition
 
 import android.content.Context
+import android.net.Uri
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.Espresso.openActionBarOverflowOrOptionsMenu
@@ -13,6 +14,7 @@ import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.hamcrest.Matchers.containsString
+import org.hamcrest.Matchers.not
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -26,13 +28,51 @@ class MainActivityInstrumentedTest {
             onView(withText(R.string.output_not_selected)).check(matches(isDisplayed()))
             onView(withText(R.string.folder_not_selected)).check(matches(isDisplayed()))
             onView(withContentDescription(R.string.menu_refresh_folder)).check(matches(isDisplayed()))
-            onView(withId(R.id.transcribeAll)).check(matches(isDisplayed()))
+            onView(withId(R.id.transcribeAll)).check(matches(not(isDisplayed())))
 
             openActionBarOverflowOrOptionsMenu(
                 InstrumentationRegistry.getInstrumentation().targetContext,
             )
             onView(withText(R.string.menu_select_output)).check(matches(isDisplayed()))
             onView(withText(R.string.menu_select_folder)).check(matches(isDisplayed()))
+        }
+    }
+
+    @Test
+    fun transcribeAllIsVisibleOnlyOnNewTabWhenPendingWorkExists() {
+        clearActivityState()
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                MainActivity::class.java.getDeclaredField("modelReady")
+                    .apply { isAccessible = true }
+                    .setBoolean(activity, true)
+                MainActivity::class.java.getDeclaredField("outputUri")
+                    .apply { isAccessible = true }
+                    .set(activity, Uri.parse("content://output"))
+                MainActivity::class.java.getDeclaredField("folderUri")
+                    .apply { isAccessible = true }
+                    .set(activity, Uri.parse("content://folder"))
+                MainActivity::class.java.getDeclaredField("pendingCount")
+                    .apply { isAccessible = true }
+                    .setInt(activity, 2)
+                MainActivity::class.java.getDeclaredField("transcriptionState")
+                    .apply { isAccessible = true }
+                    .set(activity, TranscriptionObservationState.IDLE)
+                MainActivity::class.java.getDeclaredMethod("updateControls")
+                    .apply { isAccessible = true }
+                    .invoke(activity)
+            }
+
+            onView(withId(R.id.transcribeAll)).perform(scrollTo()).check(matches(isDisplayed()))
+
+            scenario.onActivity { activity ->
+                activity.findViewById<android.widget.Button>(R.id.processedTab).performClick()
+                MainActivity::class.java.getDeclaredMethod("updateControls")
+                    .apply { isAccessible = true }
+                    .invoke(activity)
+            }
+
+            onView(withId(R.id.transcribeAll)).check(matches(not(isDisplayed())))
         }
     }
 

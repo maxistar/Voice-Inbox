@@ -26,8 +26,8 @@
                 android:id="@+id/statusTitle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
-                android:text="Checking speech model"
+                android:layout_marginTop="0dp"
+                android:text="@string/checking_speech_model"
                 android:textStyle="bold" />
 
             <TextView
@@ -57,7 +57,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:text="Download speech model"
+                android:text="@string/download_speech_model"
                 android:visibility="gone" />
 
         <TextView
@@ -74,16 +74,6 @@
             android:layout_marginTop="4dp"
             android:text="@string/folder_not_selected" />
 
-        <Button
-            android:id="@+id/transcribeAll"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/transcribe_all_background"
-            android:enabled="false"
-            android:textColor="@color/transcribe_all_text"
-            android:text="Transcribe all" />
-
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -95,7 +85,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="New" />
+                android:text="@string/new_label" />
 
             <Button
                 android:id="@+id/processedTab"
@@ -103,7 +93,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
                 android:layout_weight="1"
-                android:text="Processed" />
+                android:text="@string/processed" />
         </LinearLayout>
 
         <TextView
@@ -111,13 +101,23 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="No new audio files" />
+            android:text="@string/no_new_audio_files" />
 
         <LinearLayout
             android:id="@+id/fileList"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical" />
+
+        <Button
+            android:id="@+id/transcribeAll"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/transcribe_all_background"
+            android:enabled="false"
+            android:text="@string/transcribe_all"
+            android:textColor="@color/transcribe_all_text" />
 
         </LinearLayout>
     </ScrollView>

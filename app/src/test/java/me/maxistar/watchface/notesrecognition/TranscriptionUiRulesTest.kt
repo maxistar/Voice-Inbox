@@ -47,7 +47,7 @@ class TranscriptionUiRulesTest {
                 outputSelected = true,
                 folderSelected = true,
                 pendingCount = 2,
-                transcriptionActive = true,
+                transcriptionState = TranscriptionObservationState.ACTIVE,
                 scanning = false,
             ),
         )
@@ -58,8 +58,23 @@ class TranscriptionUiRulesTest {
                 outputSelected = true,
                 folderSelected = true,
                 pendingCount = 2,
-                transcriptionActive = false,
+                transcriptionState = TranscriptionObservationState.IDLE,
                 scanning = true,
+            ),
+        )
+    }
+
+    @Test
+    fun controlsAreDisabledWhileTranscriptionObservationIsUnknown() {
+        assertEquals(
+            CatalogControlState(false, false, false, false, false),
+            TranscriptionUiRules.catalogControls(
+                modelReady = true,
+                outputSelected = true,
+                folderSelected = true,
+                pendingCount = 2,
+                transcriptionState = TranscriptionObservationState.UNKNOWN,
+                scanning = false,
             ),
         )
     }
@@ -79,7 +94,7 @@ class TranscriptionUiRulesTest {
                 entryId = 1,
                 activeEntryId = null,
                 playbackState = PreviewPlaybackState.IDLE,
-                transcriptionActive = false,
+                transcriptionState = TranscriptionObservationState.IDLE,
                 scanning = false,
             ),
         )
@@ -89,7 +104,17 @@ class TranscriptionUiRulesTest {
                 entryId = 1,
                 activeEntryId = null,
                 playbackState = PreviewPlaybackState.IDLE,
-                transcriptionActive = true,
+                transcriptionState = TranscriptionObservationState.ACTIVE,
+                scanning = false,
+            ),
+        )
+        assertEquals(
+            PreviewControlState("Play", enabled = false),
+            TranscriptionUiRules.previewControl(
+                entryId = 1,
+                activeEntryId = null,
+                playbackState = PreviewPlaybackState.IDLE,
+                transcriptionState = TranscriptionObservationState.UNKNOWN,
                 scanning = false,
             ),
         )
@@ -99,7 +124,7 @@ class TranscriptionUiRulesTest {
                 entryId = 1,
                 activeEntryId = 1,
                 playbackState = PreviewPlaybackState.LOADING,
-                transcriptionActive = false,
+                transcriptionState = TranscriptionObservationState.IDLE,
                 scanning = false,
             ),
         )
@@ -109,7 +134,7 @@ class TranscriptionUiRulesTest {
                 entryId = 1,
                 activeEntryId = 1,
                 playbackState = PreviewPlaybackState.PLAYING,
-                transcriptionActive = false,
+                transcriptionState = TranscriptionObservationState.IDLE,
                 scanning = false,
             ),
         )
@@ -171,7 +196,7 @@ class TranscriptionUiRulesTest {
                 folder = true,
                 pending = 2,
                 scanMessage = "Scan complete: 2 audio files",
-                transcriptionActive = true,
+                transcriptionState = TranscriptionObservationState.ACTIVE,
                 transcriptionPhase = "Transcribing",
                 transcriptionFilename = "lesson.wav",
                 transcriptionIndeterminate = false,
@@ -198,9 +223,27 @@ class TranscriptionUiRulesTest {
                 folder = true,
                 scanning = true,
                 scanMessage = "Scanning folder",
-                transcriptionFinished = true,
+                transcriptionState = TranscriptionObservationState.FINISHED,
                 transcriptionPhase = "Completed",
                 transcriptionProgress = 100,
+            ),
+        )
+    }
+
+    @Test
+    fun unknownTranscriptionObservationDoesNotRenderReadyState() {
+        assertEquals(
+            StatusProgressBlockState(
+                title = "Checking transcription status",
+                progressVisible = true,
+                progressIndeterminate = true,
+            ),
+            status(
+                modelReady = true,
+                output = true,
+                folder = true,
+                pending = 2,
+                transcriptionState = TranscriptionObservationState.UNKNOWN,
             ),
         )
     }
@@ -274,7 +317,7 @@ class TranscriptionUiRulesTest {
         output,
         folder,
         pending,
-        active,
+        if (active) TranscriptionObservationState.ACTIVE else TranscriptionObservationState.IDLE,
         scanning = false,
     )
 
@@ -290,8 +333,7 @@ class TranscriptionUiRulesTest {
         folderChecking: Boolean = false,
         scanning: Boolean = false,
         scanMessage: String? = null,
-        transcriptionActive: Boolean = false,
-        transcriptionFinished: Boolean = false,
+        transcriptionState: TranscriptionObservationState = TranscriptionObservationState.IDLE,
         transcriptionPhase: String? = null,
         transcriptionFilename: String? = null,
         transcriptionIndeterminate: Boolean = true,
@@ -315,8 +357,7 @@ class TranscriptionUiRulesTest {
             folderChecking = folderChecking,
             scanning = scanning,
             scanMessage = scanMessage,
-            transcriptionActive = transcriptionActive,
-            transcriptionFinished = transcriptionFinished,
+            transcriptionState = transcriptionState,
             transcriptionPhase = transcriptionPhase,
             transcriptionFilename = transcriptionFilename,
             transcriptionIndeterminate = transcriptionIndeterminate,

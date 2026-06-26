@@ -47,7 +47,7 @@ class MainActivity : AppCompatActivity() {
     private var modelReady = false
     private var outputUri: Uri? = null
     private var folderUri: Uri? = null
-    private var transcriptionActive = false
+    private var transcriptionState = TranscriptionObservationState.UNKNOWN
     private var folderChecking = false
     private var folderScanQueued = false
     private var scanning = false
@@ -222,6 +222,7 @@ class MainActivity : AppCompatActivity() {
                         folderUri = stored
                         updateFolderSummary(name)
                         updateControls()
+                        refreshCatalog()
                         scanFolder()
                     }
                 }.onFailure {
@@ -285,6 +286,7 @@ class MainActivity : AppCompatActivity() {
                     statusError = null
                     renderStatusBlock()
                     updateControls()
+                    refreshCatalog()
                     scanFolder()
                 }
             }.onFailure {
@@ -299,7 +301,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun scanFolder() {
         val folder = folderUri ?: return
-        if (folderChecking || folderScanQueued || scanning || transcriptionActive) return
+        if (folderChecking || folderScanQueued || scanning || transcriptionActive()) return
         folderScanQueued = true
         transcriptionFinished = false
         transcriptionPhase = null
@@ -424,7 +426,7 @@ class MainActivity : AppCompatActivity() {
                     entryId = entry.id,
                     activeEntryId = previewEntryId,
                     playbackState = previewState,
-                    transcriptionActive = transcriptionActive,
+                    transcriptionState = transcriptionState,
                     scanning = folderBusy(),
                 )
                 text = control.label
@@ -565,22 +567,20 @@ class MainActivity : AppCompatActivity() {
         WorkManager.getInstance(this)
             .getWorkInfosForUniqueWorkLiveData(TranscriptionWorker.UNIQUE_WORK_NAME)
             .observe(this) { infos ->
+                transcriptionState = classifyTranscriptionState(infos)
+                if (infos.isEmpty()) {
+                    transcriptionFinished = false
+                    renderStatusBlock()
+                    updateControls()
+                    return@observe
+                }
                 val info = infos.firstOrNull {
-                    it.state in setOf(
-                        WorkInfo.State.ENQUEUED,
-                        WorkInfo.State.BLOCKED,
-                        WorkInfo.State.RUNNING,
-                    )
+                    it.state in ACTIVE_WORK_STATES
                 } ?: infos.firstOrNull() ?: return@observe
-                transcriptionActive = info.state in setOf(
-                    WorkInfo.State.ENQUEUED,
-                    WorkInfo.State.BLOCKED,
-                    WorkInfo.State.RUNNING,
-                )
-                if (transcriptionActive && previewState != PreviewPlaybackState.IDLE) {
+                if (transcriptionActive() && previewState != PreviewPlaybackState.IDLE) {
                     stopPreviewPlayback(render = true)
                 }
-                transcriptionFinished = info.state.isFinished
+                transcriptionFinished = transcriptionState == TranscriptionObservationState.FINISHED
                 val data = if (info.state.isFinished) info.outputData else info.progress
                 transcriptionPhase = data.getString(TranscriptionWorker.KEY_PHASE)
                     ?: when (info.state) {
@@ -593,14 +593,14 @@ class MainActivity : AppCompatActivity() {
                     }
                 transcriptionFilename = data.getString(TranscriptionWorker.KEY_FILENAME)
                 transcriptionIndeterminate =
-                    transcriptionActive && data.getBoolean(TranscriptionWorker.KEY_INDETERMINATE, true)
+                    transcriptionActive() && data.getBoolean(TranscriptionWorker.KEY_INDETERMINATE, true)
                 transcriptionProgressValue = data.getInt(TranscriptionWorker.KEY_PROGRESS, 0)
                 processedUs = data.getLong(TranscriptionWorker.KEY_PROCESSED_US, -1L)
                 durationUs = data.getLong(TranscriptionWorker.KEY_DURATION_US, -1L)
                 completedFiles = data.getInt(TranscriptionWorker.KEY_COMPLETED_FILES, 0)
                 totalFiles = data.getInt(TranscriptionWorker.KEY_TOTAL_FILES, 0)
                 failedFiles = data.getInt(TranscriptionWorker.KEY_FAILED_FILES, 0)
-                if (transcriptionActive || transcriptionFinished) {
+                if (transcriptionActive() || transcriptionFinished) {
                     scanMessage = null
                     statusError = null
                 }
@@ -621,15 +621,28 @@ class MainActivity : AppCompatActivity() {
             outputSelected = outputUri != null,
             folderSelected = folderUri != null,
             pendingCount = pendingCount,
-            transcriptionActive = transcriptionActive,
+            transcriptionState = transcriptionState,
             scanning = folderBusy(),
         )
 
     private fun folderBusy(): Boolean = folderChecking || folderScanQueued || scanning
 
+    private fun transcriptionActive(): Boolean = transcriptionState == TranscriptionObservationState.ACTIVE
+
+    private fun classifyTranscriptionState(infos: List<WorkInfo>): TranscriptionObservationState =
+        when {
+            infos.any { it.state in ACTIVE_WORK_STATES } -> TranscriptionObservationState.ACTIVE
+            infos.any { it.state.isFinished } -> TranscriptionObservationState.FINISHED
+            else -> TranscriptionObservationState.IDLE
+        }
+
     private fun updateControls() {
         val controls = currentControls()
-        transcribeAll.visibility = View.VISIBLE
+        transcribeAll.visibility = if (selectedTab == CatalogTab.NEW && pendingCount > 0) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
         transcribeAll.isEnabled = controls.transcribeAllEnabled
         for (index in 0 until fileList.childCount) {
             val row = fileList.getChildAt(index) as? LinearLayout ?: continue
@@ -644,7 +657,7 @@ class MainActivity : AppCompatActivity() {
                                 entryId = tag.entryId,
                                 activeEntryId = previewEntryId,
                                 playbackState = previewState,
-                                transcriptionActive = transcriptionActive,
+                                transcriptionState = transcriptionState,
                                 scanning = folderBusy(),
                             )
                             button.text = preview.label
@@ -658,7 +671,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startPreviewPlayback(entry: AudioCatalogEntry) {
-        if (folderBusy() || transcriptionActive) return
+        if (folderBusy() || transcriptionActive()) return
         stopPreviewPlayback(render = false)
         previewEntryId = entry.id
         previewState = PreviewPlaybackState.LOADING
@@ -722,8 +735,7 @@ class MainActivity : AppCompatActivity() {
                 folderChecking = folderChecking,
                 scanning = scanning,
                 scanMessage = scanMessage,
-                transcriptionActive = transcriptionActive,
-                transcriptionFinished = transcriptionFinished,
+                transcriptionState = transcriptionState,
                 transcriptionPhase = transcriptionPhase,
                 transcriptionFilename = transcriptionFilename,
                 transcriptionIndeterminate = transcriptionIndeterminate,
@@ -802,6 +814,11 @@ class MainActivity : AppCompatActivity() {
 
     private companion object {
         const val RETRY_BUTTON_TAG = "retry"
+        val ACTIVE_WORK_STATES = setOf(
+            WorkInfo.State.ENQUEUED,
+            WorkInfo.State.BLOCKED,
+            WorkInfo.State.RUNNING,
+        )
 
         @Volatile
         private var sharedModelReadiness: SpeechModelReadinessManager? = null

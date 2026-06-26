@@ -20,8 +20,7 @@ data class StatusProgressInput(
     val folderChecking: Boolean,
     val scanning: Boolean,
     val scanMessage: String?,
-    val transcriptionActive: Boolean,
-    val transcriptionFinished: Boolean,
+    val transcriptionState: TranscriptionObservationState,
     val transcriptionPhase: String?,
     val transcriptionFilename: String?,
     val transcriptionIndeterminate: Boolean,
@@ -50,6 +49,13 @@ enum class PreviewPlaybackState {
     PLAYING,
 }
 
+enum class TranscriptionObservationState {
+    UNKNOWN,
+    IDLE,
+    ACTIVE,
+    FINISHED,
+}
+
 data class PreviewControlState(
     val label: String,
     val enabled: Boolean,
@@ -61,10 +67,12 @@ object TranscriptionUiRules {
         outputSelected: Boolean,
         folderSelected: Boolean,
         pendingCount: Int,
-        transcriptionActive: Boolean,
+        transcriptionState: TranscriptionObservationState,
         scanning: Boolean,
     ): CatalogControlState {
-        val idle = !transcriptionActive && !scanning
+        val workReady = transcriptionState == TranscriptionObservationState.IDLE ||
+            transcriptionState == TranscriptionObservationState.FINISHED
+        val idle = workReady && !scanning
         val prerequisites = modelReady && outputSelected && folderSelected && idle
         return CatalogControlState(
             outputEnabled = modelReady && idle,
@@ -84,11 +92,12 @@ object TranscriptionUiRules {
         entryId: Long,
         activeEntryId: Long?,
         playbackState: PreviewPlaybackState,
-        transcriptionActive: Boolean,
+        transcriptionState: TranscriptionObservationState,
         scanning: Boolean,
     ): PreviewControlState {
         val activeForEntry = entryId == activeEntryId
-        val blocked = transcriptionActive || scanning
+        val blocked = transcriptionState != TranscriptionObservationState.IDLE &&
+            transcriptionState != TranscriptionObservationState.FINISHED || scanning
         return when {
             activeForEntry && playbackState == PreviewPlaybackState.LOADING ->
                 PreviewControlState("Loading...", enabled = true)
@@ -100,7 +109,7 @@ object TranscriptionUiRules {
 
     fun statusProgressBlock(input: StatusProgressInput): StatusProgressBlockState =
         when {
-            input.transcriptionActive -> activeTranscription(input)
+            input.transcriptionState == TranscriptionObservationState.ACTIVE -> activeTranscription(input)
             input.modelLoading -> StatusProgressBlockState(
                 title = input.modelMessage,
                 progressVisible = true,
@@ -125,7 +134,12 @@ object TranscriptionUiRules {
                 title = input.errorMessage,
             )
             !input.outputSelected || !input.folderSelected -> setupRequired(input)
-            input.transcriptionFinished -> completedTranscription(input)
+            input.transcriptionState == TranscriptionObservationState.UNKNOWN -> StatusProgressBlockState(
+                title = "Checking transcription status",
+                progressVisible = true,
+                progressIndeterminate = true,
+            )
+            input.transcriptionState == TranscriptionObservationState.FINISHED -> completedTranscription(input)
             input.scanMessage != null -> StatusProgressBlockState(
                 title = input.scanMessage,
                 detail = idleDetail(input.pendingCount),

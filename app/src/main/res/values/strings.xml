@@ -9,4 +9,10 @@
     <string name="output_selected">Output: %1$s</string>
     <string name="folder_not_selected">Audio folder: not selected. Use the menu to select an audio folder.</string>
     <string name="folder_selected">Audio folder: %1$s</string>
+    <string name="checking_speech_model">Checking speech model</string>
+    <string name="download_speech_model">Download speech model</string>
+    <string name="new_label">New</string>
+    <string name="processed">Processed</string>
+    <string name="no_new_audio_files">No new audio files</string>
+    <string name="transcribe_all">Transcribe all</string>
 </resources>
