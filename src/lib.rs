@@ -27,7 +27,7 @@ fn serialize_chunk_result(result: transcribe_rs::TranscriptionResult) -> String 
 }
 
 #[no_mangle]
-pub unsafe extern "system" fn Java_me_maxistar_watchface_notesrecognition_NativeTranscriptionBridge_initialize(
+pub unsafe extern "system" fn Java_me_maxistar_voiceinbox_NativeTranscriptionBridge_initialize(
     mut env: JNIEnv,
     _class: JClass,
     model_directory: JString,
@@ -56,7 +56,7 @@ pub unsafe extern "system" fn Java_me_maxistar_watchface_notesrecognition_Native
 }
 
 #[no_mangle]
-pub unsafe extern "system" fn Java_me_maxistar_watchface_notesrecognition_NativeTranscriptionBridge_transcribeChunkJson(
+pub unsafe extern "system" fn Java_me_maxistar_voiceinbox_NativeTranscriptionBridge_transcribeChunkJson(
     env: JNIEnv,
     _class: JClass,
     samples: JFloatArray,

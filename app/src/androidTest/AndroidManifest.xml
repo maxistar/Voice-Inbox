@@ -3,7 +3,7 @@
     <application>
         <provider
             android:name=".TestAudioDocumentsProvider"
-            android:authorities="me.maxistar.watchface.notesrecognition.test.documents"
+            android:authorities="me.maxistar.voiceinbox.test.documents"
             android:exported="true"
             android:grantUriPermissions="true" />
     </application>

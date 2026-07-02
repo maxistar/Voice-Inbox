@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "me.maxistar.watchface.notesrecognition"
+    namespace = "me.maxistar.voiceinbox"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "me.maxistar.watchface.notesrecognition"
+        applicationId = "me.maxistar.voiceinbox"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
