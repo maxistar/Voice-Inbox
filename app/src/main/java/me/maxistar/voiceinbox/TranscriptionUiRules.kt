@@ -3,6 +3,8 @@ package me.maxistar.voiceinbox
 data class CatalogControlState(
     val outputEnabled: Boolean,
     val folderEnabled: Boolean,
+    val outputSetupVisible: Boolean,
+    val folderSetupVisible: Boolean,
     val refreshEnabled: Boolean,
     val transcribeAllEnabled: Boolean,
     val retryEnabled: Boolean,
@@ -77,6 +79,8 @@ object TranscriptionUiRules {
         return CatalogControlState(
             outputEnabled = modelReady && idle,
             folderEnabled = modelReady && idle,
+            outputSetupVisible = !outputSelected,
+            folderSetupVisible = !folderSelected,
             refreshEnabled = modelReady && folderSelected && idle,
             transcribeAllEnabled = prerequisites && pendingCount > 0,
             retryEnabled = prerequisites,

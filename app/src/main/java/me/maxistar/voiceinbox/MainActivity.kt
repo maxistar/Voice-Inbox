@@ -29,6 +29,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusMeta: TextView
     private lateinit var downloadModel: Button
     private lateinit var transcribeAll: Button
+    private lateinit var selectOutput: Button
+    private lateinit var selectFolder: Button
     private lateinit var outputName: TextView
     private lateinit var folderName: TextView
     private lateinit var newTab: Button
@@ -109,12 +111,9 @@ class MainActivity : AppCompatActivity() {
         modelReadiness = getSharedModelReadiness(SpeechModelRepository(noBackupFilesDir.resolve("models")))
 
         downloadModel.setOnClickListener { SpeechModelDownloadWorker.enqueue(this) }
-        transcribeAll.setOnClickListener {
-            val folder = folderUri ?: return@setOnClickListener
-            val output = outputUri ?: return@setOnClickListener
-            stopPreviewPlayback(render = true)
-            TranscriptionWorker.enqueueAll(this, folder, output)
-        }
+        transcribeAll.setOnClickListener { startBatchTranscription() }
+        selectOutput.setOnClickListener { launchOutputPickerIfEnabled() }
+        selectFolder.setOnClickListener { launchFolderPickerIfEnabled() }
         newTab.setOnClickListener {
             selectedTab = CatalogTab.NEW
             refreshCatalog()
@@ -150,15 +149,11 @@ class MainActivity : AppCompatActivity() {
                 true
             }
             R.id.menuSelectOutput -> {
-                if (currentControls().outputEnabled) {
-                    outputPicker.launch(FileSelectionRules.outputMimeTypes)
-                }
+                launchOutputPickerIfEnabled()
                 true
             }
             R.id.menuSelectFolder -> {
-                if (currentControls().folderEnabled) {
-                    folderPicker.launch(folderUri)
-                }
+                launchFolderPickerIfEnabled()
                 true
             }
             else -> super.onOptionsItemSelected(item)
@@ -178,6 +173,8 @@ class MainActivity : AppCompatActivity() {
         statusMeta = findViewById(R.id.statusMeta)
         downloadModel = findViewById(R.id.downloadModel)
         transcribeAll = findViewById(R.id.transcribeAll)
+        selectOutput = findViewById(R.id.selectOutput)
+        selectFolder = findViewById(R.id.selectFolder)
         outputName = findViewById(R.id.outputName)
         folderName = findViewById(R.id.folderName)
         newTab = findViewById(R.id.newTab)
@@ -627,6 +624,25 @@ class MainActivity : AppCompatActivity() {
 
     private fun folderBusy(): Boolean = folderChecking || folderScanQueued || scanning
 
+    private fun launchOutputPickerIfEnabled() {
+        if (currentControls().outputEnabled) {
+            outputPicker.launch(FileSelectionRules.outputMimeTypes)
+        }
+    }
+
+    private fun launchFolderPickerIfEnabled() {
+        if (currentControls().folderEnabled) {
+            folderPicker.launch(folderUri)
+        }
+    }
+
+    private fun startBatchTranscription() {
+        val folder = folderUri ?: return
+        val output = outputUri ?: return
+        stopPreviewPlayback(render = true)
+        TranscriptionWorker.enqueueAll(this, folder, output)
+    }
+
     private fun transcriptionActive(): Boolean = transcriptionState == TranscriptionObservationState.ACTIVE
 
     private fun classifyTranscriptionState(infos: List<WorkInfo>): TranscriptionObservationState =
@@ -638,6 +654,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateControls() {
         val controls = currentControls()
+        selectOutput.visibility = if (controls.outputSetupVisible) View.VISIBLE else View.GONE
+        selectOutput.isEnabled = controls.outputEnabled
+        selectFolder.visibility = if (controls.folderSetupVisible) View.VISIBLE else View.GONE
+        selectFolder.isEnabled = controls.folderEnabled
         transcribeAll.visibility = if (selectedTab == CatalogTab.NEW && pendingCount > 0) {
             View.VISIBLE
         } else {

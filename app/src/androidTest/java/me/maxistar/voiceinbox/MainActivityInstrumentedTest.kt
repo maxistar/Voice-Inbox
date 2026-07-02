@@ -27,6 +27,8 @@ class MainActivityInstrumentedTest {
             onView(withId(R.id.statusTitle)).check(matches(isDisplayed()))
             onView(withText(R.string.output_not_selected)).check(matches(isDisplayed()))
             onView(withText(R.string.folder_not_selected)).check(matches(isDisplayed()))
+            onView(withId(R.id.selectOutput)).check(matches(isDisplayed()))
+            onView(withId(R.id.selectFolder)).check(matches(isDisplayed()))
             onView(withContentDescription(R.string.menu_refresh_folder)).check(matches(isDisplayed()))
             onView(withId(R.id.transcribeAll)).check(matches(not(isDisplayed())))
 

@@ -7,27 +7,27 @@ class TranscriptionUiRulesTest {
     @Test
     fun controlsRequireModelSelectionsPendingWorkAndIdleState() {
         assertEquals(
-            CatalogControlState(false, false, false, false, false),
+            CatalogControlState(false, false, true, true, false, false, false),
             controls(modelReady = false),
         )
         assertEquals(
-            CatalogControlState(true, true, false, false, false),
+            CatalogControlState(true, true, true, true, false, false, false),
             controls(modelReady = true),
         )
         assertEquals(
-            CatalogControlState(true, true, true, false, true),
+            CatalogControlState(true, true, false, false, true, false, true),
             controls(modelReady = true, output = true, folder = true),
         )
         assertEquals(
-            CatalogControlState(true, true, true, false, false),
+            CatalogControlState(true, true, true, false, true, false, false),
             controls(modelReady = true, folder = true),
         )
         assertEquals(
-            CatalogControlState(true, true, true, true, true),
+            CatalogControlState(true, true, false, false, true, true, true),
             controls(modelReady = true, output = true, folder = true, pending = 2),
         )
         assertEquals(
-            CatalogControlState(false, false, false, false, false),
+            CatalogControlState(false, false, false, false, false, false, false),
             controls(
                 modelReady = true,
                 output = true,
@@ -41,7 +41,7 @@ class TranscriptionUiRulesTest {
     @Test
     fun selectionControlsAreDisabledWhileScanningOrTranscribing() {
         assertEquals(
-            CatalogControlState(false, false, false, false, false),
+            CatalogControlState(false, false, false, false, false, false, false),
             TranscriptionUiRules.catalogControls(
                 modelReady = true,
                 outputSelected = true,
@@ -52,7 +52,7 @@ class TranscriptionUiRulesTest {
             ),
         )
         assertEquals(
-            CatalogControlState(false, false, false, false, false),
+            CatalogControlState(false, false, false, false, false, false, false),
             TranscriptionUiRules.catalogControls(
                 modelReady = true,
                 outputSelected = true,
@@ -67,7 +67,7 @@ class TranscriptionUiRulesTest {
     @Test
     fun controlsAreDisabledWhileTranscriptionObservationIsUnknown() {
         assertEquals(
-            CatalogControlState(false, false, false, false, false),
+            CatalogControlState(false, false, false, false, false, false, false),
             TranscriptionUiRules.catalogControls(
                 modelReady = true,
                 outputSelected = true,
@@ -76,6 +76,46 @@ class TranscriptionUiRulesTest {
                 transcriptionState = TranscriptionObservationState.UNKNOWN,
                 scanning = false,
             ),
+        )
+    }
+
+    @Test
+    fun setupActionVisibilityReflectsMissingSelections() {
+        assertEquals(
+            CatalogControlState(
+                outputEnabled = true,
+                folderEnabled = true,
+                outputSetupVisible = true,
+                folderSetupVisible = true,
+                refreshEnabled = false,
+                transcribeAllEnabled = false,
+                retryEnabled = false,
+            ),
+            controls(modelReady = true),
+        )
+        assertEquals(
+            CatalogControlState(
+                outputEnabled = true,
+                folderEnabled = true,
+                outputSetupVisible = false,
+                folderSetupVisible = true,
+                refreshEnabled = false,
+                transcribeAllEnabled = false,
+                retryEnabled = false,
+            ),
+            controls(modelReady = true, output = true),
+        )
+        assertEquals(
+            CatalogControlState(
+                outputEnabled = true,
+                folderEnabled = true,
+                outputSetupVisible = false,
+                folderSetupVisible = false,
+                refreshEnabled = true,
+                transcribeAllEnabled = false,
+                retryEnabled = true,
+            ),
+            controls(modelReady = true, output = true, folder = true),
         )
     }
 

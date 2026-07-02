@@ -2,9 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
         <provider
-            android:name=".TestAudioDocumentsProvider"
+            android:name="me.maxistar.voiceinbox.TestAudioDocumentsProvider"
             android:authorities="me.maxistar.voiceinbox.test.documents"
             android:exported="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS"
             android:grantUriPermissions="true" />
     </application>
 </manifest>
