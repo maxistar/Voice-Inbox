@@ -1,0 +1,62 @@
+name: Android CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;30.0.14904198"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Cache Rust artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rust-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'transcribe-rs/**/Cargo.toml') }}
+          restore-keys: |
+            rust-${{ runner.os }}-
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run JVM unit tests
+        run: ./gradlew :app:testDebugUnitTest
+
+      - name: Build debug APK
+        run: ./gradlew :app:assembleDebug
+
+      - name: Build debug androidTest APK
+        run: ./gradlew :app:assembleDebugAndroidTest

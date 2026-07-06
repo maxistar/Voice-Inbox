@@ -1,0 +1,98 @@
+name: Android Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  signed-release:
+    name: Build signed release artifacts
+    runs-on: ubuntu-latest
+
+    env:
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate signing secrets
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          missing=0
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name is required for signed release builds"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;30.0.14904198"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Cache Rust artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rust-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'transcribe-rs/**/Cargo.toml') }}
+          restore-keys: |
+            rust-${{ runner.os }}-
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Decode release keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          keystore="$RUNNER_TEMP/voice-inbox-release.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          echo "ANDROID_KEYSTORE_FILE=$keystore" >> "$GITHUB_ENV"
+
+      - name: Build signed release APK
+        run: ./gradlew :app:assembleRelease
+
+      - name: Build signed release AAB
+        run: ./gradlew :app:bundleRelease
+
+      - name: Upload signed release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: voice-inbox-release-apk
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+      - name: Upload signed release AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: voice-inbox-release-aab
+          path: app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error

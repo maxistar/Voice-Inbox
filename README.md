@@ -82,3 +82,22 @@ Requirements:
 
 The Gradle build extracts ONNX Runtime, builds the Rust JNI library for
 `arm64-v8a`, and packages the required native libraries.
+
+## GitHub Actions
+
+The repository includes two GitHub Actions workflows:
+
+- **Android CI** runs on pull requests and pushes to `main`. It builds the
+  debug APK, builds the debug androidTest APK, and runs JVM unit tests.
+- **Android Release** runs manually from GitHub Actions and builds signed
+  release APK and AAB artifacts.
+
+Signed release builds require these repository secrets:
+
+- `ANDROID_KEYSTORE_BASE64`: base64-encoded release keystore file
+- `ANDROID_KEYSTORE_PASSWORD`: release keystore password
+- `ANDROID_KEY_ALIAS`: release key alias
+- `ANDROID_KEY_PASSWORD`: release key password
+
+The release workflow uploads signed APK and AAB artifacts. It does not publish
+to Google Play or any other app store.

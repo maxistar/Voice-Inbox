@@ -5,6 +5,17 @@ plugins {
     alias(libs.plugins.kotlin.android)
 }
 
+val releaseKeystoreFile = System.getenv("ANDROID_KEYSTORE_FILE")
+val releaseKeystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+val releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
+val releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+val hasReleaseSigning = listOf(
+    releaseKeystoreFile,
+    releaseKeystorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "me.maxistar.voiceinbox"
     compileSdk = 36
@@ -22,8 +33,22 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(requireNotNull(releaseKeystoreFile))
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
