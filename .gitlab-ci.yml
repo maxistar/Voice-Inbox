@@ -1,0 +1,80 @@
+stages:
+  - release
+
+variables:
+  GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
+  ANDROID_SDK_ROOT: "$CI_PROJECT_DIR/android-sdk"
+  ANDROID_HOME: "$CI_PROJECT_DIR/android-sdk"
+  CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
+  RUSTUP_HOME: "$CI_PROJECT_DIR/.rustup"
+  DEBIAN_FRONTEND: "noninteractive"
+  RELEASE_STAGE_DIR: "$CI_PROJECT_DIR/release-dist"
+
+cache:
+  key: "$CI_JOB_NAME"
+  paths:
+    - .gradle/caches/
+    - .gradle/wrapper/
+    - android-sdk/
+    - .cargo/registry/
+    - .cargo/git/
+    - .rustup/
+    - target/
+
+default:
+  image: ubuntu:22.04
+  before_script:
+    - 'apt-get update'
+    - 'apt-get install -y ca-certificates curl git openjdk-17-jdk unzip wget openssh-client'
+    - 'export PATH="$CARGO_HOME/bin:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"'
+    - 'mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"'
+    - 'wget -q https://dl.google.com/android/repository/commandlinetools-linux-14742923_latest.zip -O /tmp/android-commandline-tools.zip'
+    - 'unzip -q /tmp/android-commandline-tools.zip -d /tmp/android-cmdline-tools'
+    - 'rm -rf "$ANDROID_SDK_ROOT/cmdline-tools/latest"'
+    - 'mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools/latest"'
+    - 'mv /tmp/android-cmdline-tools/cmdline-tools/* "$ANDROID_SDK_ROOT/cmdline-tools/latest/"'
+    - 'bash -lc ''set +o pipefail; yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null'''
+    - '"$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;30.0.14904198"'
+    - 'if ! command -v rustup >/dev/null 2>&1; then curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable; fi'
+    - 'rustup target add aarch64-linux-android'
+    - 'command -v cargo-ndk >/dev/null 2>&1 || cargo install cargo-ndk --locked'
+
+.release_upload_template:
+  stage: release
+  when: manual
+  tags:
+    - crabby
+  script:
+    - 'test -n "$KEYSTORE_BASE64"'
+    - 'test -n "$RELEASE_STORE_PASSWORD"'
+    - 'test -n "$RELEASE_KEY_ALIAS"'
+    - 'test -n "$RELEASE_KEY_PASSWORD"'
+    - 'test -n "$SSH_PRIVATE_KEY"'
+    - 'test -n "$SSH_HOST"'
+    - 'test -n "$SSH_USER"'
+    - 'test -n "$APK_SSH_TARGET_DIR"'
+    - 'test -n "$AAB_SSH_TARGET_DIR"'
+    - 'test -n "$RELEASE_MODULES"'
+    - 'mkdir -p "$HOME/.ssh"'
+    - 'printf "%s\n" "$SSH_PRIVATE_KEY" | tr -d "\r" > "$HOME/.ssh/id_ed25519"'
+    - 'chmod 600 "$HOME/.ssh/id_ed25519"'
+    - 'JOB_RELEASE_STAGE_DIR="$RELEASE_STAGE_DIR/$CI_JOB_NAME"'
+    - 'mkdir -p "$JOB_RELEASE_STAGE_DIR"'
+    - 'printf "%s" "$KEYSTORE_BASE64" | base64 --decode > "$CI_PROJECT_DIR/release-keystore.jks"'
+    - 'export ANDROID_KEYSTORE_FILE="$CI_PROJECT_DIR/release-keystore.jks"'
+    - 'export ANDROID_KEYSTORE_PASSWORD="$RELEASE_STORE_PASSWORD"'
+    - 'export ANDROID_KEY_ALIAS="$RELEASE_KEY_ALIAS"'
+    - 'export ANDROID_KEY_PASSWORD="$RELEASE_KEY_PASSWORD"'
+    - 'GRADLE_TASKS=""'
+    - 'for module in $RELEASE_MODULES; do GRADLE_TASKS="$GRADLE_TASKS :${module}:assembleRelease :${module}:bundleRelease"; done'
+    - './gradlew -x lintVitalRelease -x lintVitalAnalyzeRelease $GRADLE_TASKS'
+    - 'for module in $RELEASE_MODULES; do VERSION=$(grep ''versionName ='' "$CI_PROJECT_DIR/${module}/build.gradle.kts" | head -n1 | cut -d ''"'' -f2); test -n "$VERSION"; ARTIFACT_NAME="${RELEASE_ARTIFACT_NAME:-$module}"; cp "${module}/build/outputs/apk/release/${module}-release.apk" "$JOB_RELEASE_STAGE_DIR/${ARTIFACT_NAME}-${VERSION}.apk"; cp "${module}/build/outputs/bundle/release/${module}-release.aab" "$JOB_RELEASE_STAGE_DIR/${ARTIFACT_NAME}-${VERSION}.aab"; done'
+    - 'for module in $RELEASE_MODULES; do VERSION=$(grep ''versionName ='' "$CI_PROJECT_DIR/${module}/build.gradle.kts" | head -n1 | cut -d ''"'' -f2); ARTIFACT_NAME="${RELEASE_ARTIFACT_NAME:-$module}"; test -f "$JOB_RELEASE_STAGE_DIR/${ARTIFACT_NAME}-${VERSION}.apk"; test -f "$JOB_RELEASE_STAGE_DIR/${ARTIFACT_NAME}-${VERSION}.aab"; done'
+    - 'for module in $RELEASE_MODULES; do VERSION=$(grep ''versionName ='' "$CI_PROJECT_DIR/${module}/build.gradle.kts" | head -n1 | cut -d ''"'' -f2); ARTIFACT_NAME="${RELEASE_ARTIFACT_NAME:-$module}"; scp -P "${SSH_PORT:-22}" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$JOB_RELEASE_STAGE_DIR/${ARTIFACT_NAME}-${VERSION}.apk" "$SSH_USER@$SSH_HOST:$APK_SSH_TARGET_DIR/"; done'
+    - 'for module in $RELEASE_MODULES; do VERSION=$(grep ''versionName ='' "$CI_PROJECT_DIR/${module}/build.gradle.kts" | head -n1 | cut -d ''"'' -f2); ARTIFACT_NAME="${RELEASE_ARTIFACT_NAME:-$module}"; scp -P "${SSH_PORT:-22}" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$JOB_RELEASE_STAGE_DIR/${ARTIFACT_NAME}-${VERSION}.aab" "$SSH_USER@$SSH_HOST:$AAB_SSH_TARGET_DIR/"; done'
+
+voice_inbox_release_upload:
+  extends: .release_upload_template
+  variables:
+    RELEASE_MODULES: "app"
+    RELEASE_ARTIFACT_NAME: "voice-inbox"
