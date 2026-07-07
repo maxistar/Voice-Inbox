@@ -5,7 +5,13 @@
     <string name="menu_select_folder">Select audio folder</string>
     <string name="menu_change_folder">Change audio folder</string>
     <string name="menu_refresh_folder">Refresh</string>
-    <string name="menu_scheduled_transcription">Nightly transcription around 01:00</string>
+    <string name="menu_settings">Settings</string>
+    <string name="settings_title">Settings</string>
+    <string name="settings_scheduled_transcription_title">Nightly transcription</string>
+    <string name="settings_scheduled_transcription_subtitle">Automatically scan and transcribe new notes around the selected time.</string>
+    <string name="settings_scheduled_transcription_time">Scheduled time: %1$02d:%2$02d</string>
+    <string name="settings_change_scheduled_time">Change scheduled time</string>
+    <string name="settings_scheduled_transcription_note">Android may delay background work to save battery. The feature is off by default.</string>
     <string name="output_not_selected">Output: not selected</string>
     <string name="output_selected">Output: %1$s</string>
     <string name="select_output_file">Select output file</string>

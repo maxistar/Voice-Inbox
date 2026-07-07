@@ -36,6 +36,9 @@ class ScheduledTranscriptionSettingsStore(
     fun setEnabled(enabled: Boolean): ScheduledTranscriptionSettings =
         load().copy(enabled = enabled).also(::save)
 
+    fun setTime(hour: Int, minute: Int): ScheduledTranscriptionSettings =
+        load().copy(hour = hour, minute = minute).also(::save)
+
     companion object {
         const val PREFERENCES_NAME = "scheduled_transcription"
     }

@@ -44,7 +44,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var catalogDatabase: AudioCatalogDatabase
     private lateinit var catalog: AudioCatalogRepository
     private lateinit var modelReadiness: SpeechModelReadinessManager
-    private lateinit var scheduledSettingsStore: ScheduledTranscriptionSettingsStore
     private val folderExecutor = Executors.newSingleThreadExecutor()
 
     private var modelReady = false
@@ -76,7 +75,6 @@ class MainActivity : AppCompatActivity() {
     private var previewPlayer: MediaPlayer? = null
     private var previewEntryId: Long? = null
     private var previewState = PreviewPlaybackState.IDLE
-    private var scheduledTranscriptionSettings = ScheduledTranscriptionSettings()
     private var activityDestroyed = false
 
     private val outputPicker = registerForActivityResult(
@@ -111,11 +109,12 @@ class MainActivity : AppCompatActivity() {
         catalogDatabase = AudioCatalogDatabase(this)
         catalog = AudioCatalogRepository(catalogDatabase)
         modelReadiness = getSharedModelReadiness(SpeechModelRepository(noBackupFilesDir.resolve("models")))
-        scheduledSettingsStore = ScheduledTranscriptionSettingsStore(
-            getSharedPreferences(ScheduledTranscriptionSettingsStore.PREFERENCES_NAME, MODE_PRIVATE),
+        ScheduledTranscriptionScheduler.sync(
+            this,
+            ScheduledTranscriptionSettingsStore(
+                getSharedPreferences(ScheduledTranscriptionSettingsStore.PREFERENCES_NAME, MODE_PRIVATE),
+            ).load(),
         )
-        scheduledTranscriptionSettings = scheduledSettingsStore.load()
-        ScheduledTranscriptionScheduler.sync(this, scheduledTranscriptionSettings)
 
         downloadModel.setOnClickListener { SpeechModelDownloadWorker.enqueue(this) }
         transcribeAll.setOnClickListener { startBatchTranscription() }
@@ -163,8 +162,8 @@ class MainActivity : AppCompatActivity() {
                 launchFolderPickerIfEnabled()
                 true
             }
-            R.id.menuScheduledTranscription -> {
-                toggleScheduledTranscription()
+            R.id.menuSettings -> {
+                startActivity(Intent(this, SettingsActivity::class.java))
                 true
             }
             else -> super.onOptionsItemSelected(item)
@@ -654,14 +653,6 @@ class MainActivity : AppCompatActivity() {
         TranscriptionWorker.enqueueAll(this, folder, output)
     }
 
-    private fun toggleScheduledTranscription() {
-        scheduledTranscriptionSettings = scheduledSettingsStore.setEnabled(
-            !scheduledTranscriptionSettings.enabled,
-        )
-        ScheduledTranscriptionScheduler.sync(this, scheduledTranscriptionSettings)
-        invalidateOptionsMenu()
-    }
-
     private fun transcriptionActive(): Boolean = transcriptionState == TranscriptionObservationState.ACTIVE
 
     private fun classifyTranscriptionState(infos: List<WorkInfo>): TranscriptionObservationState =
@@ -811,9 +802,6 @@ class MainActivity : AppCompatActivity() {
         menu.findItem(R.id.menuSelectFolder)?.apply {
             isEnabled = controls.folderEnabled
             setTitle(if (folderUri == null) R.string.menu_select_folder else R.string.menu_change_folder)
-        }
-        menu.findItem(R.id.menuScheduledTranscription)?.apply {
-            isChecked = scheduledTranscriptionSettings.enabled
         }
     }
 
