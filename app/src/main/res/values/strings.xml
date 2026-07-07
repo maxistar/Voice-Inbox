@@ -5,6 +5,7 @@
     <string name="menu_select_folder">Select audio folder</string>
     <string name="menu_change_folder">Change audio folder</string>
     <string name="menu_refresh_folder">Refresh</string>
+    <string name="menu_scheduled_transcription">Nightly transcription around 01:00</string>
     <string name="output_not_selected">Output: not selected</string>
     <string name="output_selected">Output: %1$s</string>
     <string name="select_output_file">Select output file</string>
