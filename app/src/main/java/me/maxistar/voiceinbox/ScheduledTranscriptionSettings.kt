@@ -5,6 +5,8 @@ import android.content.SharedPreferences
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import java.util.Calendar
+import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 import me.maxistar.voiceinbox.core.ScheduledTranscriptionRules
 import me.maxistar.voiceinbox.core.ScheduledTranscriptionSettings
@@ -82,7 +84,7 @@ object ScheduledTranscriptionScheduler {
         }
         val request = OneTimeWorkRequestBuilder<ScheduledTranscriptionWorker>()
             .setInitialDelay(
-                ScheduledTranscriptionRules.delayUntilNextRunMillis(nowMillis, normalized),
+                delayUntilNextRunMillis(nowMillis, normalized),
                 TimeUnit.MILLISECONDS,
             )
             .build()
@@ -96,4 +98,34 @@ object ScheduledTranscriptionScheduler {
     fun cancel(context: Context) {
         WorkManager.getInstance(context.applicationContext).cancelUniqueWork(UNIQUE_WORK_NAME)
     }
+
+    fun nextRunAtMillis(
+        nowMillis: Long,
+        hour: Int,
+        minute: Int,
+        timeZone: TimeZone = TimeZone.getDefault(),
+    ): Long {
+        val normalized = ScheduledTranscriptionRules.normalize(
+            ScheduledTranscriptionSettings(hour = hour, minute = minute),
+        )
+        val calendar = Calendar.getInstance(timeZone).apply {
+            timeInMillis = nowMillis
+            set(Calendar.HOUR_OF_DAY, normalized.hour)
+            set(Calendar.MINUTE, normalized.minute)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+            if (timeInMillis <= nowMillis) {
+                add(Calendar.DAY_OF_YEAR, 1)
+            }
+        }
+        return calendar.timeInMillis
+    }
+
+    fun delayUntilNextRunMillis(
+        nowMillis: Long,
+        settings: ScheduledTranscriptionSettings,
+        timeZone: TimeZone = TimeZone.getDefault(),
+    ): Long =
+        (nextRunAtMillis(nowMillis, settings.hour, settings.minute, timeZone) - nowMillis)
+            .coerceAtLeast(0L)
 }

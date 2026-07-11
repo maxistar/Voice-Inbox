@@ -1,10 +1,9 @@
-package me.maxistar.voiceinbox
+package me.maxistar.voiceinbox.core
 
-import me.maxistar.voiceinbox.core.*
 
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.Test
 
 class BatchTranscriptionRulesTest {
     @Test

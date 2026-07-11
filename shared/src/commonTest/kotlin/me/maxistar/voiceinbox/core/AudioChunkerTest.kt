@@ -1,11 +1,10 @@
-package me.maxistar.voiceinbox
+package me.maxistar.voiceinbox.core
 
-import me.maxistar.voiceinbox.core.*
 
-import org.junit.Assert.assertArrayEquals
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.assertContentEquals
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+import kotlin.test.Test
 
 class AudioChunkerTest {
     @Test
@@ -17,7 +16,7 @@ class AudioChunkerTest {
         chunker.finish()
 
         assertEquals(1, chunks.size)
-        assertArrayEquals(floatArrayOf(1f, 2f, 3f), chunks.single(), 0f)
+        assertContentEquals(floatArrayOf(1f, 2f, 3f).toList(), chunks.single().toList())
     }
 
     @Test
@@ -40,8 +39,8 @@ class AudioChunkerTest {
         chunker.finish()
 
         assertEquals(2, chunks.size)
-        assertArrayEquals(floatArrayOf(1f, 2f, 3f, 4f, 5f), chunks[0], 0f)
-        assertArrayEquals(floatArrayOf(4f, 5f, 6f, 7f), chunks[1], 0f)
+        assertContentEquals(floatArrayOf(1f, 2f, 3f, 4f, 5f).toList(), chunks[0].toList())
+        assertContentEquals(floatArrayOf(4f, 5f, 6f, 7f).toList(), chunks[1].toList())
     }
 
     @Test

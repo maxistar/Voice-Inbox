@@ -4,8 +4,12 @@ import me.maxistar.voiceinbox.core.*
 
 import android.content.Context
 import android.net.Uri
+import java.text.DateFormat
+import java.util.Date
 import java.io.File
 import java.io.IOException
+import java.util.Locale
+import java.util.TimeZone
 
 data class FileTranscriptionProgress(
     val phase: String,
@@ -60,8 +64,9 @@ class SingleFileTranscriber(
             onProgress(FileTranscriptionProgress("Appending transcript", durationUs, durationUs))
             val formatted = TranscriptOutput.formatEntry(
                 audioName = entry.displayName,
-                recordingTimeMillis = info.embeddedRecordingTimeMillis
-                    ?: entry.fingerprint.modifiedMillis,
+                recordingTimeLabel = formatRecordingTime(
+                    info.embeddedRecordingTimeMillis ?: entry.fingerprint.modifiedMillis,
+                ),
                 transcript = finalTranscript,
             )
             AppendPublication.publish(access.readTail(outputUri), formatted) { text ->
@@ -75,5 +80,12 @@ class SingleFileTranscriber(
         } finally {
             staging.delete()
         }
+    }
+
+    private fun formatRecordingTime(recordingTimeMillis: Long?): String? {
+        if (recordingTimeMillis == null) return null
+        return DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.MEDIUM, Locale.getDefault())
+            .apply { timeZone = TimeZone.getDefault() }
+            .format(Date(recordingTimeMillis))
     }
 }

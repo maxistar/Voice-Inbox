@@ -1,11 +1,10 @@
-package me.maxistar.voiceinbox
+package me.maxistar.voiceinbox.core
 
-import me.maxistar.voiceinbox.core.*
 
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+import kotlin.test.Test
 
 class AudioCatalogRulesTest {
     @Test
