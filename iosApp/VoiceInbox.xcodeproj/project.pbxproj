@@ -133,7 +133,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "cd \"$SRCROOT/..\"\n./gradlew :shared:embedAndSignAppleFrameworkForXcode\n";
+			shellScript = "export JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\"\nexport PATH=\"$JAVA_HOME/bin:$PATH\"\n\ncd \"$SRCROOT/..\"\n./gradlew :shared:embedAndSignAppleFrameworkForXcode\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -269,7 +269,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 2835P3MJR8;
 				ENABLE_PREVIEWS = YES;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
@@ -308,7 +308,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 2835P3MJR8;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)",
@@ -343,20 +343,20 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		101010101010101010101016 /* Build configuration list for PBXProject "VoiceInbox" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				101010101010101010101017 /* Debug */,
-				101010101010101010101018 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		101010101010101010101014 /* Build configuration list for PBXNativeTarget "VoiceInbox" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				101010101010101010101019 /* Debug */,
 				101010101010101010101020 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		101010101010101010101016 /* Build configuration list for PBXProject "VoiceInbox" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				101010101010101010101017 /* Debug */,
+				101010101010101010101018 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
