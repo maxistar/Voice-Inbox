@@ -1,5 +1,7 @@
 package me.maxistar.voiceinbox
 
+import me.maxistar.voiceinbox.core.*
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -39,7 +41,7 @@ class ScheduledTranscriptionRulesTest {
     fun nextRunUsesTodayWhenTimeIsStillAhead() {
         val now = millis(2026, Calendar.JULY, 7, 0, 30)
 
-        val next = ScheduledTranscriptionRules.nextRunAtMillis(now, 1, 0, utc)
+        val next = ScheduledTranscriptionScheduler.nextRunAtMillis(now, 1, 0, utc)
 
         assertEquals(millis(2026, Calendar.JULY, 7, 1, 0), next)
     }
@@ -48,7 +50,7 @@ class ScheduledTranscriptionRulesTest {
     fun nextRunUsesTomorrowWhenTimeAlreadyPassed() {
         val now = millis(2026, Calendar.JULY, 7, 1, 1)
 
-        val next = ScheduledTranscriptionRules.nextRunAtMillis(now, 1, 0, utc)
+        val next = ScheduledTranscriptionScheduler.nextRunAtMillis(now, 1, 0, utc)
 
         assertEquals(millis(2026, Calendar.JULY, 8, 1, 0), next)
     }

@@ -1,8 +1,9 @@
-package me.maxistar.voiceinbox
+package me.maxistar.voiceinbox.core
 
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertThrows
-import org.junit.Test
+
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.Test
 
 class AppendPublicationTest {
     @Test
@@ -18,7 +19,7 @@ class AppendPublicationTest {
     fun appendFailureIsNotRetried() {
         var attempts = 0
 
-        assertThrows(IllegalStateException::class.java) {
+        assertFailsWith<IllegalStateException> {
             AppendPublication.publish("existing", "entry") {
                 attempts += 1
                 throw IllegalStateException("provider failed")

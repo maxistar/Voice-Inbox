@@ -1,5 +1,7 @@
 package me.maxistar.voiceinbox
 
+import me.maxistar.voiceinbox.core.*
+
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
@@ -57,7 +59,7 @@ class TranscriptionWorker(
                 }
                 val entry = currentEntry ?: break
                 try {
-                    transcriber.transcribe(entry, outputUri, id.toString()) { progress ->
+                    val result = transcriber.transcribe(entry, outputUri, id.toString()) { progress ->
                         val percent = BatchTranscriptionRules.percent(
                             progress.processedUs,
                             progress.durationUs,
@@ -72,7 +74,7 @@ class TranscriptionWorker(
                             progress = percent,
                         )
                     }
-                    repository.markProcessed(entry.id, System.currentTimeMillis())
+                    repository.markProcessed(entry.id, System.currentTimeMillis(), result.transcriptText)
                 } catch (cancelled: CancellationException) {
                     repository.markPending(entry.id)
                     throw cancelled

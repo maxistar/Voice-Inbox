@@ -1,4 +1,4 @@
-package me.maxistar.voiceinbox
+package me.maxistar.voiceinbox.core
 
 object TranscriptMerger {
     fun merge(accumulated: String, next: String, maxOverlapWords: Int = 20): String {

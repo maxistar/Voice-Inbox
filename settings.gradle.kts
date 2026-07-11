@@ -21,3 +21,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Notes Recognition"
 include(":app")
+include(":shared")

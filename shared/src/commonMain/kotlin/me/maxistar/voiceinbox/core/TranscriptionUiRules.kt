@@ -1,4 +1,4 @@
-package me.maxistar.voiceinbox
+package me.maxistar.voiceinbox.core
 
 data class CatalogControlState(
     val outputEnabled: Boolean,
@@ -58,12 +58,24 @@ enum class TranscriptionObservationState {
     FINISHED,
 }
 
+data class TranscriptionObservationInput(
+    val hasActiveWork: Boolean,
+    val hasCurrentSessionFinishedWork: Boolean,
+)
+
 data class PreviewControlState(
     val label: String,
     val enabled: Boolean,
 )
 
 object TranscriptionUiRules {
+    fun transcriptionObservation(input: TranscriptionObservationInput): TranscriptionObservationState =
+        when {
+            input.hasActiveWork -> TranscriptionObservationState.ACTIVE
+            input.hasCurrentSessionFinishedWork -> TranscriptionObservationState.FINISHED
+            else -> TranscriptionObservationState.IDLE
+        }
+
     fun catalogControls(
         modelReady: Boolean,
         outputSelected: Boolean,

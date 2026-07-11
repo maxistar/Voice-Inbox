@@ -1,31 +1,26 @@
-package me.maxistar.voiceinbox
+package me.maxistar.voiceinbox.core
 
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Test
-import java.util.Locale
-import java.util.TimeZone
+
+import kotlin.test.assertEquals
+import kotlin.test.Test
 
 class TranscriptOutputTest {
     @Test
-    fun formatsFilenameTimestampAndTranscript() {
+    fun formatsFilenameTimestampLabelAndTranscript() {
         val output = TranscriptOutput.formatEntry(
             audioName = "meeting.m4a",
-            recordingTimeMillis = 0,
+            recordingTimeLabel = "Jan 1, 1970, 12:00:00 AM",
             transcript = " recognized text ",
-            locale = Locale.US,
-            timeZone = TimeZone.getTimeZone("UTC"),
         )
 
-        assertTrue(output.startsWith("meeting.m4a\n"))
-        assertTrue(output.endsWith("\nrecognized text"))
+        assertEquals("meeting.m4a\nJan 1, 1970, 12:00:00 AM\nrecognized text", output)
     }
 
     @Test
     fun missingTimestampIsExplicit() {
         assertEquals(
             "audio.wav\nRecording time unknown\ntext",
-            TranscriptOutput.formatEntry("audio.wav", null, "text", Locale.US),
+            TranscriptOutput.formatEntry("audio.wav", null, "text"),
         )
     }
 

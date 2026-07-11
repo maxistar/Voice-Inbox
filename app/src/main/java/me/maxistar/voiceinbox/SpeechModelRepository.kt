@@ -1,5 +1,7 @@
 package me.maxistar.voiceinbox
 
+import me.maxistar.voiceinbox.core.*
+
 import java.io.File
 import java.io.FileInputStream
 import java.security.MessageDigest

@@ -1,4 +1,4 @@
-package me.maxistar.voiceinbox
+package me.maxistar.voiceinbox.core
 
 enum class AudioFileState {
     PENDING,
@@ -32,6 +32,7 @@ data class AudioCatalogEntry(
     val stateBeforeMissing: AudioFileState?,
     val lastError: String?,
     val processedAtMillis: Long?,
+    val transcriptText: String?,
 )
 
 object AudioCatalogRules {

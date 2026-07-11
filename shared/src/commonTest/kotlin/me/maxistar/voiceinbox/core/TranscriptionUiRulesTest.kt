@@ -1,7 +1,8 @@
-package me.maxistar.voiceinbox
+package me.maxistar.voiceinbox.core
 
-import org.junit.Assert.assertEquals
-import org.junit.Test
+
+import kotlin.test.assertEquals
+import kotlin.test.Test
 
 class TranscriptionUiRulesTest {
     @Test
@@ -75,6 +76,41 @@ class TranscriptionUiRulesTest {
                 pendingCount = 2,
                 transcriptionState = TranscriptionObservationState.UNKNOWN,
                 scanning = false,
+            ),
+        )
+    }
+
+    @Test
+    fun transcriptionObservationIgnoresHistoricalFinishedWork() {
+        assertEquals(
+            TranscriptionObservationState.IDLE,
+            TranscriptionUiRules.transcriptionObservation(
+                TranscriptionObservationInput(
+                    hasActiveWork = false,
+                    hasCurrentSessionFinishedWork = false,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun transcriptionObservationPreservesActiveAndCurrentCompletion() {
+        assertEquals(
+            TranscriptionObservationState.ACTIVE,
+            TranscriptionUiRules.transcriptionObservation(
+                TranscriptionObservationInput(
+                    hasActiveWork = true,
+                    hasCurrentSessionFinishedWork = true,
+                ),
+            ),
+        )
+        assertEquals(
+            TranscriptionObservationState.FINISHED,
+            TranscriptionUiRules.transcriptionObservation(
+                TranscriptionObservationInput(
+                    hasActiveWork = false,
+                    hasCurrentSessionFinishedWork = true,
+                ),
             ),
         )
     }
@@ -342,6 +378,49 @@ class TranscriptionUiRulesTest {
                 folderChecking = false,
                 scanning = false,
                 scanMessage = null,
+            ),
+        )
+    }
+
+    @Test
+    fun staleFinishedObservationRendersIdleStatusAfterStartup() {
+        assertEquals(
+            StatusProgressBlockState(
+                title = "Ready",
+                detail = "No new files to transcribe",
+            ),
+            status(
+                modelReady = true,
+                output = true,
+                folder = true,
+                transcriptionState = TranscriptionObservationState.IDLE,
+                transcriptionPhase = "Completed 2 of 2",
+                transcriptionProgress = 100,
+                completedFiles = 2,
+                totalFiles = 2,
+            ),
+        )
+    }
+
+    @Test
+    fun currentSessionCompletionRendersCompletionStatus() {
+        assertEquals(
+            StatusProgressBlockState(
+                title = "Completed 2 of 2",
+                meta = "2 / 2 files",
+                progressVisible = true,
+                progressIndeterminate = false,
+                progress = 100,
+            ),
+            status(
+                modelReady = true,
+                output = true,
+                folder = true,
+                transcriptionState = TranscriptionObservationState.FINISHED,
+                transcriptionPhase = "Completed 2 of 2",
+                transcriptionProgress = 100,
+                completedFiles = 2,
+                totalFiles = 2,
             ),
         )
     }
