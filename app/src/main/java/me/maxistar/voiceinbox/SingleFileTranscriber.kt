@@ -14,6 +14,7 @@ data class FileTranscriptionProgress(
 data class FileTranscriptionResult(
     val durationUs: Long?,
     val transcriptLength: Int,
+    val transcriptText: String,
 )
 
 class SingleFileTranscriber(
@@ -52,20 +53,22 @@ class SingleFileTranscriber(
             )
             durationUs = info.durationUs ?: durationUs
             if (transcript.isBlank()) throw IOException("No text was recognized")
+            val finalTranscript = transcript.trim()
 
             onProgress(FileTranscriptionProgress("Appending transcript", durationUs, durationUs))
             val formatted = TranscriptOutput.formatEntry(
                 audioName = entry.displayName,
                 recordingTimeMillis = info.embeddedRecordingTimeMillis
                     ?: entry.fingerprint.modifiedMillis,
-                transcript = transcript,
+                transcript = finalTranscript,
             )
             AppendPublication.publish(access.readTail(outputUri), formatted) { text ->
                 access.append(outputUri, text)
             }
             return FileTranscriptionResult(
                 durationUs = durationUs,
-                transcriptLength = transcript.length,
+                transcriptLength = finalTranscript.length,
+                transcriptText = finalTranscript,
             )
         } finally {
             staging.delete()

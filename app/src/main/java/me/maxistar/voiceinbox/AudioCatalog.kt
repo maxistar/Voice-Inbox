@@ -32,6 +32,7 @@ data class AudioCatalogEntry(
     val stateBeforeMissing: AudioFileState?,
     val lastError: String?,
     val processedAtMillis: Long?,
+    val transcriptText: String?,
 )
 
 object AudioCatalogRules {

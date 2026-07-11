@@ -11,13 +11,14 @@ class AudioCatalogRepository(
         query(
             folderUri,
             setOf(AudioFileState.PENDING, AudioFileState.PROCESSING),
+            QueryOrder.DISPLAY,
         )
 
     fun processedEntries(folderUri: String): List<AudioCatalogEntry> =
-        query(folderUri, setOf(AudioFileState.PROCESSED, AudioFileState.FAILED))
+        query(folderUri, setOf(AudioFileState.PROCESSED, AudioFileState.FAILED), QueryOrder.DISPLAY)
 
     fun missingEntries(folderUri: String): List<AudioCatalogEntry> =
-        query(folderUri, setOf(AudioFileState.MISSING))
+        query(folderUri, setOf(AudioFileState.MISSING), QueryOrder.DISPLAY)
 
     fun entry(id: Long): AudioCatalogEntry? {
         helper.readableDatabase.query(
@@ -84,7 +85,7 @@ class AudioCatalogRepository(
     }
 
     fun pendingCount(folderUri: String): Int =
-        query(folderUri, setOf(AudioFileState.PENDING)).size
+        query(folderUri, setOf(AudioFileState.PENDING), QueryOrder.DISPLAY).size
 
     fun recoverInterrupted() {
         helper.writableDatabase.update(
@@ -92,6 +93,8 @@ class AudioCatalogRepository(
             ContentValues().apply {
                 put(AudioCatalogDatabase.COLUMN_STATE, AudioFileState.PENDING.name)
                 putNull(AudioCatalogDatabase.COLUMN_LAST_ERROR)
+                putNull(AudioCatalogDatabase.COLUMN_PROCESSED_AT)
+                putNull(AudioCatalogDatabase.COLUMN_TRANSCRIPT_TEXT)
             },
             "${AudioCatalogDatabase.COLUMN_STATE} = ?",
             arrayOf(AudioFileState.PROCESSING.name),
@@ -104,12 +107,12 @@ class AudioCatalogRepository(
     fun claimFailed(folderUri: String, id: Long): AudioCatalogEntry? =
         claim(folderUri, AudioFileState.FAILED, id)
 
-    fun markProcessed(id: Long, processedAtMillis: Long) {
-        updateOutcome(id, AudioFileState.PROCESSED, null, processedAtMillis)
+    fun markProcessed(id: Long, processedAtMillis: Long, transcriptText: String) {
+        updateOutcome(id, AudioFileState.PROCESSED, null, processedAtMillis, transcriptText)
     }
 
     fun markFailed(id: Long, message: String) {
-        updateOutcome(id, AudioFileState.FAILED, message, null)
+        updateOutcome(id, AudioFileState.FAILED, message, null, null)
     }
 
     fun markPending(id: Long) {
@@ -118,6 +121,8 @@ class AudioCatalogRepository(
             ContentValues().apply {
                 put(AudioCatalogDatabase.COLUMN_STATE, AudioFileState.PENDING.name)
                 putNull(AudioCatalogDatabase.COLUMN_LAST_ERROR)
+                putNull(AudioCatalogDatabase.COLUMN_PROCESSED_AT)
+                putNull(AudioCatalogDatabase.COLUMN_TRANSCRIPT_TEXT)
             },
             "${AudioCatalogDatabase.COLUMN_ID} = ? AND " +
                 "${AudioCatalogDatabase.COLUMN_STATE} = ?",
@@ -131,6 +136,8 @@ class AudioCatalogRepository(
             ContentValues().apply {
                 put(AudioCatalogDatabase.COLUMN_STATE, AudioFileState.PENDING.name)
                 putNull(AudioCatalogDatabase.COLUMN_LAST_ERROR)
+                putNull(AudioCatalogDatabase.COLUMN_PROCESSED_AT)
+                putNull(AudioCatalogDatabase.COLUMN_TRANSCRIPT_TEXT)
             },
             "${AudioCatalogDatabase.COLUMN_ID} = ? AND " +
                 "${AudioCatalogDatabase.COLUMN_STATE} = ?",
@@ -146,15 +153,18 @@ class AudioCatalogRepository(
         database.beginTransaction()
         try {
             val candidate = if (specificId == null) {
-                query(database, folderUri, setOf(requiredState)).firstOrNull()
+                query(database, folderUri, setOf(requiredState), QueryOrder.PROCESSING).firstOrNull()
             } else {
-                query(database, folderUri, setOf(requiredState)).firstOrNull { it.id == specificId }
+                query(database, folderUri, setOf(requiredState), QueryOrder.PROCESSING)
+                    .firstOrNull { it.id == specificId }
             } ?: return null
             val updated = database.update(
                 AudioCatalogDatabase.TABLE_FILES,
                 ContentValues().apply {
                     put(AudioCatalogDatabase.COLUMN_STATE, AudioFileState.PROCESSING.name)
                     putNull(AudioCatalogDatabase.COLUMN_LAST_ERROR)
+                    putNull(AudioCatalogDatabase.COLUMN_PROCESSED_AT)
+                    putNull(AudioCatalogDatabase.COLUMN_TRANSCRIPT_TEXT)
                 },
                 "${AudioCatalogDatabase.COLUMN_ID} = ? AND " +
                     "${AudioCatalogDatabase.COLUMN_STATE} = ?",
@@ -173,6 +183,7 @@ class AudioCatalogRepository(
         state: AudioFileState,
         error: String?,
         processedAtMillis: Long?,
+        transcriptText: String?,
     ) {
         helper.writableDatabase.update(
             AudioCatalogDatabase.TABLE_FILES,
@@ -182,6 +193,8 @@ class AudioCatalogRepository(
                 else put(AudioCatalogDatabase.COLUMN_LAST_ERROR, error)
                 if (processedAtMillis == null) putNull(AudioCatalogDatabase.COLUMN_PROCESSED_AT)
                 else put(AudioCatalogDatabase.COLUMN_PROCESSED_AT, processedAtMillis)
+                if (transcriptText == null) putNull(AudioCatalogDatabase.COLUMN_TRANSCRIPT_TEXT)
+                else put(AudioCatalogDatabase.COLUMN_TRANSCRIPT_TEXT, transcriptText)
             },
             "${AudioCatalogDatabase.COLUMN_ID} = ?",
             arrayOf(id.toString()),
@@ -191,12 +204,14 @@ class AudioCatalogRepository(
     private fun query(
         folderUri: String,
         states: Set<AudioFileState>,
-    ): List<AudioCatalogEntry> = query(helper.readableDatabase, folderUri, states)
+        order: QueryOrder,
+    ): List<AudioCatalogEntry> = query(helper.readableDatabase, folderUri, states, order)
 
     private fun query(
         database: SQLiteDatabase,
         folderUri: String,
         states: Set<AudioFileState>,
+        order: QueryOrder = QueryOrder.DISPLAY,
     ): List<AudioCatalogEntry> {
         if (states.isEmpty()) return emptyList()
         val placeholders = states.joinToString(",") { "?" }
@@ -209,10 +224,7 @@ class AudioCatalogRepository(
             arguments,
             null,
             null,
-            "CASE WHEN ${AudioCatalogDatabase.COLUMN_MODIFIED_MILLIS} IS NULL THEN 1 ELSE 0 END, " +
-                "${AudioCatalogDatabase.COLUMN_MODIFIED_MILLIS} ASC, " +
-                "${AudioCatalogDatabase.COLUMN_DISPLAY_NAME} COLLATE NOCASE ASC, " +
-                "${AudioCatalogDatabase.COLUMN_DOCUMENT_URI} ASC",
+            order.sql,
         ).use { cursor ->
             return buildList {
                 while (cursor.moveToNext()) add(cursor.toEntry())
@@ -237,6 +249,7 @@ class AudioCatalogRepository(
             ?.let(AudioFileState::valueOf),
         lastError = nullableString(AudioCatalogDatabase.COLUMN_LAST_ERROR),
         processedAtMillis = nullableLong(AudioCatalogDatabase.COLUMN_PROCESSED_AT),
+        transcriptText = nullableString(AudioCatalogDatabase.COLUMN_TRANSCRIPT_TEXT),
     )
 
     private fun Cursor.nullableString(column: String): String? {
@@ -272,7 +285,23 @@ class AudioCatalogRepository(
         if (clearOutcome) {
             putNull(AudioCatalogDatabase.COLUMN_LAST_ERROR)
             putNull(AudioCatalogDatabase.COLUMN_PROCESSED_AT)
+            putNull(AudioCatalogDatabase.COLUMN_TRANSCRIPT_TEXT)
         }
+    }
+
+    private enum class QueryOrder(val sql: String) {
+        DISPLAY(
+            "CASE WHEN ${AudioCatalogDatabase.COLUMN_MODIFIED_MILLIS} IS NULL THEN 1 ELSE 0 END, " +
+                "${AudioCatalogDatabase.COLUMN_MODIFIED_MILLIS} DESC, " +
+                "${AudioCatalogDatabase.COLUMN_DISPLAY_NAME} COLLATE NOCASE ASC, " +
+                "${AudioCatalogDatabase.COLUMN_DOCUMENT_URI} ASC",
+        ),
+        PROCESSING(
+            "CASE WHEN ${AudioCatalogDatabase.COLUMN_MODIFIED_MILLIS} IS NULL THEN 1 ELSE 0 END, " +
+                "${AudioCatalogDatabase.COLUMN_MODIFIED_MILLIS} ASC, " +
+                "${AudioCatalogDatabase.COLUMN_DISPLAY_NAME} COLLATE NOCASE ASC, " +
+                "${AudioCatalogDatabase.COLUMN_DOCUMENT_URI} ASC",
+        ),
     }
 
     companion object {
@@ -288,6 +317,7 @@ class AudioCatalogRepository(
             AudioCatalogDatabase.COLUMN_STATE_BEFORE_MISSING,
             AudioCatalogDatabase.COLUMN_LAST_ERROR,
             AudioCatalogDatabase.COLUMN_PROCESSED_AT,
+            AudioCatalogDatabase.COLUMN_TRANSCRIPT_TEXT,
         )
     }
 }

@@ -22,6 +22,7 @@ class AudioCatalogDatabase(context: Context) :
                 $COLUMN_STATE_BEFORE_MISSING TEXT,
                 $COLUMN_LAST_ERROR TEXT,
                 $COLUMN_PROCESSED_AT INTEGER,
+                $COLUMN_TRANSCRIPT_TEXT TEXT,
                 UNIQUE($COLUMN_FOLDER_URI, $COLUMN_DOCUMENT_URI)
             )
             """.trimIndent(),
@@ -37,14 +38,21 @@ class AudioCatalogDatabase(context: Context) :
     }
 
     override fun onUpgrade(database: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        check(oldVersion == newVersion) {
+        var migratedVersion = oldVersion
+        if (migratedVersion == 1 && newVersion >= 2) {
+            database.execSQL(
+                "ALTER TABLE $TABLE_FILES ADD COLUMN $COLUMN_TRANSCRIPT_TEXT TEXT",
+            )
+            migratedVersion = 2
+        }
+        check(migratedVersion == newVersion) {
             "No migration is defined from catalog version $oldVersion to $newVersion"
         }
     }
 
     companion object {
         const val DATABASE_NAME = "audio-catalog.db"
-        const val DATABASE_VERSION = 1
+        const val DATABASE_VERSION = 2
         const val TABLE_FILES = "audio_files"
         const val COLUMN_ID = "id"
         const val COLUMN_FOLDER_URI = "folder_uri"
@@ -57,5 +65,6 @@ class AudioCatalogDatabase(context: Context) :
         const val COLUMN_STATE_BEFORE_MISSING = "state_before_missing"
         const val COLUMN_LAST_ERROR = "last_error"
         const val COLUMN_PROCESSED_AT = "processed_at"
+        const val COLUMN_TRANSCRIPT_TEXT = "transcript_text"
     }
 }

@@ -112,6 +112,7 @@ class AudioCatalogRulesTest {
         stateBeforeMissing = stateBeforeMissing,
         lastError = null,
         processedAtMillis = null,
+        transcriptText = null,
     )
 
     private fun scanned(

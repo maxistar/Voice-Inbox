@@ -11,16 +11,19 @@ import android.view.MenuItem
 import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.PopupMenu
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import java.util.concurrent.Executors
+import java.util.UUID
 
 class MainActivity : AppCompatActivity() {
     private lateinit var statusTitle: TextView
@@ -56,6 +59,8 @@ class MainActivity : AppCompatActivity() {
     private var pendingCount = 0
     private var selectedTab = CatalogTab.NEW
     private var lastCatalogWorkState: String? = null
+    private var currentSessionTranscriptionWorkId: UUID? = null
+    private var currentSessionObservedActiveTranscription = false
     private var modelMessage = "Checking speech model"
     private var modelLoading = true
     private var modelDownloadAvailable = false
@@ -401,6 +406,11 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(0, dp(12), 0, dp(12))
+            contentDescription = entry.displayName
+            isLongClickable = true
+            setOnLongClickListener { anchor ->
+                showEntryContextMenu(anchor, entry)
+            }
 
             addView(LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
@@ -452,20 +462,77 @@ class MainActivity : AppCompatActivity() {
                     text = "Retry"
                     isEnabled = currentControls().retryEnabled
                     setOnClickListener {
-                        val folder = folderUri ?: return@setOnClickListener
-                        val output = outputUri ?: return@setOnClickListener
-                        stopPreviewPlayback(render = true)
-                        TranscriptionWorker.enqueueRetry(
-                            this@MainActivity,
-                            folder,
-                            output,
-                            entry.id,
-                        )
+                        retryEntry(entry)
                     }
                 })
             }
             addView(actions)
         }
+
+    private fun showEntryContextMenu(anchor: View, entry: AudioCatalogEntry): Boolean {
+        val popup = PopupMenu(this, anchor)
+        val preview = TranscriptionUiRules.previewControl(
+            entryId = entry.id,
+            activeEntryId = previewEntryId,
+            playbackState = previewState,
+            transcriptionState = transcriptionState,
+            scanning = folderBusy(),
+        )
+        if (preview.enabled) {
+            popup.menu.add(Menu.NONE, MENU_ENTRY_PLAY, Menu.NONE, preview.label)
+        }
+        if (entry.state == AudioFileState.FAILED && currentControls().retryEnabled) {
+            popup.menu.add(Menu.NONE, MENU_ENTRY_RETRY, Menu.NONE, "Retry")
+        }
+        if (entry.state == AudioFileState.PROCESSED && !entry.transcriptText.isNullOrBlank()) {
+            popup.menu.add(Menu.NONE, MENU_ENTRY_SHOW_TEXT, Menu.NONE, "Show text")
+        }
+        if (popup.menu.size() == 0) return false
+        popup.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                MENU_ENTRY_PLAY -> {
+                    if (entry.id == previewEntryId && previewState != PreviewPlaybackState.IDLE) {
+                        stopPreviewPlayback(render = true)
+                    } else {
+                        startPreviewPlayback(entry)
+                    }
+                    true
+                }
+                MENU_ENTRY_RETRY -> {
+                    retryEntry(entry)
+                    true
+                }
+                MENU_ENTRY_SHOW_TEXT -> {
+                    showTranscriptText(entry)
+                    true
+                }
+                else -> false
+            }
+        }
+        popup.show()
+        return true
+    }
+
+    private fun retryEntry(entry: AudioCatalogEntry) {
+        val folder = folderUri ?: return
+        val output = outputUri ?: return
+        stopPreviewPlayback(render = true)
+        currentSessionTranscriptionWorkId = TranscriptionWorker.enqueueRetry(
+            this,
+            folder,
+            output,
+            entry.id,
+        )
+    }
+
+    private fun showTranscriptText(entry: AudioCatalogEntry) {
+        val transcript = entry.transcriptText?.takeIf { it.isNotBlank() } ?: return
+        AlertDialog.Builder(this)
+            .setTitle(entry.displayName)
+            .setMessage(transcript)
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
+    }
 
     private fun entryDescription(entry: AudioCatalogEntry): String = buildString {
         append(
@@ -583,7 +650,20 @@ class MainActivity : AppCompatActivity() {
                 }
                 val info = infos.firstOrNull {
                     it.state in ACTIVE_WORK_STATES
-                } ?: infos.firstOrNull() ?: return@observe
+                } ?: if (transcriptionState == TranscriptionObservationState.FINISHED) {
+                    infos.firstOrNull { it.id == currentSessionTranscriptionWorkId && it.state.isFinished }
+                } else {
+                    null
+                } ?: run {
+                    clearTranscriptionProgress()
+                    renderStatusBlock()
+                    updateControls()
+                    return@observe
+                }
+                if (info.state in ACTIVE_WORK_STATES) {
+                    currentSessionTranscriptionWorkId = info.id
+                    currentSessionObservedActiveTranscription = true
+                }
                 if (transcriptionActive() && previewState != PreviewPlaybackState.IDLE) {
                     stopPreviewPlayback(render = true)
                 }
@@ -650,17 +730,37 @@ class MainActivity : AppCompatActivity() {
         val folder = folderUri ?: return
         val output = outputUri ?: return
         stopPreviewPlayback(render = true)
-        TranscriptionWorker.enqueueAll(this, folder, output)
+        currentSessionTranscriptionWorkId = TranscriptionWorker.enqueueAll(this, folder, output)
     }
 
     private fun transcriptionActive(): Boolean = transcriptionState == TranscriptionObservationState.ACTIVE
 
-    private fun classifyTranscriptionState(infos: List<WorkInfo>): TranscriptionObservationState =
-        when {
-            infos.any { it.state in ACTIVE_WORK_STATES } -> TranscriptionObservationState.ACTIVE
-            infos.any { it.state.isFinished } -> TranscriptionObservationState.FINISHED
-            else -> TranscriptionObservationState.IDLE
+    private fun classifyTranscriptionState(infos: List<WorkInfo>): TranscriptionObservationState {
+        val active = infos.any { it.state in ACTIVE_WORK_STATES }
+        val currentSessionFinished = infos.any { info ->
+            info.state.isFinished &&
+                (info.id == currentSessionTranscriptionWorkId || currentSessionObservedActiveTranscription)
         }
+        return TranscriptionUiRules.transcriptionObservation(
+            TranscriptionObservationInput(
+                hasActiveWork = active,
+                hasCurrentSessionFinishedWork = currentSessionFinished,
+            ),
+        )
+    }
+
+    private fun clearTranscriptionProgress() {
+        transcriptionFinished = false
+        transcriptionPhase = null
+        transcriptionFilename = null
+        transcriptionIndeterminate = true
+        transcriptionProgressValue = 0
+        processedUs = -1L
+        durationUs = -1L
+        completedFiles = 0
+        totalFiles = 0
+        failedFiles = 0
+    }
 
     private fun updateControls() {
         val controls = currentControls()
@@ -844,6 +944,9 @@ class MainActivity : AppCompatActivity() {
 
     private companion object {
         const val RETRY_BUTTON_TAG = "retry"
+        const val MENU_ENTRY_PLAY = 1
+        const val MENU_ENTRY_RETRY = 2
+        const val MENU_ENTRY_SHOW_TEXT = 3
         val ACTIVE_WORK_STATES = setOf(
             WorkInfo.State.ENQUEUED,
             WorkInfo.State.BLOCKED,

@@ -1,5 +1,6 @@
 package me.maxistar.voiceinbox
 
+import android.database.sqlite.SQLiteDatabase
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.After
@@ -31,13 +32,33 @@ class AudioCatalogRepositoryInstrumentedTest {
     }
 
     @Test
-    fun schemaPersistsEntriesAndOrdersPendingRows() {
+    fun migrationFromVersionOneAddsNullableTranscriptText() {
+        database.close()
+        context.deleteDatabase(AudioCatalogDatabase.DATABASE_NAME)
+        createVersionOneCatalog()
+
+        database = AudioCatalogDatabase(context)
+        database.writableDatabase.rawQuery(
+            "PRAGMA table_info(${AudioCatalogDatabase.TABLE_FILES})",
+            null,
+        ).use { cursor ->
+            val nameIndex = cursor.getColumnIndexOrThrow("name")
+            val columns = buildList {
+                while (cursor.moveToNext()) add(cursor.getString(nameIndex))
+            }
+            assertTrue(columns.contains(AudioCatalogDatabase.COLUMN_TRANSCRIPT_TEXT))
+        }
+    }
+
+    @Test
+    fun schemaPersistsEntriesAndOrdersPendingRowsNewestFirstForDisplay() {
         repository.reconcile(
             FOLDER,
             listOf(
                 scanned("z.wav", 20),
                 scanned("b.wav", 10),
                 scanned("A.wav", 10),
+                scanned("unknown.wav", null),
             ),
         )
         database.close()
@@ -45,8 +66,47 @@ class AudioCatalogRepositoryInstrumentedTest {
         repository = AudioCatalogRepository(database)
 
         assertEquals(
-            listOf("A.wav", "b.wav", "z.wav"),
+            listOf("z.wav", "A.wav", "b.wav", "unknown.wav"),
             repository.newEntries(FOLDER).map(AudioCatalogEntry::displayName),
+        )
+    }
+
+    @Test
+    fun displayOrderDoesNotChangeBatchClaimOrder() {
+        repository.reconcile(
+            FOLDER,
+            listOf(
+                scanned("z.wav", 20),
+                scanned("b.wav", 10),
+                scanned("A.wav", 10),
+                scanned("unknown.wav", null),
+            ),
+        )
+
+        assertEquals(
+            listOf("z.wav", "A.wav", "b.wav", "unknown.wav"),
+            repository.newEntries(FOLDER).map(AudioCatalogEntry::displayName),
+        )
+        assertEquals("A.wav", repository.claimPending(FOLDER)!!.displayName)
+        assertEquals("b.wav", repository.claimPending(FOLDER)!!.displayName)
+        assertEquals("z.wav", repository.claimPending(FOLDER)!!.displayName)
+        assertEquals("unknown.wav", repository.claimPending(FOLDER)!!.displayName)
+    }
+
+    @Test
+    fun processedEntriesUseNewestFirstDisplayOrder() {
+        repository.reconcile(
+            FOLDER,
+            listOf(scanned("old.wav", 10), scanned("new.wav", 20)),
+        )
+        repository.claimPending(FOLDER)!!
+            .also { repository.markProcessed(it.id, 500, "old text") }
+        repository.claimPending(FOLDER)!!
+            .also { repository.markProcessed(it.id, 600, "new text") }
+
+        assertEquals(
+            listOf("new.wav", "old.wav"),
+            repository.processedEntries(FOLDER).map(AudioCatalogEntry::displayName),
         )
     }
 
@@ -55,15 +115,33 @@ class AudioCatalogRepositoryInstrumentedTest {
         repository.reconcile(FOLDER, listOf(scanned("one.wav", 10, size = 100)))
         val entry = repository.claimPending(FOLDER)
         assertNotNull(entry)
-        repository.markProcessed(entry!!.id, 500)
+        repository.markProcessed(entry!!.id, 500, "recognized text")
 
         repository.reconcile(FOLDER, listOf(scanned("one.wav", 10, size = 100)))
-        assertEquals(AudioFileState.PROCESSED, repository.processedEntries(FOLDER).single().state)
+        val unchanged = repository.processedEntries(FOLDER).single()
+        assertEquals(AudioFileState.PROCESSED, unchanged.state)
+        assertEquals("recognized text", unchanged.transcriptText)
 
         repository.reconcile(FOLDER, listOf(scanned("one.wav", 11, size = 100)))
         val changed = repository.newEntries(FOLDER).single()
         assertEquals(AudioFileState.PENDING, changed.state)
         assertNull(changed.processedAtMillis)
+        assertNull(changed.transcriptText)
+    }
+
+    @Test
+    fun processedTranscriptTextPersistsAcrossDatabaseReopen() {
+        repository.reconcile(FOLDER, listOf(scanned("one.wav", 10)))
+        val entry = repository.claimPending(FOLDER)!!
+        repository.markProcessed(entry.id, 500, "hello from audio")
+
+        database.close()
+        database = AudioCatalogDatabase(context)
+        repository = AudioCatalogRepository(database)
+
+        val processed = repository.processedEntries(FOLDER).single()
+        assertEquals(AudioFileState.PROCESSED, processed.state)
+        assertEquals("hello from audio", processed.transcriptText)
     }
 
     @Test
@@ -113,7 +191,7 @@ class AudioCatalogRepositoryInstrumentedTest {
 
     private fun scanned(
         name: String,
-        modified: Long,
+        modified: Long?,
         size: Long = 50,
     ) = ScannedAudioFile(
         folderUri = FOLDER,
@@ -122,6 +200,32 @@ class AudioCatalogRepositoryInstrumentedTest {
         mimeType = "audio/wav",
         fingerprint = AudioFileFingerprint(size, modified),
     )
+
+    private fun createVersionOneCatalog() {
+        val path = context.getDatabasePath(AudioCatalogDatabase.DATABASE_NAME)
+        path.parentFile?.mkdirs()
+        SQLiteDatabase.openOrCreateDatabase(path, null).use { database ->
+            database.execSQL(
+                """
+                CREATE TABLE ${AudioCatalogDatabase.TABLE_FILES} (
+                    ${AudioCatalogDatabase.COLUMN_ID} INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ${AudioCatalogDatabase.COLUMN_FOLDER_URI} TEXT NOT NULL,
+                    ${AudioCatalogDatabase.COLUMN_DOCUMENT_URI} TEXT NOT NULL,
+                    ${AudioCatalogDatabase.COLUMN_DISPLAY_NAME} TEXT NOT NULL,
+                    ${AudioCatalogDatabase.COLUMN_MIME_TYPE} TEXT,
+                    ${AudioCatalogDatabase.COLUMN_SIZE_BYTES} INTEGER,
+                    ${AudioCatalogDatabase.COLUMN_MODIFIED_MILLIS} INTEGER,
+                    ${AudioCatalogDatabase.COLUMN_STATE} TEXT NOT NULL,
+                    ${AudioCatalogDatabase.COLUMN_STATE_BEFORE_MISSING} TEXT,
+                    ${AudioCatalogDatabase.COLUMN_LAST_ERROR} TEXT,
+                    ${AudioCatalogDatabase.COLUMN_PROCESSED_AT} INTEGER,
+                    UNIQUE(${AudioCatalogDatabase.COLUMN_FOLDER_URI}, ${AudioCatalogDatabase.COLUMN_DOCUMENT_URI})
+                )
+                """.trimIndent(),
+            )
+            database.version = 1
+        }
+    }
 
     companion object {
         private const val FOLDER = "content://folder"

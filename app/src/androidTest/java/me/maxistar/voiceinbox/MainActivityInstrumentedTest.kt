@@ -5,6 +5,8 @@ import android.net.Uri
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.Espresso.openActionBarOverflowOrOptionsMenu
+import androidx.test.espresso.action.ViewActions.click
+import androidx.test.espresso.action.ViewActions.longClick
 import androidx.test.espresso.action.ViewActions.scrollTo
 import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.platform.app.InstrumentationRegistry
@@ -104,6 +106,7 @@ class MainActivityInstrumentedTest {
                     stateBeforeMissing = null,
                     lastError = "decode failed",
                     processedAtMillis = null,
+                    transcriptText = null,
                 )
                 val row = MainActivity::class.java
                     .getDeclaredMethod("createEntryView", AudioCatalogEntry::class.java)
@@ -116,6 +119,37 @@ class MainActivityInstrumentedTest {
             onView(withText(containsString("decode failed"))).perform(scrollTo()).check(matches(isDisplayed()))
             onView(withText("Play")).perform(scrollTo()).check(matches(isDisplayed()))
             onView(withText("Retry")).perform(scrollTo()).check(matches(isDisplayed()))
+        }
+    }
+
+    @Test
+    fun processedRowContextMenuShowsStoredTranscriptText() {
+        clearActivityState()
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val entry = AudioCatalogEntry(
+                    id = 43,
+                    folderUri = "content://folder",
+                    documentUri = "content://audio/done.wav",
+                    displayName = "done.wav",
+                    mimeType = "audio/wav",
+                    fingerprint = AudioFileFingerprint(sizeBytes = 2048, modifiedMillis = 20),
+                    state = AudioFileState.PROCESSED,
+                    stateBeforeMissing = null,
+                    lastError = null,
+                    processedAtMillis = 500,
+                    transcriptText = "recognized words from the note",
+                )
+                val row = MainActivity::class.java
+                    .getDeclaredMethod("createEntryView", AudioCatalogEntry::class.java)
+                    .apply { isAccessible = true }
+                    .invoke(activity, entry) as android.view.View
+                activity.findViewById<android.widget.LinearLayout>(R.id.fileList).addView(row)
+            }
+
+            onView(withContentDescription("done.wav")).perform(longClick())
+            onView(withText("Show text")).perform(click())
+            onView(withText("recognized words from the note")).check(matches(isDisplayed()))
         }
     }
 
