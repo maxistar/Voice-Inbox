@@ -88,7 +88,10 @@ The Gradle build extracts ONNX Runtime, builds the Rust JNI library for
 The repository includes a minimal SwiftUI iOS shell at
 `iosApp/VoiceInbox.xcodeproj`. It is a KMP wiring milestone: the app launches to
 a simple screen and imports the generated `Shared` Kotlin Multiplatform
-framework to display speech-model metadata from shared core.
+framework to display speech-model metadata from shared core. The shell also
+includes a Settings screen that persists scheduled transcription preferences in
+iOS `UserDefaults` and normalizes them through shared scheduling rules; iOS
+scheduled execution itself remains future work.
 
 Open the project from `notes_recognition`:
 

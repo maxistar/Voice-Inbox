@@ -9,12 +9,16 @@
 /* Begin PBXBuildFile section */
 		101010101010101010101001 /* VoiceInboxApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101010101010101010101011 /* VoiceInboxApp.swift */; };
 		101010101010101010101002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101010101010101010101012 /* ContentView.swift */; };
+		101010101010101010101021 /* IosScheduledTranscriptionSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101010101010101010101023 /* IosScheduledTranscriptionSettingsStore.swift */; };
+		101010101010101010101022 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101010101010101010101024 /* SettingsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		101010101010101010101003 /* VoiceInbox.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VoiceInbox.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		101010101010101010101011 /* VoiceInboxApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceInboxApp.swift; sourceTree = "<group>"; };
 		101010101010101010101012 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		101010101010101010101023 /* IosScheduledTranscriptionSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosScheduledTranscriptionSettingsStore.swift; sourceTree = "<group>"; };
+		101010101010101010101024 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -49,6 +53,8 @@
 			children = (
 				101010101010101010101011 /* VoiceInboxApp.swift */,
 				101010101010101010101012 /* ContentView.swift */,
+				101010101010101010101023 /* IosScheduledTranscriptionSettingsStore.swift */,
+				101010101010101010101024 /* SettingsView.swift */,
 			);
 			path = VoiceInbox;
 			sourceTree = "<group>";
@@ -135,6 +141,8 @@
 			files = (
 				101010101010101010101001 /* VoiceInboxApp.swift in Sources */,
 				101010101010101010101002 /* ContentView.swift in Sources */,
+				101010101010101010101021 /* IosScheduledTranscriptionSettingsStore.swift in Sources */,
+				101010101010101010101022 /* SettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

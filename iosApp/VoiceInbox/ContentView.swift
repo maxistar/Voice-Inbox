@@ -6,36 +6,39 @@ struct ContentView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Voice Inbox")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                    Text("Minimal iOS shell")
-                        .font(.headline)
+            List {
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Voice Inbox")
+                            .font(.largeTitle)
+                            .fontWeight(.bold)
+                        Text("iOS shell")
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 8)
+                }
+
+                Section("Shared framework") {
+                    LabeledContent("Model", value: manifest.modelId)
+                    LabeledContent("Version", value: manifest.version)
+                    LabeledContent("Required free space", value: formatBytes(manifest.requiredFreeBytes))
+                }
+
+                Section {
+                    NavigationLink {
+                        SettingsView()
+                    } label: {
+                        Label("Settings", systemImage: "gearshape")
+                    }
+                }
+
+                Section("Future work") {
+                    Text("Document access, playback, catalog storage, transcription, scheduling execution, and Rust/iOS bridging are intentionally future work.")
+                        .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
-
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Shared framework connected")
-                        .font(.title3)
-                        .fontWeight(.semibold)
-                    Text("Model: \(manifest.modelId)")
-                    Text("Version: \(manifest.version)")
-                    Text("Required free space: \(formatBytes(manifest.requiredFreeBytes))")
-                }
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.thinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                Text("Document access, playback, catalog storage, transcription, settings, scheduling, and Rust/iOS bridging are intentionally future work.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-
-                Spacer()
             }
-            .padding()
             .navigationTitle("Voice Inbox")
         }
     }
