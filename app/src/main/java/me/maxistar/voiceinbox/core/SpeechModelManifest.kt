@@ -1,4 +1,4 @@
-package me.maxistar.voiceinbox
+package me.maxistar.voiceinbox.core
 
 data class SpeechModelFile(
     val name: String,

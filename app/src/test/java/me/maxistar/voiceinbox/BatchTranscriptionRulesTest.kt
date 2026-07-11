@@ -1,5 +1,7 @@
 package me.maxistar.voiceinbox
 
+import me.maxistar.voiceinbox.core.*
+
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test

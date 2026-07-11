@@ -1,4 +1,4 @@
-package me.maxistar.voiceinbox
+package me.maxistar.voiceinbox.core
 
 object BatchTranscriptionRules {
     fun percent(processedUs: Long?, durationUs: Long?): Int? {

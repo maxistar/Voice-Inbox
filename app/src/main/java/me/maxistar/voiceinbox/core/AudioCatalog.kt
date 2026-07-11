@@ -1,4 +1,4 @@
-package me.maxistar.voiceinbox
+package me.maxistar.voiceinbox.core
 
 enum class AudioFileState {
     PENDING,

@@ -1,4 +1,4 @@
-package me.maxistar.voiceinbox
+package me.maxistar.voiceinbox.core
 
 import java.text.DateFormat
 import java.util.Date

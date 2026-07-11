@@ -1,5 +1,7 @@
 package me.maxistar.voiceinbox
 
+import me.maxistar.voiceinbox.core.*
+
 import android.content.ContentValues
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase

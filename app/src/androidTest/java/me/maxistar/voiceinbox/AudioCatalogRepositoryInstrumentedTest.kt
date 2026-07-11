@@ -1,5 +1,7 @@
 package me.maxistar.voiceinbox
 
+import me.maxistar.voiceinbox.core.*
+
 import android.database.sqlite.SQLiteDatabase
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4

@@ -1,5 +1,7 @@
 package me.maxistar.voiceinbox
 
+import me.maxistar.voiceinbox.core.*
+
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 

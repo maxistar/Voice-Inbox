@@ -1,5 +1,7 @@
 package me.maxistar.voiceinbox
 
+import me.maxistar.voiceinbox.core.*
+
 import android.content.Context
 import android.net.Uri
 import androidx.test.core.app.ActivityScenario

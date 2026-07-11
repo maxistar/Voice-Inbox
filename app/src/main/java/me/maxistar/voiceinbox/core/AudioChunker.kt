@@ -1,4 +1,4 @@
-package me.maxistar.voiceinbox
+package me.maxistar.voiceinbox.core
 
 class AudioChunker(
     private val chunkSamples: Int = CHUNK_SAMPLES,

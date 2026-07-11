@@ -1,5 +1,7 @@
 package me.maxistar.voiceinbox
 
+import me.maxistar.voiceinbox.core.*
+
 import android.content.ContentResolver
 import android.media.AudioFormat
 import android.media.MediaCodec
