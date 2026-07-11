@@ -12,6 +12,8 @@
 		101010101010101010101021 /* IosScheduledTranscriptionSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101010101010101010101023 /* IosScheduledTranscriptionSettingsStore.swift */; };
 		101010101010101010101022 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101010101010101010101024 /* SettingsView.swift */; };
 		101010101010101010101025 /* IosMainScreenShellState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101010101010101010101026 /* IosMainScreenShellState.swift */; };
+		101010101010101010101027 /* IosAudioImportStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101010101010101010101029 /* IosAudioImportStore.swift */; };
+		101010101010101010101028 /* IosAudioDocumentPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101010101010101010101030 /* IosAudioDocumentPicker.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -21,6 +23,8 @@
 		101010101010101010101023 /* IosScheduledTranscriptionSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosScheduledTranscriptionSettingsStore.swift; sourceTree = "<group>"; };
 		101010101010101010101024 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		101010101010101010101026 /* IosMainScreenShellState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosMainScreenShellState.swift; sourceTree = "<group>"; };
+		101010101010101010101029 /* IosAudioImportStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosAudioImportStore.swift; sourceTree = "<group>"; };
+		101010101010101010101030 /* IosAudioDocumentPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosAudioDocumentPicker.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -55,6 +59,8 @@
 			children = (
 				101010101010101010101011 /* VoiceInboxApp.swift */,
 				101010101010101010101012 /* ContentView.swift */,
+				101010101010101010101030 /* IosAudioDocumentPicker.swift */,
+				101010101010101010101029 /* IosAudioImportStore.swift */,
 				101010101010101010101023 /* IosScheduledTranscriptionSettingsStore.swift */,
 				101010101010101010101026 /* IosMainScreenShellState.swift */,
 				101010101010101010101024 /* SettingsView.swift */,
@@ -144,6 +150,8 @@
 			files = (
 				101010101010101010101001 /* VoiceInboxApp.swift in Sources */,
 				101010101010101010101002 /* ContentView.swift in Sources */,
+				101010101010101010101028 /* IosAudioDocumentPicker.swift in Sources */,
+				101010101010101010101027 /* IosAudioImportStore.swift in Sources */,
 				101010101010101010101021 /* IosScheduledTranscriptionSettingsStore.swift in Sources */,
 				101010101010101010101025 /* IosMainScreenShellState.swift in Sources */,
 				101010101010101010101022 /* SettingsView.swift in Sources */,

@@ -37,29 +37,31 @@ struct IosShellAudioRow: Identifiable {
     let title: String
     let subtitle: String
     let badge: String
+    let imported: Bool
     let state: MainScreenRowState
 }
 
 final class IosMainScreenShellState {
-    func screen(selection: IosShellCatalogSelection) -> IosShellMainScreen {
-        let samples = sampleRows(for: selection)
-        let rows = samples.map { $0.input }
+    func screen(selection: IosShellCatalogSelection, importedFiles: [IosImportedAudioFile]) -> IosShellMainScreen {
+        let rowsForSelection = displayRows(for: selection, importedFiles: importedFiles)
+        let rows = rowsForSelection.map { $0.input }
         let state = MainScreenStateController.shared.state(
             input: input(
                 selectedTab: selection.sharedTab,
-                pendingCount: newSamples.count,
+                pendingCount: importedFiles.count,
                 displayedRowCount: Int32(rows.count),
                 rows: rows
             )
         )
         let sharedRowsById = Dictionary(uniqueKeysWithValues: state.rows.map { ($0.entryId, $0) })
-        let displayRows = samples.compactMap { sample -> IosShellAudioRow? in
-            guard let rowState = sharedRowsById[sample.input.entryId] else { return nil }
+        let displayRows = rowsForSelection.compactMap { row -> IosShellAudioRow? in
+            guard let rowState = sharedRowsById[row.input.entryId] else { return nil }
             return IosShellAudioRow(
-                id: sample.input.entryId,
-                title: sample.title,
-                subtitle: sample.subtitle,
-                badge: sample.badge,
+                id: row.input.entryId,
+                title: row.title,
+                subtitle: row.subtitle,
+                badge: row.badge,
+                imported: row.imported,
                 state: rowState
             )
         }
@@ -78,38 +80,30 @@ final class IosMainScreenShellState {
         )
     }
 
-    private var newSamples: [SampleRow] {
+    private var processedSamples: [DisplayRow] {
         [
-            SampleRow(
-                input: MainScreenRowInput(entryId: 101, state: AudioFileState.pending, hasTranscriptText: false),
-                title: "meeting-note.m4a",
-                subtitle: "Pending • 1.8 MB",
-                badge: "New"
-            ),
-            SampleRow(
-                input: MainScreenRowInput(entryId: 102, state: AudioFileState.failed, hasTranscriptText: false),
-                title: "noisy-capture.wav",
-                subtitle: "Failed • Retry available",
-                badge: "Failed"
-            ),
-        ]
-    }
-
-    private var processedSamples: [SampleRow] {
-        [
-            SampleRow(
+            DisplayRow(
                 input: MainScreenRowInput(entryId: 201, state: AudioFileState.processed, hasTranscriptText: true),
                 title: "daily-idea.m4a",
-                subtitle: "Processed • Transcript available",
-                badge: "Processed"
+                subtitle: "Sample processed row • Transcript available",
+                badge: "Sample",
+                imported: false
             ),
         ]
     }
 
-    private func sampleRows(for selection: IosShellCatalogSelection) -> [SampleRow] {
+    private func displayRows(for selection: IosShellCatalogSelection, importedFiles: [IosImportedAudioFile]) -> [DisplayRow] {
         switch selection {
         case .new:
-            newSamples
+            importedFiles.map { file in
+                DisplayRow(
+                    input: MainScreenRowInput(entryId: file.id, state: AudioFileState.pending, hasTranscriptText: false),
+                    title: file.displayName,
+                    subtitle: "Imported • \(file.formattedSize)",
+                    badge: "New",
+                    imported: true
+                )
+            }
         case .processed:
             processedSamples
         }
@@ -122,18 +116,18 @@ final class IosMainScreenShellState {
         rows: [MainScreenRowInput]
     ) -> MainScreenInput {
         MainScreenInput(
-            modelMessage: "Model ready",
+            modelMessage: "iOS transcription is future work",
             modelLoading: false,
             modelDownloadAvailable: false,
             modelDownloadProgress: nil,
-            modelReady: true,
+            modelReady: false,
             outputSelected: true,
             folderSelected: true,
             pendingCount: Int32(pendingCount),
             folderChecking: false,
             folderScanQueued: false,
             scanning: false,
-            scanMessage: "iOS shell sample catalog",
+            scanMessage: "iOS imported audio prototype",
             transcriptionState: TranscriptionObservationState.idle,
             transcriptionPhase: nil,
             transcriptionFilename: nil,
@@ -153,10 +147,11 @@ final class IosMainScreenShellState {
         )
     }
 
-    private struct SampleRow {
+    private struct DisplayRow {
         let input: MainScreenRowInput
         let title: String
         let subtitle: String
         let badge: String
+        let imported: Bool
     }
 }

@@ -5,10 +5,12 @@ struct ContentView: View {
     private let manifest = EmbeddedSpeechModel.shared.manifest
     private let shellState = IosMainScreenShellState()
 
+    @StateObject private var importStore = IosAudioImportStore()
     @State private var selectedTab = IosShellCatalogSelection.new
+    @State private var showingImporter = false
 
     var body: some View {
-        let screen = shellState.screen(selection: selectedTab)
+        let screen = shellState.screen(selection: selectedTab, importedFiles: importStore.files)
 
         NavigationStack {
             List {
@@ -50,12 +52,25 @@ struct ContentView: View {
                         Button("Transcribe All") {}
                             .disabled(!screen.state.list.transcribeAllEnabled)
                     }
+
+                    Button {
+                        showingImporter = true
+                    } label: {
+                        Label("Import Audio Files", systemImage: "square.and.arrow.down")
+                    }
                 }
 
                 Section(selectedTab.title) {
                     if screen.state.list.emptyVisible {
-                        Text(screen.state.list.emptyMessage)
-                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(screen.state.list.emptyMessage)
+                                .foregroundStyle(.secondary)
+                            Button {
+                                showingImporter = true
+                            } label: {
+                                Label("Import Audio Files", systemImage: "square.and.arrow.down")
+                            }
+                        }
                     } else {
                         ForEach(screen.rows) { row in
                             VStack(alignment: .leading, spacing: 8) {
@@ -79,12 +94,12 @@ struct ContentView: View {
                                 }
 
                                 HStack {
-                                    Button(row.state.preview.label) {}
-                                        .disabled(!row.state.preview.enabled)
+                                    Text("Preview: \(row.state.preview.label) (future)")
+                                        .foregroundStyle(.secondary)
 
                                     if row.state.retryVisible {
-                                        Button("Retry") {}
-                                            .disabled(!row.state.retryEnabled)
+                                        Text("Retry: future")
+                                            .foregroundStyle(.secondary)
                                     }
 
                                     if row.state.showTextVisible {
@@ -96,6 +111,13 @@ struct ContentView: View {
                             }
                             .padding(.vertical, 4)
                         }
+                    }
+                }
+
+                if let importMessage = importStore.importMessage {
+                    Section("Import result") {
+                        Text(importMessage)
+                            .foregroundStyle(.secondary)
                     }
                 }
 
@@ -121,12 +143,19 @@ struct ContentView: View {
                 }
 
                 Section("Future work") {
-                    Text("Sample rows are shell verification only. Document access, playback, catalog storage, transcription, scheduling execution, output writing, and Rust/iOS bridging are intentionally future work.")
+                    Text("Imported files are copied into app-local storage for shell verification only. Playback, transcription, output writing, scheduling execution, and Rust/iOS bridging are intentionally future work.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
             }
             .navigationTitle("Voice Inbox")
+            .sheet(isPresented: $showingImporter) {
+                IosAudioDocumentPicker { urls in
+                    importStore.importFiles(from: urls)
+                    showingImporter = false
+                    selectedTab = .new
+                }
+            }
         }
     }
 
