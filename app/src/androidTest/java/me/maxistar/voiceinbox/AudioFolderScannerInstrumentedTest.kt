@@ -11,7 +11,7 @@ import org.junit.runner.RunWith
 class AudioFolderScannerInstrumentedTest {
     @Test
     fun scansOnlySupportedDirectChildren() {
-        val context = InstrumentationRegistry.getInstrumentation().context
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
         val treeUri = DocumentsContract.buildTreeDocumentUri(
             TestAudioDocumentsProvider.AUTHORITY,
             TestAudioDocumentsProvider.ROOT_ID,
@@ -19,10 +19,12 @@ class AudioFolderScannerInstrumentedTest {
         val scanner = AudioFolderScanner(context.contentResolver)
 
         scanner.requireReadable(treeUri)
-        val files = scanner.scan(treeUri)
+        val scanResult = scanner.scan(treeUri) to scanner.folderName(treeUri)
+        val files = scanResult.first
+        val folderName = scanResult.second
 
         assertEquals(listOf("recording.wav", "recording.m4a"), files.map { it.displayName })
         assertEquals(listOf(100L, 200L), files.map { it.fingerprint.sizeBytes })
-        assertEquals("Test audio folder", scanner.folderName(treeUri))
+        assertEquals("Test audio folder", folderName)
     }
 }
