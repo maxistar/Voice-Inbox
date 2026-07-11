@@ -18,8 +18,15 @@ kotlin {
             jvmTarget.set(JvmTarget.JVM_11)
         }
     }
-    iosArm64()
-    iosSimulatorArm64()
+    listOf(
+        iosArm64(),
+        iosSimulatorArm64(),
+        iosX64(),
+    ).forEach { iosTarget ->
+        iosTarget.binaries.framework {
+            baseName = "Shared"
+        }
+    }
 
     sourceSets {
         commonTest.dependencies {
