@@ -38,48 +38,10 @@ class AudioCatalogRepository(
         val database = helper.writableDatabase
         database.beginTransaction()
         try {
-            val existing = query(database, folderUri, AudioFileState.entries.toSet())
-                .associateBy(AudioCatalogEntry::documentUri)
-            val seenUris = HashSet<String>()
-
-            scannedFiles.forEach { scanned ->
-                require(scanned.folderUri == folderUri)
-                seenUris += scanned.documentUri
-                val current = existing[scanned.documentUri]
-                if (current == null) {
-                    database.insertOrThrow(
-                        AudioCatalogDatabase.TABLE_FILES,
-                        null,
-                        scanned.toValues(AudioFileState.PENDING),
-                    )
-                } else {
-                    val nextState = AudioCatalogRules.rediscoveredState(current, scanned)
-                    database.update(
-                        AudioCatalogDatabase.TABLE_FILES,
-                        scanned.toValues(
-                            state = nextState,
-                            stateBeforeMissing = null,
-                            clearOutcome = nextState == AudioFileState.PENDING,
-                        ),
-                        "${AudioCatalogDatabase.COLUMN_ID} = ?",
-                        arrayOf(current.id.toString()),
-                    )
-                }
-            }
-
-            existing.values
-                .filter { it.documentUri !in seenUris && it.state != AudioFileState.MISSING }
-                .forEach { entry ->
-                    database.update(
-                        AudioCatalogDatabase.TABLE_FILES,
-                        ContentValues().apply {
-                            put(AudioCatalogDatabase.COLUMN_STATE, AudioFileState.MISSING.name)
-                            put(AudioCatalogDatabase.COLUMN_STATE_BEFORE_MISSING, entry.state.name)
-                        },
-                        "${AudioCatalogDatabase.COLUMN_ID} = ?",
-                        arrayOf(entry.id.toString()),
-                    )
-                }
+            CatalogReconciliationUseCase(database.reconciliationPort()).reconcile(
+                folderUri,
+                scannedFiles,
+            )
             database.setTransactionSuccessful()
         } finally {
             database.endTransaction()
@@ -288,6 +250,57 @@ class AudioCatalogRepository(
             putNull(AudioCatalogDatabase.COLUMN_LAST_ERROR)
             putNull(AudioCatalogDatabase.COLUMN_PROCESSED_AT)
             putNull(AudioCatalogDatabase.COLUMN_TRANSCRIPT_TEXT)
+        }
+    }
+
+    private fun SQLiteDatabase.reconciliationPort() = object : AudioCatalogReconciliationPort {
+        override fun existingEntriesForReconciliation(
+            folderUri: String,
+        ): List<AudioCatalogEntry> = query(
+            database = this@reconciliationPort,
+            folderUri = folderUri,
+            states = AudioFileState.entries.toSet(),
+        )
+
+        override fun applyReconciliationOperations(
+            operations: List<AudioCatalogReconciliationOperation>,
+        ) {
+            operations.forEach { operation ->
+                when (operation) {
+                    is AudioCatalogReconciliationOperation.InsertScannedFile ->
+                        insertOrThrow(
+                            AudioCatalogDatabase.TABLE_FILES,
+                            null,
+                            operation.scannedFile.toValues(AudioFileState.PENDING),
+                        )
+
+                    is AudioCatalogReconciliationOperation.UpdateScannedFile ->
+                        update(
+                            AudioCatalogDatabase.TABLE_FILES,
+                            operation.scannedFile.toValues(
+                                state = operation.state,
+                                stateBeforeMissing = operation.stateBeforeMissing,
+                                clearOutcome = operation.clearOutcome,
+                            ),
+                            "${AudioCatalogDatabase.COLUMN_ID} = ?",
+                            arrayOf(operation.entryId.toString()),
+                        )
+
+                    is AudioCatalogReconciliationOperation.MarkMissing ->
+                        update(
+                            AudioCatalogDatabase.TABLE_FILES,
+                            ContentValues().apply {
+                                put(AudioCatalogDatabase.COLUMN_STATE, AudioFileState.MISSING.name)
+                                put(
+                                    AudioCatalogDatabase.COLUMN_STATE_BEFORE_MISSING,
+                                    operation.stateBeforeMissing.name,
+                                )
+                            },
+                            "${AudioCatalogDatabase.COLUMN_ID} = ?",
+                            arrayOf(operation.entryId.toString()),
+                        )
+                }
+            }
         }
     }
 
