@@ -29,12 +29,13 @@ class TranscriptionWorker(
         val outputUri = inputData.getString(KEY_OUTPUT_URI)?.let(Uri::parse)
             ?: return@withContext failure("Output file is missing")
         val retryId = inputData.getLong(KEY_RETRY_ID, NO_RETRY_ID).takeIf { it != NO_RETRY_ID }
-        val repository = AudioCatalogRepository(AudioCatalogDatabase(applicationContext))
+        val catalog: AudioCatalogQueuePort =
+            AudioCatalogRepository(AudioCatalogDatabase(applicationContext))
         var currentEntry: AudioCatalogEntry? = null
 
         try {
             setForeground(foreground("Preparing transcription", 0, true))
-            repository.recoverInterrupted()
+            catalog.recoverInterrupted()
             val model = SpeechModelRepository(
                 applicationContext.noBackupFilesDir.resolve("models"),
             ).inspect() as? InstalledSpeechModelState.Ready
@@ -44,16 +45,16 @@ class TranscriptionWorker(
                 return@withContext failure("Speech model failed to load")
             }
 
-            val total = if (retryId == null) repository.pendingCount(folderUri) else 1
+            val total = if (retryId == null) catalog.pendingCount(folderUri) else 1
             var completed = 0
             var failed = 0
             val transcriber = SingleFileTranscriber(applicationContext)
 
             while (true) {
                 currentEntry = if (retryId == null) {
-                    repository.claimPending(folderUri)
+                    catalog.claimPending(folderUri)
                 } else if (completed == 0) {
-                    repository.claimFailed(folderUri, retryId)
+                    catalog.claimFailed(folderUri, retryId)
                 } else {
                     null
                 }
@@ -74,12 +75,12 @@ class TranscriptionWorker(
                             progress = percent,
                         )
                     }
-                    repository.markProcessed(entry.id, System.currentTimeMillis(), result.transcriptText)
+                    catalog.markProcessed(entry.id, System.currentTimeMillis(), result.transcriptText)
                 } catch (cancelled: CancellationException) {
-                    repository.markPending(entry.id)
+                    catalog.markPending(entry.id)
                     throw cancelled
                 } catch (error: Throwable) {
-                    repository.markFailed(entry.id, error.message ?: "Transcription failed")
+                    catalog.markFailed(entry.id, error.message ?: "Transcription failed")
                     failed += 1
                 }
                 completed += 1
@@ -106,10 +107,10 @@ class TranscriptionWorker(
                 ),
             )
         } catch (cancelled: CancellationException) {
-            currentEntry?.let { repository.markPending(it.id) }
+            currentEntry?.let { catalog.markPending(it.id) }
             throw cancelled
         } catch (error: Throwable) {
-            currentEntry?.let { repository.markPending(it.id) }
+            currentEntry?.let { catalog.markPending(it.id) }
             failure(error.message ?: "Transcription failed")
         }
     }

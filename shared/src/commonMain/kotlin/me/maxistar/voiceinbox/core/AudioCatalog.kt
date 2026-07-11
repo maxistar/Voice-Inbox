@@ -35,6 +35,22 @@ data class AudioCatalogEntry(
     val transcriptText: String?,
 )
 
+interface AudioCatalogQueuePort {
+    fun pendingCount(folderUri: String): Int
+
+    fun recoverInterrupted()
+
+    fun claimPending(folderUri: String, specificId: Long? = null): AudioCatalogEntry?
+
+    fun claimFailed(folderUri: String, id: Long): AudioCatalogEntry?
+
+    fun markProcessed(id: Long, processedAtMillis: Long, transcriptText: String)
+
+    fun markFailed(id: Long, message: String)
+
+    fun markPending(id: Long)
+}
+
 object AudioCatalogRules {
     val processingOrder = compareBy<AudioCatalogEntry>(
         { it.fingerprint.modifiedMillis ?: Long.MAX_VALUE },
