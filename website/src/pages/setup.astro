@@ -1,0 +1,91 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+const githubUrl = 'https://github.com/maxistar/Voice-Inbox';
+const releaseUrl = `${githubUrl}/releases`;
+---
+<Layout title="Setup" description="How to install and configure Voice Inbox on Android.">
+  <style>
+    .intro { max-width: 760px; }
+    .steps {
+      margin-top: 34px;
+      display: grid;
+      gap: 18px;
+    }
+    .step {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      padding: 24px;
+    }
+    .step h2 {
+      margin-bottom: 8px;
+      font-size: 1.35rem;
+    }
+    .step ul, .step ol { margin-bottom: 0; }
+  </style>
+
+  <section class="intro">
+    <p class="eyebrow">Setup guide</p>
+    <h1>Get Voice Inbox ready for your recordings.</h1>
+    <p>
+      Voice Inbox works with an existing output document and one selected audio folder.
+      The first model download is large, but after verification recognition runs locally.
+    </p>
+  </section>
+
+  <section class="steps">
+    <div class="step">
+      <h2>1. Install the Android app</h2>
+      <p>
+        Download the latest APK from
+        <a href={releaseUrl} target="_blank" rel="noopener">GitHub Releases</a>
+        and install it on an ARM64 Android device running Android 7.0 or later.
+      </p>
+      <p class="note">If a Google Play listing is added later, this page can link to it as the primary install path.</p>
+    </div>
+
+    <div class="step">
+      <h2>2. Download the speech model</h2>
+      <p>
+        On first launch, download and verify the pinned int8 Parakeet model. The download is about
+        640 MiB, and installation needs about 704 MiB of free storage.
+      </p>
+      <p>Network access is required for this first model download. Recognition runs locally after the model is installed.</p>
+    </div>
+
+    <div class="step">
+      <h2>3. Select an output document</h2>
+      <p>
+        Choose an existing writable <code>.txt</code> or <code>.md</code> file. Voice Inbox appends new entries
+        and preserves existing document content.
+      </p>
+    </div>
+
+    <div class="step">
+      <h2>4. Select your audio folder</h2>
+      <p>
+        Choose one readable folder that contains audio recordings. The app scans direct children only and does not traverse nested folders.
+      </p>
+    </div>
+
+    <div class="step">
+      <h2>5. Review and transcribe</h2>
+      <p>
+        The New tab lists files that are pending or being processed. Use Play to preview a recording, then choose
+        <strong>Transcribe All</strong> when you are ready.
+      </p>
+      <p>
+        Failed files move to the Processed tab with their latest error and a Retry action. Successful files are appended to the output document.
+      </p>
+    </div>
+
+    <div class="step">
+      <h2>6. Optional: scheduled transcription</h2>
+      <p>
+        Open Settings to enable scheduled transcription and choose a preferred time. Android may delay background work,
+        so scheduled runs should be treated as best-effort rather than exact alarms.
+      </p>
+    </div>
+  </section>
+</Layout>

@@ -1,0 +1,85 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+const githubUrl = 'https://github.com/maxistar/Voice-Inbox';
+const releaseUrl = `${githubUrl}/releases`;
+---
+<Layout title="Legal" description="Voice Inbox legal, support, privacy, and publication information.">
+  <style>
+    .legal {
+      max-width: 900px;
+    }
+    .table {
+      display: grid;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--surface);
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      border-bottom: 1px solid var(--border);
+    }
+    .row:last-child { border-bottom: 0; }
+    .row strong, .row span {
+      padding: 14px 16px;
+    }
+    .row strong {
+      background: var(--surface-strong);
+    }
+    @media (max-width: 680px) {
+      .row { grid-template-columns: 1fr; }
+      .row strong { padding-bottom: 4px; }
+      .row span { padding-top: 4px; }
+    }
+  </style>
+
+  <article class="legal">
+    <p class="eyebrow">Legal information</p>
+    <h1>App and publication details</h1>
+    <p>
+      This page collects information useful for users and Google Play publication preparation.
+      Fields marked as placeholders must be reviewed and replaced by the maintainer before store submission.
+    </p>
+
+    <section class="section">
+      <h2>App information</h2>
+      <div class="table">
+        <div class="row"><strong>App name</strong><span>Voice Inbox</span></div>
+        <div class="row"><strong>Android package</strong><span><code>me.maxistar.voiceinbox</code></span></div>
+        <div class="row"><strong>Developer / publisher</strong><span>TODO: maintainer legal or publisher name</span></div>
+        <div class="row"><strong>Support contact</strong><span>TODO: support email or support URL</span></div>
+        <div class="row"><strong>Privacy policy</strong><span><a href="../privacy/">Privacy page</a></span></div>
+        <div class="row"><strong>Source code</strong><span><a href={githubUrl} target="_blank" rel="noopener">{githubUrl}</a></span></div>
+        <div class="row"><strong>Downloads</strong><span><a href={releaseUrl} target="_blank" rel="noopener">GitHub Releases</a></span></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Requirements and limitations</h2>
+      <ul>
+        <li>Requires an ARM64 Android device running Android 7.0 (API 24) or later.</li>
+        <li>Requires network access for the first speech model download.</li>
+        <li>Requires about 704 MiB of free storage for model installation.</li>
+        <li>Scheduled transcription uses Android background work and is not an exact alarm.</li>
+        <li>Speech recognition accuracy is not guaranteed and may vary by audio quality, accent, language, and recording conditions.</li>
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2>License and acknowledgements</h2>
+      <p>
+        Voice Inbox is distributed from its public source repository. TODO: confirm final app license text
+        and add third-party acknowledgements for AndroidX, ONNX Runtime, Rust crates, and the speech model before publication.
+      </p>
+    </section>
+
+    <section class="section">
+      <h2>Important notice</h2>
+      <p>
+        This legal page is structured publication information, not legal advice. Review it before publishing to Google Play or another app store.
+      </p>
+    </section>
+  </article>
+</Layout>

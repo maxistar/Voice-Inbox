@@ -1,0 +1,261 @@
+---
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const {
+  title,
+  description = 'Voice Inbox turns accumulated Android voice recordings into a local Markdown or text inbox.',
+} = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const githubUrl = 'https://github.com/maxistar/Voice-Inbox';
+const releaseUrl = `${githubUrl}/releases`;
+const nav = [
+  ['Home', '/'],
+  ['Setup', '/setup/'],
+  ['FAQ', '/faq/'],
+  ['Privacy', '/privacy/'],
+  ['Legal', '/legal/'],
+  ['Other Projects', '/projects/'],
+];
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+    <title>{title} - Voice Inbox</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f9fc;
+        --surface: #ffffff;
+        --surface-strong: #eef4ff;
+        --ink: #172033;
+        --muted: #5c667a;
+        --soft: #7a8497;
+        --accent: #2563eb;
+        --accent-strong: #1d4ed8;
+        --accent-soft: #dbeafe;
+        --border: rgba(23, 32, 51, 0.12);
+        --shadow: 0 18px 48px rgba(23, 32, 51, 0.12);
+      }
+
+      *, *::before, *::after { box-sizing: border-box; }
+      html {
+        margin: 0;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: var(--ink);
+        background: var(--bg);
+      }
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      a { color: var(--accent); text-decoration: none; }
+      a:hover { color: var(--accent-strong); text-decoration: underline; }
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        border-bottom: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.92);
+        backdrop-filter: blur(16px);
+      }
+      .topbar {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 16px 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+      }
+      .logo {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--ink);
+        font-weight: 800;
+        letter-spacing: 0.01em;
+      }
+      .logo-mark {
+        width: 32px;
+        height: 32px;
+        border-radius: 9px;
+        background: linear-gradient(145deg, #2563eb, #38bdf8);
+        color: white;
+        display: grid;
+        place-items: center;
+        font-size: 17px;
+        box-shadow: 0 10px 28px rgba(37, 99, 235, 0.28);
+      }
+      nav {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: 14px 18px;
+      }
+      nav a {
+        color: var(--muted);
+        font-size: 0.92rem;
+        font-weight: 650;
+      }
+      nav a:hover {
+        color: var(--ink);
+        text-decoration: none;
+      }
+      main {
+        flex: 1;
+        width: 100%;
+      }
+      .page {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 56px 24px 72px;
+      }
+      footer {
+        border-top: 1px solid var(--border);
+        background: var(--surface);
+      }
+      .footer-inner {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 28px 24px;
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        flex-wrap: wrap;
+        color: var(--soft);
+        font-size: 0.9rem;
+      }
+      .footer-links {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      h1, h2, h3, p { margin-top: 0; }
+      h1 {
+        font-size: clamp(2.2rem, 6vw, 4.4rem);
+        line-height: 1;
+        letter-spacing: -0.04em;
+      }
+      h2 {
+        font-size: clamp(1.55rem, 3vw, 2.35rem);
+        line-height: 1.12;
+        letter-spacing: -0.025em;
+      }
+      h3 {
+        font-size: 1.05rem;
+        letter-spacing: -0.01em;
+      }
+      p, li {
+        color: var(--muted);
+        line-height: 1.7;
+      }
+      .eyebrow {
+        color: var(--accent);
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-size: 0.78rem;
+      }
+      .button-row {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 44px;
+        padding: 0 18px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        font-weight: 800;
+        color: var(--ink);
+        background: var(--surface);
+      }
+      .button:hover { text-decoration: none; }
+      .button.primary {
+        color: #fff;
+        border-color: var(--accent);
+        background: var(--accent);
+      }
+      .section {
+        margin-top: 72px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        gap: 18px;
+      }
+      .card {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface);
+        padding: 22px;
+      }
+      .card h3 { margin-bottom: 8px; }
+      .note {
+        border-left: 4px solid var(--accent);
+        background: var(--accent-soft);
+        border-radius: 0 8px 8px 0;
+        padding: 14px 18px;
+        color: var(--muted);
+      }
+      code {
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        padding: 1px 5px;
+        color: var(--accent-strong);
+        background: var(--surface-strong);
+      }
+      @media (max-width: 720px) {
+        .topbar {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+        nav { justify-content: flex-start; }
+        .page { padding-top: 38px; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="topbar">
+        <a class="logo" href={`${base}/`}>
+          <span class="logo-mark" aria-hidden="true">V</span>
+          <span>Voice Inbox</span>
+        </a>
+        <nav aria-label="Main navigation">
+          {nav.map(([label, href]) => <a href={`${base}${href}`}>{label}</a>)}
+          <a href={githubUrl} target="_blank" rel="noopener">GitHub</a>
+        </nav>
+      </div>
+    </header>
+    <main>
+      <div class="page">
+        <slot />
+      </div>
+    </main>
+    <footer>
+      <div class="footer-inner">
+        <span>Voice Inbox - local-first Android transcription.</span>
+        <span class="footer-links">
+          <a href={releaseUrl} target="_blank" rel="noopener">Releases</a>
+          <a href={`${base}/privacy/`}>Privacy</a>
+          <a href={`${base}/legal/`}>Legal</a>
+        </span>
+      </div>
+    </footer>
+  </body>
+</html>
+

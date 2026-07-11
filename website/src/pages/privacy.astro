@@ -1,0 +1,65 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="Privacy" description="Voice Inbox privacy and data handling information.">
+  <style>
+    .content {
+      max-width: 860px;
+    }
+    .content section {
+      margin-top: 38px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 26px;
+    }
+    .content section:last-child {
+      border-bottom: 0;
+    }
+  </style>
+
+  <article class="content">
+    <p class="eyebrow">Privacy</p>
+    <h1>Local-first by design.</h1>
+    <p>
+      This page explains how Voice Inbox handles audio, documents, and network access in user-facing terms.
+      It is not a substitute for legal review before app store publication.
+    </p>
+
+    <section>
+      <h2>Audio recognition</h2>
+      <p>
+        Voice Inbox runs speech recognition locally on the Android device after the speech model is installed.
+        Audio files are read from the folder selected by the user.
+      </p>
+    </section>
+
+    <section>
+      <h2>Network access</h2>
+      <p>
+        Network access is needed for the first speech model download. The app should not be described as never using network access.
+      </p>
+    </section>
+
+    <section>
+      <h2>Selected files and folders</h2>
+      <p>
+        The app uses Android document access selected by the user: one output <code>.txt</code> or <code>.md</code> document and one audio folder.
+        It appends recognized text only to the selected output document.
+      </p>
+    </section>
+
+    <section>
+      <h2>Catalog storage</h2>
+      <p>
+        Voice Inbox keeps a private local catalog of discovered audio files and processing state so it can distinguish New and Processed files.
+      </p>
+    </section>
+
+    <section>
+      <h2>External providers and Android services</h2>
+      <p>
+        Android document providers, media decoders, storage behavior, and background scheduling are provided by the operating system or selected providers.
+        Voice Inbox cannot control or make privacy claims on behalf of those external components.
+      </p>
+    </section>
+  </article>
+</Layout>

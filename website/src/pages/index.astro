@@ -1,0 +1,227 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+const githubUrl = 'https://github.com/maxistar/Voice-Inbox';
+const releaseUrl = `${githubUrl}/releases`;
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+<Layout
+  title="Voice notes to Markdown"
+  description="Voice Inbox is a local-first Android app for turning accumulated voice recordings into a Markdown or plain-text inbox."
+>
+  <style>
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.75fr);
+      gap: 42px;
+      align-items: center;
+      min-height: 560px;
+    }
+    .hero-copy p {
+      max-width: 640px;
+      font-size: 1.12rem;
+    }
+    .hero-visual {
+      border: 1px solid var(--border);
+      border-radius: 28px;
+      background: linear-gradient(180deg, #eff6ff, #ffffff);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+    .phone {
+      border: 10px solid #111827;
+      border-radius: 28px;
+      background: #f8fafc;
+      overflow: hidden;
+    }
+    .phone-header {
+      padding: 18px;
+      color: #fff;
+      background: #2563eb;
+      font-weight: 800;
+    }
+    .screen {
+      padding: 18px;
+    }
+    .status {
+      margin-bottom: 14px;
+      border-radius: 8px;
+      background: #dbeafe;
+      padding: 12px;
+      color: #1e3a8a;
+      font-size: 0.9rem;
+      font-weight: 700;
+    }
+    .tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      margin-bottom: 14px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      overflow: hidden;
+      font-size: 0.85rem;
+      font-weight: 800;
+      text-align: center;
+    }
+    .tabs span {
+      padding: 9px;
+    }
+    .tabs span:first-child {
+      color: #fff;
+      background: #2563eb;
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid #e2e8f0;
+      padding: 12px 0;
+    }
+    .row strong {
+      display: block;
+      margin-bottom: 3px;
+      font-size: 0.93rem;
+    }
+    .row small {
+      color: #64748b;
+    }
+    .pill {
+      align-self: center;
+      border-radius: 8px;
+      background: #eff6ff;
+      padding: 7px 9px;
+      color: #1d4ed8;
+      font-size: 0.72rem;
+      font-weight: 900;
+    }
+    .flow {
+      counter-reset: flow;
+    }
+    .flow .card {
+      position: relative;
+      padding-left: 58px;
+    }
+    .flow .card::before {
+      counter-increment: flow;
+      content: counter(flow);
+      position: absolute;
+      left: 20px;
+      top: 22px;
+      width: 26px;
+      height: 26px;
+      border-radius: 8px;
+      color: white;
+      background: var(--accent);
+      display: grid;
+      place-items: center;
+      font-weight: 900;
+    }
+    .requirements {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      padding: 24px;
+    }
+    @media (max-width: 860px) {
+      .hero {
+        grid-template-columns: 1fr;
+        min-height: auto;
+      }
+    }
+  </style>
+
+  <section class="hero">
+    <div class="hero-copy">
+      <p class="eyebrow">Local-first Android transcription</p>
+      <h1>Turn voice notes into a Markdown inbox.</h1>
+      <p>
+        Voice Inbox watches the folder where your recordings collect, transcribes new audio locally
+        after the speech model is installed, and appends each result to your chosen <code>.md</code>
+        or <code>.txt</code> file.
+      </p>
+      <div class="button-row">
+        <a class="button primary" href={releaseUrl} target="_blank" rel="noopener">Download from GitHub Releases</a>
+        <a class="button" href={githubUrl} target="_blank" rel="noopener">View source</a>
+        <a class="button" href={`${base}/setup/`}>Setup guide</a>
+      </div>
+    </div>
+
+    <div class="hero-visual" aria-label="Voice Inbox app preview">
+      <div class="phone">
+        <div class="phone-header">Voice Inbox</div>
+        <div class="screen">
+          <div class="status">Speech model ready</div>
+          <div class="tabs"><span>New</span><span>Processed</span></div>
+          <div class="row">
+            <div><strong>2026-07-11 note.m4a</strong><small>New - 2.4 MB</small></div>
+            <span class="pill">Play</span>
+          </div>
+          <div class="row">
+            <div><strong>walk home.mp3</strong><small>New - 6.8 MB</small></div>
+            <span class="pill">Play</span>
+          </div>
+          <div class="row">
+            <div><strong>meeting recap.flac</strong><small>Processed - 14 MB</small></div>
+            <span class="pill">Done</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <p class="eyebrow">What it does</p>
+    <h2>Built for accumulated recordings, not live dictation.</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>Incremental folder transcription</h3>
+        <p>Select one folder, review discovered recordings, and process only files that are new or changed.</p>
+      </div>
+      <div class="card">
+        <h3>Local recognition</h3>
+        <p>After the first model download, recognition runs on the Android device instead of sending audio to an app cloud service.</p>
+      </div>
+      <div class="card">
+        <h3>Markdown or plain text output</h3>
+        <p>Each successful note is appended to an existing writable <code>.md</code> or <code>.txt</code> document.</p>
+      </div>
+      <div class="card">
+        <h3>Preview before processing</h3>
+        <p>Play audio files from the list before deciding to transcribe them.</p>
+      </div>
+      <div class="card">
+        <h3>Scheduled processing</h3>
+        <p>Optionally ask Android to run scheduled transcription around your chosen time. Exact execution is not guaranteed.</p>
+      </div>
+      <div class="card">
+        <h3>Transparent history</h3>
+        <p>Processed and failed files stay visible, and failed files can be retried individually.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <p class="eyebrow">Workflow</p>
+    <h2>From recordings to notes in five steps.</h2>
+    <div class="grid flow">
+      <div class="card"><h3>Install the model</h3><p>Download and verify the speech model on first launch.</p></div>
+      <div class="card"><h3>Select output</h3><p>Choose an existing writable Markdown or text file.</p></div>
+      <div class="card"><h3>Select recordings</h3><p>Pick the folder that contains your audio notes.</p></div>
+      <div class="card"><h3>Review New files</h3><p>Preview recordings and check what will be processed.</p></div>
+      <div class="card"><h3>Transcribe all</h3><p>Append one entry per successful file with filename, recording time, and recognized text.</p></div>
+    </div>
+  </section>
+
+  <section class="section requirements">
+    <p class="eyebrow">Requirements</p>
+    <h2>Designed for ARM64 Android devices.</h2>
+    <p>
+      Voice Inbox requires Android 7.0 (API 24) or later, an ARM64 device, network access for
+      the first model download, and about 704 MiB of free storage for model installation.
+    </p>
+    <div class="button-row">
+      <a class="button primary" href={releaseUrl} target="_blank" rel="noopener">Get the APK</a>
+      <a class="button" href={`${base}/faq/`}>Read FAQ</a>
+    </div>
+  </section>
+</Layout>

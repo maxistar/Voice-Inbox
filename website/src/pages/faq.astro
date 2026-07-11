@@ -1,0 +1,101 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="FAQ" description="Common questions about Voice Inbox, privacy, model size, supported audio, and troubleshooting.">
+  <style>
+    .faq {
+      max-width: 860px;
+      display: grid;
+      gap: 16px;
+    }
+    details {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      padding: 18px 20px;
+    }
+    summary {
+      cursor: pointer;
+      font-weight: 850;
+      color: var(--ink);
+    }
+    details p, details ul {
+      margin: 12px 0 0;
+    }
+  </style>
+
+  <p class="eyebrow">FAQ</p>
+  <h1>Common questions</h1>
+
+  <section class="faq">
+    <details open>
+      <summary>Does my audio leave the device?</summary>
+      <p>
+        Voice Inbox runs recognition locally after the speech model is installed. The app needs network access for the first model download,
+        but it is not designed around app-cloud transcription.
+      </p>
+    </details>
+
+    <details>
+      <summary>Why is the model download so large?</summary>
+      <p>
+        Local speech recognition needs a speech model on the device. The pinned int8 Parakeet model download is about 640 MiB,
+        and installation needs about 704 MiB of free storage.
+      </p>
+    </details>
+
+    <details>
+      <summary>Which devices are supported?</summary>
+      <p>
+        The app targets ARM64 Android devices running Android 7.0 (API 24) or later.
+      </p>
+    </details>
+
+    <details>
+      <summary>Which audio formats work?</summary>
+      <p>
+        The app uses Android platform decoders. Tested input includes PCM WAV, AAC in M4A/MP4, MP3, ADTS AAC,
+        mono or stereo FLAC, Ogg Vorbis, Ogg Opus, AMR-NB, and AMR-WB.
+      </p>
+      <p>Encrypted, DRM-protected, malformed, unsupported codec/container, and unsupported multichannel inputs are rejected.</p>
+    </details>
+
+    <details>
+      <summary>Does Voice Inbox edit my existing Markdown?</summary>
+      <p>
+        It appends new entries to the selected output document. It does not search, replace, or delete previous Markdown/text content,
+        because the document may be edited independently.
+      </p>
+    </details>
+
+    <details>
+      <summary>Can scheduled transcription run exactly at my selected time?</summary>
+      <p>
+        No exact timing is promised. Voice Inbox uses Android background work, and Android may delay scheduled work depending on system state.
+      </p>
+    </details>
+
+    <details>
+      <summary>Why did a file fail?</summary>
+      <p>
+        A file can fail because decoding, normalization, recognition, staging, or output append publication failed.
+        Failed files appear in the Processed tab with the latest error.
+      </p>
+    </details>
+
+    <details>
+      <summary>What does Retry do?</summary>
+      <p>
+        Retry starts a transcription run for one failed file when the app is otherwise ready. Failed and processed files are excluded from Transcribe All.
+      </p>
+    </details>
+
+    <details>
+      <summary>Why did a changed file become New again?</summary>
+      <p>
+        Voice Inbox identifies files by provider URI and compares reported size and modification time.
+        If known metadata changes, the file becomes pending again.
+      </p>
+    </details>
+  </section>
+</Layout>
