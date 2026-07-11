@@ -8,7 +8,7 @@ import android.database.sqlite.SQLiteDatabase
 
 class AudioCatalogRepository(
     private val helper: AudioCatalogDatabase,
-) {
+) : AudioCatalogQueuePort {
     fun newEntries(folderUri: String): List<AudioCatalogEntry> =
         query(
             folderUri,
@@ -86,10 +86,10 @@ class AudioCatalogRepository(
         }
     }
 
-    fun pendingCount(folderUri: String): Int =
+    override fun pendingCount(folderUri: String): Int =
         query(folderUri, setOf(AudioFileState.PENDING), QueryOrder.DISPLAY).size
 
-    fun recoverInterrupted() {
+    override fun recoverInterrupted() {
         helper.writableDatabase.update(
             AudioCatalogDatabase.TABLE_FILES,
             ContentValues().apply {
@@ -103,21 +103,21 @@ class AudioCatalogRepository(
         )
     }
 
-    fun claimPending(folderUri: String, specificId: Long? = null): AudioCatalogEntry? =
+    override fun claimPending(folderUri: String, specificId: Long?): AudioCatalogEntry? =
         claim(folderUri, AudioFileState.PENDING, specificId)
 
-    fun claimFailed(folderUri: String, id: Long): AudioCatalogEntry? =
+    override fun claimFailed(folderUri: String, id: Long): AudioCatalogEntry? =
         claim(folderUri, AudioFileState.FAILED, id)
 
-    fun markProcessed(id: Long, processedAtMillis: Long, transcriptText: String) {
+    override fun markProcessed(id: Long, processedAtMillis: Long, transcriptText: String) {
         updateOutcome(id, AudioFileState.PROCESSED, null, processedAtMillis, transcriptText)
     }
 
-    fun markFailed(id: Long, message: String) {
+    override fun markFailed(id: Long, message: String) {
         updateOutcome(id, AudioFileState.FAILED, message, null, null)
     }
 
-    fun markPending(id: Long) {
+    override fun markPending(id: Long) {
         helper.writableDatabase.update(
             AudioCatalogDatabase.TABLE_FILES,
             ContentValues().apply {
