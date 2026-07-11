@@ -1,5 +1,6 @@
 import { defineConfig } from 'astro/config';
 
 export default defineConfig({
-  site: 'https://maxistar.github.io',
+  site: 'https://projects.maxistar.me',
+  base: '/Voice-Inbox',
 });
