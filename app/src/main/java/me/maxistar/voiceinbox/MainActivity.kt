@@ -59,7 +59,7 @@ class MainActivity : AppCompatActivity() {
     private var folderScanQueued = false
     private var scanning = false
     private var pendingCount = 0
-    private var selectedTab = CatalogTab.NEW
+    private var selectedTab = MainScreenCatalogTab.NEW
     private var lastCatalogWorkState: String? = null
     private var currentSessionTranscriptionWorkId: UUID? = null
     private var currentSessionObservedActiveTranscription = false
@@ -128,11 +128,11 @@ class MainActivity : AppCompatActivity() {
         selectOutput.setOnClickListener { launchOutputPickerIfEnabled() }
         selectFolder.setOnClickListener { launchFolderPickerIfEnabled() }
         newTab.setOnClickListener {
-            selectedTab = CatalogTab.NEW
+            selectedTab = MainScreenCatalogTab.NEW
             refreshCatalog()
         }
         processedTab.setOnClickListener {
-            selectedTab = CatalogTab.PROCESSED
+            selectedTab = MainScreenCatalogTab.PROCESSED
             refreshCatalog()
         }
 
@@ -373,7 +373,7 @@ class MainActivity : AppCompatActivity() {
         }
         folderExecutor.execute {
             val newEntries = catalog.newEntries(folder)
-            val entries = if (selectedTab == CatalogTab.NEW) {
+            val entries = if (selectedTab == MainScreenCatalogTab.NEW) {
                 newEntries
             } else {
                 catalog.processedEntries(folder)
@@ -389,21 +389,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renderEntries(entries: List<AudioCatalogEntry>) {
+        val state = currentMainScreenState(entries)
         fileList.removeAllViews()
-        emptyList.visibility = if (entries.isEmpty()) View.VISIBLE else View.GONE
-        emptyList.text = if (selectedTab == CatalogTab.NEW) {
-            "No new audio files"
-        } else {
-            "No processed audio files"
+        emptyList.visibility = if (state.list.emptyVisible) View.VISIBLE else View.GONE
+        emptyList.text = state.list.emptyMessage
+        newTab.isSelected = state.tabs.newSelected
+        processedTab.isSelected = state.tabs.processedSelected
+        newTab.isEnabled = state.tabs.newEnabled
+        processedTab.isEnabled = state.tabs.processedEnabled
+        entries.zip(state.rows).forEach { (entry, rowState) ->
+            fileList.addView(createEntryView(entry, rowState))
         }
-        newTab.isSelected = selectedTab == CatalogTab.NEW
-        processedTab.isSelected = selectedTab == CatalogTab.PROCESSED
-        newTab.isEnabled = selectedTab != CatalogTab.NEW
-        processedTab.isEnabled = selectedTab != CatalogTab.PROCESSED
-        entries.forEach { entry -> fileList.addView(createEntryView(entry)) }
     }
 
-    private fun createEntryView(entry: AudioCatalogEntry): View =
+    private fun createEntryView(entry: AudioCatalogEntry, rowState: MainScreenRowState): View =
         LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -441,15 +440,8 @@ class MainActivity : AppCompatActivity() {
             }
             actions.addView(Button(context).apply {
                 tag = PreviewButtonTag(entry.id)
-                val control = TranscriptionUiRules.previewControl(
-                    entryId = entry.id,
-                    activeEntryId = previewEntryId,
-                    playbackState = previewState,
-                    transcriptionState = transcriptionState,
-                    scanning = folderBusy(),
-                )
-                text = control.label
-                isEnabled = control.enabled
+                text = rowState.preview.label
+                isEnabled = rowState.preview.enabled
                 setOnClickListener {
                     if (entry.id == previewEntryId && previewState != PreviewPlaybackState.IDLE) {
                         stopPreviewPlayback(render = true)
@@ -460,9 +452,9 @@ class MainActivity : AppCompatActivity() {
             })
             if (entry.state == AudioFileState.FAILED) {
                 actions.addView(Button(context).apply {
-                    tag = RETRY_BUTTON_TAG
+                    tag = RetryButtonTag(entry.id)
                     text = "Retry"
-                    isEnabled = currentControls().retryEnabled
+                    isEnabled = rowState.retryEnabled
                     setOnClickListener {
                         retryEntry(entry)
                     }
@@ -473,20 +465,21 @@ class MainActivity : AppCompatActivity() {
 
     private fun showEntryContextMenu(anchor: View, entry: AudioCatalogEntry): Boolean {
         val popup = PopupMenu(this, anchor)
-        val preview = TranscriptionUiRules.previewControl(
-            entryId = entry.id,
-            activeEntryId = previewEntryId,
-            playbackState = previewState,
+        val row = MainScreenStateController.rowState(
+            row = entry.toMainScreenRowInput(),
+            activePreviewEntryId = previewEntryId,
+            previewState = previewState,
             transcriptionState = transcriptionState,
-            scanning = folderBusy(),
+            busy = folderBusy(),
+            retryEnabled = currentControls().retryEnabled,
         )
-        if (preview.enabled) {
-            popup.menu.add(Menu.NONE, MENU_ENTRY_PLAY, Menu.NONE, preview.label)
+        if (row.preview.enabled) {
+            popup.menu.add(Menu.NONE, MENU_ENTRY_PLAY, Menu.NONE, row.preview.label)
         }
-        if (entry.state == AudioFileState.FAILED && currentControls().retryEnabled) {
+        if (row.retryVisible && row.retryEnabled) {
             popup.menu.add(Menu.NONE, MENU_ENTRY_RETRY, Menu.NONE, "Retry")
         }
-        if (entry.state == AudioFileState.PROCESSED && !entry.transcriptText.isNullOrBlank()) {
+        if (row.showTextVisible) {
             popup.menu.add(Menu.NONE, MENU_ENTRY_SHOW_TEXT, Menu.NONE, "Show text")
         }
         if (popup.menu.size() == 0) return false
@@ -705,14 +698,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun currentControls(): CatalogControlState =
-        TranscriptionUiRules.catalogControls(
-            modelReady = modelReady,
-            outputSelected = outputUri != null,
-            folderSelected = folderUri != null,
-            pendingCount = pendingCount,
-            transcriptionState = transcriptionState,
-            scanning = folderBusy(),
-        )
+        currentMainScreenState().controls
 
     private fun folderBusy(): Boolean = folderChecking || folderScanQueued || scanning
 
@@ -765,17 +751,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateControls() {
-        val controls = currentControls()
+        val state = currentMainScreenState()
+        val controls = state.controls
         selectOutput.visibility = if (controls.outputSetupVisible) View.VISIBLE else View.GONE
         selectOutput.isEnabled = controls.outputEnabled
         selectFolder.visibility = if (controls.folderSetupVisible) View.VISIBLE else View.GONE
         selectFolder.isEnabled = controls.folderEnabled
-        transcribeAll.visibility = if (selectedTab == CatalogTab.NEW && pendingCount > 0) {
-            View.VISIBLE
-        } else {
-            View.GONE
-        }
-        transcribeAll.isEnabled = controls.transcribeAllEnabled
+        transcribeAll.visibility = if (state.list.transcribeAllVisible) View.VISIBLE else View.GONE
+        transcribeAll.isEnabled = state.list.transcribeAllEnabled
         for (index in 0 until fileList.childCount) {
             val row = fileList.getChildAt(index) as? LinearLayout ?: continue
             for (childIndex in 0 until row.childCount) {
@@ -783,15 +766,34 @@ class MainActivity : AppCompatActivity() {
                 for (buttonIndex in 0 until actions.childCount) {
                     val button = actions.getChildAt(buttonIndex) as? Button ?: continue
                     when (val tag = button.tag) {
-                        RETRY_BUTTON_TAG -> button.isEnabled = controls.retryEnabled
-                        is PreviewButtonTag -> {
-                            val preview = TranscriptionUiRules.previewControl(
-                                entryId = tag.entryId,
-                                activeEntryId = previewEntryId,
-                                playbackState = previewState,
+                        is RetryButtonTag -> {
+                            val retry = MainScreenStateController.rowState(
+                                row = MainScreenRowInput(
+                                    entryId = tag.entryId,
+                                    state = AudioFileState.FAILED,
+                                    hasTranscriptText = false,
+                                ),
+                                activePreviewEntryId = previewEntryId,
+                                previewState = previewState,
                                 transcriptionState = transcriptionState,
-                                scanning = folderBusy(),
+                                busy = folderBusy(),
+                                retryEnabled = controls.retryEnabled,
                             )
+                            button.isEnabled = retry.retryEnabled
+                        }
+                        is PreviewButtonTag -> {
+                            val preview = MainScreenStateController.rowState(
+                                row = MainScreenRowInput(
+                                    entryId = tag.entryId,
+                                    state = AudioFileState.PENDING,
+                                    hasTranscriptText = false,
+                                ),
+                                activePreviewEntryId = previewEntryId,
+                                previewState = previewState,
+                                transcriptionState = transcriptionState,
+                                busy = folderBusy(),
+                                retryEnabled = controls.retryEnabled,
+                            ).preview
                             button.text = preview.label
                             button.isEnabled = preview.enabled
                         }
@@ -854,32 +856,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renderStatusBlock() {
-        val state = TranscriptionUiRules.statusProgressBlock(
-            StatusProgressInput(
-                modelMessage = modelMessage,
-                modelLoading = modelLoading,
-                modelDownloadAvailable = modelDownloadAvailable,
-                modelDownloadProgress = modelDownloadProgress,
-                modelReady = modelReady,
-                outputSelected = outputUri != null,
-                folderSelected = folderUri != null,
-                pendingCount = pendingCount,
-                folderChecking = folderChecking,
-                scanning = scanning,
-                scanMessage = scanMessage,
-                transcriptionState = transcriptionState,
-                transcriptionPhase = transcriptionPhase,
-                transcriptionFilename = transcriptionFilename,
-                transcriptionIndeterminate = transcriptionIndeterminate,
-                transcriptionProgress = transcriptionProgressValue,
-                processedUs = processedUs,
-                durationUs = durationUs,
-                completedFiles = completedFiles,
-                totalFiles = totalFiles,
-                failedFiles = failedFiles,
-                errorMessage = statusError,
-            ),
-        )
+        val state = currentMainScreenState().status
         statusTitle.text = state.title
         setOptionalText(statusDetail, state.detail)
         setOptionalText(statusMeta, state.meta)
@@ -895,7 +872,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateMenu(menu: Menu) {
-        val controls = currentControls()
+        val controls = currentMainScreenState().controls
         menu.findItem(R.id.menuRefreshFolder)?.isEnabled = controls.refreshEnabled
         menu.findItem(R.id.menuSelectOutput)?.apply {
             isEnabled = controls.outputEnabled
@@ -937,15 +914,53 @@ class MainActivity : AppCompatActivity() {
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
-    private enum class CatalogTab {
-        NEW,
-        PROCESSED,
-    }
+    private fun currentMainScreenState(
+        entries: List<AudioCatalogEntry> = emptyList(),
+    ): MainScreenState =
+        MainScreenStateController.state(
+            MainScreenInput(
+                modelMessage = modelMessage,
+                modelLoading = modelLoading,
+                modelDownloadAvailable = modelDownloadAvailable,
+                modelDownloadProgress = modelDownloadProgress,
+                modelReady = modelReady,
+                outputSelected = outputUri != null,
+                folderSelected = folderUri != null,
+                pendingCount = pendingCount,
+                folderChecking = folderChecking,
+                folderScanQueued = folderScanQueued,
+                scanning = scanning,
+                scanMessage = scanMessage,
+                transcriptionState = transcriptionState,
+                transcriptionPhase = transcriptionPhase,
+                transcriptionFilename = transcriptionFilename,
+                transcriptionIndeterminate = transcriptionIndeterminate,
+                transcriptionProgress = transcriptionProgressValue,
+                processedUs = processedUs,
+                durationUs = durationUs,
+                completedFiles = completedFiles,
+                totalFiles = totalFiles,
+                failedFiles = failedFiles,
+                errorMessage = statusError,
+                selectedTab = selectedTab,
+                displayedRowCount = entries.size,
+                activePreviewEntryId = previewEntryId,
+                previewState = previewState,
+                rows = entries.map { it.toMainScreenRowInput() },
+            ),
+        )
+
+    private fun AudioCatalogEntry.toMainScreenRowInput(): MainScreenRowInput =
+        MainScreenRowInput(
+            entryId = id,
+            state = state,
+            hasTranscriptText = !transcriptText.isNullOrBlank(),
+        )
 
     private data class PreviewButtonTag(val entryId: Long)
+    private data class RetryButtonTag(val entryId: Long)
 
     private companion object {
-        const val RETRY_BUTTON_TAG = "retry"
         const val MENU_ENTRY_PLAY = 1
         const val MENU_ENTRY_RETRY = 2
         const val MENU_ENTRY_SHOW_TEXT = 3
