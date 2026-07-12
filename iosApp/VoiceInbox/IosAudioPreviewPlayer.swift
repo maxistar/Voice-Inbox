@@ -48,7 +48,7 @@ final class IosAudioPreviewPlayer: NSObject, ObservableObject, AVAudioPlayerDele
         }
     }
 
-    private func stop() {
+    func stop() {
         player?.stop()
         player = nil
         playingFileId = nil

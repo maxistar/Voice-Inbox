@@ -1,6 +1,11 @@
 import Foundation
 import Shared
 
+enum IosAudioCatalogConstants {
+    static let databaseName = "voice-inbox-catalog.db"
+    static let importedFolderUri = "ios-imported-audio"
+}
+
 enum IosImportedAudioStatus: String, Codable {
     case pending
     case processing
@@ -124,13 +129,12 @@ final class IosAudioImportStore: ObservableObject {
 
     private let fileManager: FileManager
     private let catalog: SqlDelightAudioCatalogRepository
-    private let folderUri = "ios-imported-audio"
     private let supportedExtensions: Set<String> = ["aac", "aiff", "aif", "caf", "flac", "m4a", "mp3", "mp4", "wav"]
 
     init(fileManager: FileManager = .default) {
         self.fileManager = fileManager
         self.catalog = IosSqlDelightAudioCatalogFactory().create(
-            databaseName: "voice-inbox-catalog.db"
+            databaseName: IosAudioCatalogConstants.databaseName
         )
         ensureImportDirectoryExists()
         migrateLegacyCatalogIfNeeded()
@@ -145,6 +149,14 @@ final class IosAudioImportStore: ObservableObject {
 
     func localURL(for file: IosImportedAudioFile) -> URL {
         importDirectory.appendingPathComponent(file.localFileName)
+    }
+
+    func localURL(documentUri: String) -> URL {
+        importDirectory.appendingPathComponent(documentUri)
+    }
+
+    func refresh() {
+        load()
     }
 
     func markProcessing(fileId: Int64) {
@@ -208,7 +220,7 @@ final class IosAudioImportStore: ObservableObject {
                 let targetURL = importDirectory.appendingPathComponent(targetFileName)
                 try fileManager.copyItem(at: sourceURL, to: targetURL)
                 _ = catalog.upsertImportedFile(
-                    folderUri: folderUri,
+                    folderUri: IosAudioCatalogConstants.importedFolderUri,
                     documentUri: targetFileName,
                     displayName: sourceURL.lastPathComponent,
                     mimeType: nil,
@@ -230,18 +242,18 @@ final class IosAudioImportStore: ObservableObject {
     }
 
     private func load() {
-        files = catalog.importedFiles(folderUri: folderUri).map(Self.importedFile)
+        files = catalog.importedFiles(folderUri: IosAudioCatalogConstants.importedFolderUri).map(Self.importedFile)
         sortFiles()
     }
 
     private func migrateLegacyCatalogIfNeeded() {
-        guard catalog.importedFiles(folderUri: folderUri).isEmpty else { return }
+        guard catalog.importedFiles(folderUri: IosAudioCatalogConstants.importedFolderUri).isEmpty else { return }
         guard let data = try? Data(contentsOf: metadataURL) else { return }
         guard let legacyFiles = try? JSONDecoder().decode([IosImportedAudioFile].self, from: data) else { return }
 
         for file in legacyFiles {
             _ = catalog.upsertImportedFile(
-                folderUri: folderUri,
+                folderUri: IosAudioCatalogConstants.importedFolderUri,
                 documentUri: file.localFileName,
                 displayName: file.displayName,
                 mimeType: nil,

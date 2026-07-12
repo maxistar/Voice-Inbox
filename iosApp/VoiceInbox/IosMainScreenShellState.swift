@@ -59,10 +59,11 @@ final class IosMainScreenShellState {
     ) -> IosShellMainScreen {
         let rowsForSelection = displayRows(for: selection, importedFiles: importedFiles)
         let rows = rowsForSelection.map { $0.input }
+        let pendingCount = importedFiles.count { $0.status == .pending }
         let state = MainScreenStateController.shared.state(
             input: input(
                 selectedTab: selection.sharedTab,
-                pendingCount: 0,
+                pendingCount: pendingCount,
                 displayedRowCount: Int32(rows.count),
                 runtimeReady: runtimeReady,
                 modelReady: modelReady,
@@ -192,9 +193,9 @@ final class IosMainScreenShellState {
             transcriptionProgress: Int32(transcription?.progressPercent ?? 0),
             processedUs: processedUs,
             durationUs: durationUs,
-            completedFiles: 0,
-            totalFiles: 0,
-            failedFiles: 0,
+            completedFiles: transcription?.completedFiles ?? 0,
+            totalFiles: transcription?.totalFiles ?? 0,
+            failedFiles: transcription?.failedFiles ?? 0,
             errorMessage: nil,
             selectedTab: selectedTab,
             displayedRowCount: displayedRowCount,

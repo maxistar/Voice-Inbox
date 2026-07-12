@@ -27,8 +27,16 @@ struct IosSingleFileTranscriptionState {
     let phase: String?
     let processedUs: Int64
     let durationUs: Int64
+    let completedFiles: Int32
+    let totalFiles: Int32
+    let failedFiles: Int32
+    let explicitProgress: Int32?
+    let summary: String?
 
     var progressPercent: Int? {
+        if let explicitProgress {
+            return Int(explicitProgress)
+        }
         guard durationUs > 0 else { return nil }
         return Int((max(0, min(processedUs, durationUs)) * 100) / durationUs)
     }
@@ -39,7 +47,12 @@ struct IosSingleFileTranscriptionState {
         fileName: nil,
         phase: nil,
         processedUs: 0,
-        durationUs: 0
+        durationUs: 0,
+        completedFiles: 0,
+        totalFiles: 0,
+        failedFiles: 0,
+        explicitProgress: nil,
+        summary: nil
     )
 }
 
@@ -53,6 +66,10 @@ final class IosSingleFileTranscriptionController: ObservableObject {
 
     var activeFileId: Int64? {
         state.active ? state.fileId : nil
+    }
+
+    var isActive: Bool {
+        state.active
     }
 
     var backendConfigured: Bool {
@@ -74,7 +91,12 @@ final class IosSingleFileTranscriptionController: ObservableObject {
             fileName: file.displayName,
             phase: SingleFileTranscriptionUseCase.companion.PHASE_DECODING_AUDIO,
             processedUs: 0,
-            durationUs: 0
+            durationUs: 0,
+            completedFiles: 0,
+            totalFiles: 1,
+            failedFiles: 0,
+            explicitProgress: nil,
+            summary: nil
         )
         message = nil
 
@@ -88,7 +110,12 @@ final class IosSingleFileTranscriptionController: ObservableObject {
                             fileName: file.displayName,
                             phase: progress.phase,
                             processedUs: progress.processedUs?.int64Value ?? 0,
-                            durationUs: progress.durationUs?.int64Value ?? 0
+                            durationUs: progress.durationUs?.int64Value ?? 0,
+                            completedFiles: 0,
+                            totalFiles: 1,
+                            failedFiles: 0,
+                            explicitProgress: nil,
+                            summary: nil
                         )
                     }
                 }
@@ -117,6 +144,73 @@ final class IosSingleFileTranscriptionController: ObservableObject {
         }
     }
 
+    func transcribeAll(
+        modelDirectory: URL,
+        store: IosAudioImportStore,
+        onFinished: (() -> Void)? = nil
+    ) {
+        guard !state.active else { return }
+        task?.cancel()
+        state = IosSingleFileTranscriptionState(
+            active: true,
+            fileId: nil,
+            fileName: nil,
+            phase: "Preparing transcription",
+            processedUs: 0,
+            durationUs: 0,
+            completedFiles: 0,
+            totalFiles: Int32(store.files.filter { $0.status == .pending }.count),
+            failedFiles: 0,
+            explicitProgress: nil,
+            summary: nil
+        )
+        message = nil
+
+        task = Task {
+            let outcome = await Task.detached(priority: .userInitiated) {
+                Self.runSharedBatchTranscription(modelDirectory: modelDirectory.path) { progress in
+                    Task { @MainActor in
+                        self.state = IosSingleFileTranscriptionState(
+                            active: true,
+                            fileId: nil,
+                            fileName: progress.filename,
+                            phase: progress.phase,
+                            processedUs: progress.processedUs?.int64Value ?? 0,
+                            durationUs: progress.durationUs?.int64Value ?? 0,
+                            completedFiles: progress.completed,
+                            totalFiles: progress.total,
+                            failedFiles: progress.failed,
+                            explicitProgress: progress.progress?.int32Value,
+                            summary: progress.filename == nil ? progress.phase : nil
+                        )
+                    }
+                }
+            }.value
+
+            store.refresh()
+            guard !Task.isCancelled else {
+                state = .idle
+                return
+            }
+
+            message = outcome.summary
+            state = IosSingleFileTranscriptionState(
+                active: false,
+                fileId: nil,
+                fileName: nil,
+                phase: outcome.summary,
+                processedUs: 0,
+                durationUs: 0,
+                completedFiles: outcome.completed,
+                totalFiles: outcome.total,
+                failedFiles: outcome.failed,
+                explicitProgress: outcome.progress,
+                summary: outcome.summary
+            )
+            onFinished?()
+        }
+    }
+
     func retry(
         file: IosImportedAudioFile,
         localURL: URL,
@@ -134,7 +228,7 @@ final class IosSingleFileTranscriptionController: ObservableObject {
         )
     }
 
-    nonisolated private static func runSharedTranscription(
+    nonisolated fileprivate static func runSharedTranscription(
         file: IosImportedAudioFile,
         localURL: URL,
         modelDirectory: String,
@@ -168,6 +262,74 @@ final class IosSingleFileTranscriptionController: ObservableObject {
             ),
             onProgress: onProgress
         )
+    }
+
+    nonisolated private static func runSharedBatchTranscription(
+        modelDirectory: String,
+        onProgress: @escaping (BatchTranscriptionProgress) -> Void
+    ) -> BatchTranscriptionResult {
+        let catalog = IosSqlDelightAudioCatalogFactory().create(
+            databaseName: IosAudioCatalogConstants.databaseName
+        )
+        defer { catalog.close() }
+        let transcriber = IosBatchEntryOutcomeTranscriber(modelDirectory: modelDirectory)
+        let useCase = OutcomeBatchTranscriptionUseCase(
+            catalog: catalog,
+            transcriber: transcriber,
+            clock: IosBatchClock()
+        )
+        return useCase.transcribe(
+            input: BatchTranscriptionInput(
+                folderId: IosAudioCatalogConstants.importedFolderUri,
+                outputId: "ios-shell-output",
+                runId: UUID().uuidString,
+                retryEntryId: nil
+            ),
+            onProgress: onProgress
+        )
+    }
+}
+
+private final class IosBatchEntryOutcomeTranscriber: OutcomeBatchEntryTranscriber {
+    private let modelDirectory: String
+
+    init(modelDirectory: String) {
+        self.modelDirectory = modelDirectory
+    }
+
+    func transcribe(
+        entry: AudioCatalogEntry,
+        outputId: String,
+        runId: String,
+        onProgress: @escaping (SingleFileTranscriptionProgress) -> Void
+    ) -> SingleFileTranscriptionOutcome {
+        IosSingleFileTranscriptionController.runSharedTranscription(
+            file: IosImportedAudioFile(
+                id: entry.id,
+                displayName: entry.displayName,
+                localFileName: entry.documentUri,
+                sizeBytes: entry.fingerprint.sizeBytes?.int64Value ?? 0,
+                importedAt: Date(timeIntervalSince1970: Double(entry.fingerprint.modifiedMillis?.int64Value ?? 0) / 1000),
+                status: IosImportedAudioStatus(sharedState: entry.state),
+                transcriptText: entry.transcriptText,
+                lastError: entry.lastError
+            ),
+            localURL: Self.localURL(documentUri: entry.documentUri),
+            modelDirectory: modelDirectory,
+            onProgress: onProgress
+        )
+    }
+
+    private static func localURL(documentUri: String) -> URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("ImportedAudio", isDirectory: true)
+            .appendingPathComponent(documentUri)
+    }
+}
+
+private final class IosBatchClock: BatchClock {
+    func currentTimeMillis() -> Int64 {
+        Int64(Date().timeIntervalSince1970 * 1000)
     }
 }
 

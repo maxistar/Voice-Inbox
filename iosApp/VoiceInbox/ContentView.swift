@@ -63,7 +63,18 @@ struct ContentView: View {
                     .pickerStyle(.segmented)
 
                     if screen.state.list.transcribeAllVisible {
-                        Button("Transcribe All") {}
+                        Button {
+                            previewPlayer.stop()
+                            transcriber.transcribeAll(
+                                modelDirectory: speechModelStore.modelDirectory,
+                                store: importStore,
+                                onFinished: {
+                                    selectedTab = .processed
+                                }
+                            )
+                        } label: {
+                            Label("Transcribe All", systemImage: "text.badge.checkmark")
+                        }
                             .disabled(!screen.state.list.transcribeAllEnabled)
                     }
 
@@ -120,7 +131,10 @@ struct ContentView: View {
                                                 systemImage: previewPlayer.playingFileId == importedFile.id ? "stop.fill" : "play.fill"
                                             )
                                         }
-                                        .disabled(!row.state.preview.enabled)
+                                        .disabled(
+                                            transcriber.isActive ||
+                                                !row.state.preview.enabled
+                                        )
 
                                         if importedFile.status == .pending {
                                             Button {
@@ -138,7 +152,7 @@ struct ContentView: View {
                                                 Label("Transcribe", systemImage: "text.badge.checkmark")
                                             }
                                             .disabled(
-                                                transcriber.activeFileId != nil ||
+                                                transcriber.isActive ||
                                                     !transcriptionReady
                                             )
                                         }
@@ -159,7 +173,7 @@ struct ContentView: View {
                                                 Label("Retry", systemImage: "arrow.clockwise")
                                             }
                                             .disabled(
-                                                transcriber.activeFileId != nil ||
+                                                transcriber.isActive ||
                                                     !transcriptionReady
                                             )
                                         }

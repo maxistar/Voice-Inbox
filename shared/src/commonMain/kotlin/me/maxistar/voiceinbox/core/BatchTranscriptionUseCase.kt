@@ -38,6 +38,15 @@ interface BatchEntryTranscriber {
     ): SingleFileTranscriptionResult
 }
 
+interface OutcomeBatchEntryTranscriber {
+    fun transcribe(
+        entry: AudioCatalogEntry,
+        outputId: String,
+        runId: String,
+        onProgress: (SingleFileTranscriptionProgress) -> Unit,
+    ): SingleFileTranscriptionOutcome
+}
+
 interface BatchClock {
     fun currentTimeMillis(): Long
 }
@@ -154,4 +163,39 @@ class BatchTranscriptionUseCase(
         const val FINAL_PROGRESS = 100
         const val ERROR_TRANSCRIPTION_FAILED = "Transcription failed"
     }
+}
+
+class OutcomeBatchTranscriptionUseCase(
+    catalog: AudioCatalogQueuePort,
+    transcriber: OutcomeBatchEntryTranscriber,
+    clock: BatchClock,
+) {
+    private val delegate = BatchTranscriptionUseCase(
+        catalog = catalog,
+        transcriber = object : BatchEntryTranscriber {
+            override fun transcribe(
+                entry: AudioCatalogEntry,
+                outputId: String,
+                runId: String,
+                onProgress: (SingleFileTranscriptionProgress) -> Unit,
+            ): SingleFileTranscriptionResult {
+                val outcome = transcriber.transcribe(entry, outputId, runId, onProgress)
+                if (outcome.success) {
+                    return requireNotNull(outcome.result) {
+                        "Successful transcription outcome did not include a result"
+                    }
+                }
+                throw IllegalStateException(
+                    outcome.errorMessage ?: BatchTranscriptionUseCase.ERROR_TRANSCRIPTION_FAILED,
+                )
+            }
+        },
+        clock = clock,
+    )
+
+    fun transcribe(
+        input: BatchTranscriptionInput,
+        onProgress: (BatchTranscriptionProgress) -> Unit,
+    ): BatchTranscriptionResult =
+        delegate.transcribe(input, onProgress)
 }
