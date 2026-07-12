@@ -23,6 +23,7 @@ struct ContentView: View {
             speechModelReady: speechModelReady
         )
         let modelDownloadAvailable = !speechModelReady && !speechModelStore.isBusy
+        let modelSetupVisible = !transcriptionBackendConfigured || !speechModelReady || speechModelStore.isBusy
         let screen = shellState.screen(
             selection: selectedTab,
             importedFiles: importStore.files,
@@ -210,7 +211,7 @@ struct ContentView: View {
                     }
                 }
 
-                if !transcriptionBackendConfigured || !speechModelReady || speechModelStore.isBusy || speechModelStore.message != nil || transcriber.message != nil {
+                if modelSetupVisible {
                     Section("Transcription Setup") {
                         if !transcriptionBackendConfigured {
                             Text(IosSingleFileTranscriptionController.backendUnavailableMessage)
@@ -258,17 +259,15 @@ struct ContentView: View {
                             .disabled(speechModelStore.isBusy)
                         }
 
-                        if let transcriptionMessage = transcriber.message {
-                            Text(transcriptionMessage)
-                                .foregroundStyle(.secondary)
-                        }
                     }
                 }
 
-                Section("Shared framework") {
-                    LabeledContent("Model", value: manifest.modelId)
-                    LabeledContent("Version", value: manifest.version)
-                    LabeledContent("Required free space", value: formatBytes(manifest.requiredFreeBytes))
+                if modelSetupVisible {
+                    Section("Shared framework") {
+                        LabeledContent("Model", value: manifest.modelId)
+                        LabeledContent("Version", value: manifest.version)
+                        LabeledContent("Required free space", value: formatBytes(manifest.requiredFreeBytes))
+                    }
                 }
 
                 Section {
