@@ -17,6 +17,8 @@
 		101010101010101010101031 /* IosAudioPreviewPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101010101010101010101032 /* IosAudioPreviewPlayer.swift */; };
 		101010101010101010101033 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 101010101010101010101034 /* Assets.xcassets */; };
 		101010101010101010101036 /* IosSingleFileTranscriptionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101010101010101010101037 /* IosSingleFileTranscriptionController.swift */; };
+		101010101010101010101039 /* IosSpeechModelStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101010101010101010101041 /* IosSpeechModelStore.swift */; };
+		101010101010101010101040 /* IosSpeechModelDirectoryPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101010101010101010101042 /* IosSpeechModelDirectoryPicker.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -31,6 +33,8 @@
 		101010101010101010101032 /* IosAudioPreviewPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosAudioPreviewPlayer.swift; sourceTree = "<group>"; };
 		101010101010101010101034 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		101010101010101010101037 /* IosSingleFileTranscriptionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosSingleFileTranscriptionController.swift; sourceTree = "<group>"; };
+		101010101010101010101041 /* IosSpeechModelStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosSpeechModelStore.swift; sourceTree = "<group>"; };
+		101010101010101010101042 /* IosSpeechModelDirectoryPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosSpeechModelDirectoryPicker.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -69,6 +73,8 @@
 				101010101010101010101029 /* IosAudioImportStore.swift */,
 				101010101010101010101032 /* IosAudioPreviewPlayer.swift */,
 				101010101010101010101037 /* IosSingleFileTranscriptionController.swift */,
+				101010101010101010101042 /* IosSpeechModelDirectoryPicker.swift */,
+				101010101010101010101041 /* IosSpeechModelStore.swift */,
 				101010101010101010101023 /* IosScheduledTranscriptionSettingsStore.swift */,
 				101010101010101010101026 /* IosMainScreenShellState.swift */,
 				101010101010101010101024 /* SettingsView.swift */,
@@ -199,6 +205,8 @@
 				101010101010101010101027 /* IosAudioImportStore.swift in Sources */,
 				101010101010101010101031 /* IosAudioPreviewPlayer.swift in Sources */,
 				101010101010101010101036 /* IosSingleFileTranscriptionController.swift in Sources */,
+				101010101010101010101040 /* IosSpeechModelDirectoryPicker.swift in Sources */,
+				101010101010101010101039 /* IosSpeechModelStore.swift in Sources */,
 				101010101010101010101021 /* IosScheduledTranscriptionSettingsStore.swift in Sources */,
 				101010101010101010101025 /* IosMainScreenShellState.swift in Sources */,
 				101010101010101010101022 /* SettingsView.swift in Sources */,
@@ -354,6 +362,9 @@
 					"-framework",
 					Shared,
 					"-lnotes_recognition",
+					"-lc++",
+					"-weak_framework",
+					CoreML,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = me.maxistar.voiceinbox.ios;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -399,6 +410,9 @@
 					"-framework",
 					Shared,
 					"-lnotes_recognition",
+					"-lc++",
+					"-weak_framework",
+					CoreML,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = me.maxistar.voiceinbox.ios;
 				PRODUCT_NAME = "$(TARGET_NAME)";

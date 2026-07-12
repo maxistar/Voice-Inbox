@@ -16,6 +16,7 @@ static LOAD_STATE: Lazy<(Mutex<LoadState>, Condvar)> =
     Lazy::new(|| (Mutex::new(LoadState::Idle), Condvar::new()));
 
 #[derive(Debug, Clone, PartialEq)]
+#[allow(dead_code)]
 enum LoadState {
     Idle,
     Loading,

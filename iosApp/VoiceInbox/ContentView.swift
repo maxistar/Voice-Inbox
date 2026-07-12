@@ -7,12 +7,17 @@ struct ContentView: View {
 
     @StateObject private var importStore = IosAudioImportStore()
     @StateObject private var previewPlayer = IosAudioPreviewPlayer()
+    @StateObject private var speechModelStore = IosSpeechModelStore()
     @StateObject private var transcriber = IosSingleFileTranscriptionController()
     @State private var selectedTab = IosShellCatalogSelection.new
     @State private var showingImporter = false
+    @State private var showingModelImporter = false
     @State private var shownTranscript: String?
 
     var body: some View {
+        let transcriptionBackendConfigured = transcriber.backendConfigured
+        let speechModelReady = speechModelStore.isReady
+        let transcriptionReady = transcriptionBackendConfigured && speechModelReady && !speechModelStore.isInstalling
         let screen = shellState.screen(
             selection: selectedTab,
             importedFiles: importStore.files,
@@ -120,12 +125,20 @@ struct ContentView: View {
                                                 transcriber.transcribe(
                                                     file: importedFile,
                                                     localURL: importStore.localURL(for: importedFile),
-                                                    store: importStore
+                                                    modelDirectory: speechModelStore.modelDirectory,
+                                                    store: importStore,
+                                                    onSuccess: { transcript in
+                                                        shownTranscript = transcript
+                                                        selectedTab = .processed
+                                                    }
                                                 )
                                             } label: {
                                                 Label("Transcribe", systemImage: "text.badge.checkmark")
                                             }
-                                            .disabled(transcriber.activeFileId != nil)
+                                            .disabled(
+                                                transcriber.activeFileId != nil ||
+                                                    !transcriptionReady
+                                            )
                                         }
 
                                         if importedFile.status == .failed {
@@ -133,12 +146,20 @@ struct ContentView: View {
                                                 transcriber.retry(
                                                     file: importedFile,
                                                     localURL: importStore.localURL(for: importedFile),
-                                                    store: importStore
+                                                    modelDirectory: speechModelStore.modelDirectory,
+                                                    store: importStore,
+                                                    onSuccess: { transcript in
+                                                        shownTranscript = transcript
+                                                        selectedTab = .processed
+                                                    }
                                                 )
                                             } label: {
                                                 Label("Retry", systemImage: "arrow.clockwise")
                                             }
-                                            .disabled(transcriber.activeFileId != nil)
+                                            .disabled(
+                                                transcriber.activeFileId != nil ||
+                                                    !transcriptionReady
+                                            )
                                         }
                                     }
 
@@ -180,10 +201,39 @@ struct ContentView: View {
                     }
                 }
 
-                if let transcriptionMessage = transcriber.message {
-                    Section("Transcription") {
-                        Text(transcriptionMessage)
-                            .foregroundStyle(.secondary)
+                if !transcriptionBackendConfigured || !speechModelReady || speechModelStore.isInstalling || speechModelStore.message != nil || transcriber.message != nil {
+                    Section("Transcription Setup") {
+                        if !transcriptionBackendConfigured {
+                            Text(IosSingleFileTranscriptionController.backendUnavailableMessage)
+                                .foregroundStyle(.secondary)
+                        }
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(speechModelStore.status.summary)
+                            if speechModelStore.isInstalling {
+                                ProgressView()
+                            }
+                            if let detail = speechModelStore.status.detail {
+                                Text(detail)
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                            if let modelMessage = speechModelStore.message {
+                                Text(modelMessage)
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        Button {
+                            showingModelImporter = true
+                        } label: {
+                            Label(speechModelReady ? "Replace Speech Model" : "Install Speech Model", systemImage: "square.and.arrow.down")
+                        }
+                        .disabled(speechModelStore.isInstalling)
+
+                        if let transcriptionMessage = transcriber.message {
+                            Text(transcriptionMessage)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
 
@@ -209,7 +259,7 @@ struct ContentView: View {
                 }
 
                 Section("Future work") {
-                    Text("Imported files are copied into app-local storage for shell verification only. Playback, transcription, output writing, scheduling execution, and Rust/iOS bridging are intentionally future work.")
+                    Text("Imported files are copied into app-local storage for shell verification. Transcribe All, output writing, and scheduled iOS execution are intentionally future work.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -220,6 +270,12 @@ struct ContentView: View {
                     importStore.importFiles(from: urls)
                     showingImporter = false
                     selectedTab = .new
+                }
+            }
+            .sheet(isPresented: $showingModelImporter) {
+                IosSpeechModelDirectoryPicker { url in
+                    speechModelStore.installModel(from: url)
+                    showingModelImporter = false
                 }
             }
             .onChange(of: importStore.files) { files in

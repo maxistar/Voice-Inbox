@@ -17,6 +17,9 @@ private func voiceinbox_transcription_last_error() -> UnsafeMutablePointer<CChar
 @_silgen_name("voiceinbox_transcription_string_free")
 private func voiceinbox_transcription_string_free(_ value: UnsafeMutablePointer<CChar>?)
 
+@_silgen_name("voiceinbox_transcription_backend_configured")
+private func voiceinbox_transcription_backend_configured() -> Bool
+
 struct IosSingleFileTranscriptionState {
     let active: Bool
     let fileId: Int64?
@@ -46,12 +49,23 @@ final class IosSingleFileTranscriptionController: ObservableObject {
     @Published var message: String?
 
     private var task: Task<Void, Never>?
+    static let backendUnavailableMessage = "iOS transcription backend is not configured yet."
 
     var activeFileId: Int64? {
         state.active ? state.fileId : nil
     }
 
-    func transcribe(file: IosImportedAudioFile, localURL: URL, store: IosAudioImportStore) {
+    var backendConfigured: Bool {
+        IosNativeTranscriber.isRuntimeConfigured
+    }
+
+    func transcribe(
+        file: IosImportedAudioFile,
+        localURL: URL,
+        modelDirectory: URL,
+        store: IosAudioImportStore,
+        onSuccess: ((String) -> Void)? = nil
+    ) {
         task?.cancel()
         store.markProcessing(fileId: file.id)
         state = IosSingleFileTranscriptionState(
@@ -66,7 +80,7 @@ final class IosSingleFileTranscriptionController: ObservableObject {
 
         task = Task {
             let outcome = await Task.detached(priority: .userInitiated) {
-                Self.runSharedTranscription(file: file, localURL: localURL) { progress in
+                Self.runSharedTranscription(file: file, localURL: localURL, modelDirectory: modelDirectory.path) { progress in
                     Task { @MainActor in
                         self.state = IosSingleFileTranscriptionState(
                             active: true,
@@ -93,6 +107,7 @@ final class IosSingleFileTranscriptionController: ObservableObject {
                     durationUs: result.durationUs?.int64Value
                 )
                 message = "Transcribed \(file.displayName)"
+                onSuccess?(result.transcriptText)
             } else {
                 let error = outcome.errorMessage ?? "iOS transcription failed."
                 store.markFailed(fileId: file.id, error: error)
@@ -102,18 +117,31 @@ final class IosSingleFileTranscriptionController: ObservableObject {
         }
     }
 
-    func retry(file: IosImportedAudioFile, localURL: URL, store: IosAudioImportStore) {
+    func retry(
+        file: IosImportedAudioFile,
+        localURL: URL,
+        modelDirectory: URL,
+        store: IosAudioImportStore,
+        onSuccess: ((String) -> Void)? = nil
+    ) {
         store.resetToPending(fileId: file.id)
-        transcribe(file: file, localURL: localURL, store: store)
+        transcribe(
+            file: file,
+            localURL: localURL,
+            modelDirectory: modelDirectory,
+            store: store,
+            onSuccess: onSuccess
+        )
     }
 
     nonisolated private static func runSharedTranscription(
         file: IosImportedAudioFile,
         localURL: URL,
+        modelDirectory: String,
         onProgress: @escaping (SingleFileTranscriptionProgress) -> Void
     ) -> SingleFileTranscriptionOutcome {
         let decoder = IosPlatformAudioDecoder(localURL: localURL)
-        let transcriber = IosNativeTranscriber(modelDirectory: IosNativeTranscriber.defaultModelDirectory())
+        let transcriber = IosNativeTranscriber(modelDirectory: modelDirectory)
         guard transcriber.initialize(modelDirectory: transcriber.modelDirectory) else {
             return SingleFileTranscriptionOutcome(
                 success: false,
@@ -145,6 +173,7 @@ final class IosSingleFileTranscriptionController: ObservableObject {
 
 private final class IosPlatformAudioDecoder: PlatformAudioDecoder {
     private let localURL: URL
+    private static let targetSampleRate = 16_000.0
 
     init(localURL: URL) {
         self.localURL = localURL
@@ -168,7 +197,7 @@ private final class IosPlatformAudioDecoder: PlatformAudioDecoder {
             }
 
             try file.read(into: buffer)
-            let samples = Self.monoSamples(from: buffer)
+            let samples = try Self.normalizedMonoSamples(from: buffer, sourceFormat: file.processingFormat)
             let kotlinSamples = KotlinFloatArray(size: Int32(samples.count))
             for (index, sample) in samples.enumerated() {
                 kotlinSamples.set(index: Int32(index), value: sample)
@@ -182,6 +211,58 @@ private final class IosPlatformAudioDecoder: PlatformAudioDecoder {
         } catch {
             return PlatformAudioInfo(durationUs: nil, embeddedRecordingTimeMillis: nil)
         }
+    }
+
+    private static func normalizedMonoSamples(
+        from buffer: AVAudioPCMBuffer,
+        sourceFormat: AVAudioFormat
+    ) throws -> [Float] {
+        guard let targetFormat = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: targetSampleRate,
+            channels: 1,
+            interleaved: false
+        ) else {
+            return []
+        }
+
+        if sourceFormat.sampleRate == targetSampleRate,
+           sourceFormat.channelCount == 1,
+           sourceFormat.commonFormat == .pcmFormatFloat32,
+           let channelData = buffer.floatChannelData {
+            return Array(UnsafeBufferPointer(start: channelData[0], count: Int(buffer.frameLength)))
+        }
+
+        guard let converter = AVAudioConverter(from: sourceFormat, to: targetFormat) else {
+            return monoSamples(from: buffer)
+        }
+
+        let ratio = targetSampleRate / sourceFormat.sampleRate
+        let targetCapacity = AVAudioFrameCount((Double(buffer.frameLength) * ratio).rounded(.up)) + 1024
+        guard let convertedBuffer = AVAudioPCMBuffer(
+            pcmFormat: targetFormat,
+            frameCapacity: max(targetCapacity, 1)
+        ) else {
+            return []
+        }
+
+        var didProvideInput = false
+        var conversionError: NSError?
+        let status = converter.convert(to: convertedBuffer, error: &conversionError) { _, outStatus in
+            if didProvideInput {
+                outStatus.pointee = .noDataNow
+                return nil
+            }
+            didProvideInput = true
+            outStatus.pointee = .haveData
+            return buffer
+        }
+
+        if status == .error, let conversionError {
+            throw conversionError
+        }
+
+        return monoSamples(from: convertedBuffer)
     }
 
     private static func monoSamples(from buffer: AVAudioPCMBuffer) -> [Float] {
@@ -213,10 +294,8 @@ private final class IosNativeTranscriber: PlatformNativeTranscriber {
         self.modelDirectory = modelDirectory
     }
 
-    static func defaultModelDirectory() -> String {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
-            .first ?? FileManager.default.temporaryDirectory
-        return base.appendingPathComponent("SpeechModel", isDirectory: true).path
+    static var isRuntimeConfigured: Bool {
+        voiceinbox_transcription_backend_configured()
     }
 
     func initialize(modelDirectory: String) -> Bool {
