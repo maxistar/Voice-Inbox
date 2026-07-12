@@ -30,7 +30,7 @@ class TranscriptionWorker(
             ?: return@withContext failure("Output file is missing")
         val retryId = inputData.getLong(KEY_RETRY_ID, NO_RETRY_ID).takeIf { it != NO_RETRY_ID }
         val catalog: AudioCatalogQueuePort =
-            AudioCatalogRepository(AudioCatalogDatabase(applicationContext))
+            AndroidSqlDelightAudioCatalogFactory(applicationContext).create()
 
         try {
             setForeground(foreground("Preparing transcription", 0, true))

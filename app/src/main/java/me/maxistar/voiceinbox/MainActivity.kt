@@ -46,8 +46,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var selectionStore: DocumentSelectionStore
     private lateinit var documentAccess: DocumentAccess
     private lateinit var folderScanner: AudioFolderScanner
-    private lateinit var catalogDatabase: AudioCatalogDatabase
-    private lateinit var catalog: AudioCatalogRepository
+    private lateinit var catalog: SqlDelightAudioCatalogRepository
     private lateinit var modelReadiness: SpeechModelReadinessManager
     private val folderExecutor = Executors.newSingleThreadExecutor()
 
@@ -113,8 +112,7 @@ class MainActivity : AppCompatActivity() {
         )
         documentAccess = DocumentAccess(contentResolver)
         folderScanner = AudioFolderScanner(contentResolver)
-        catalogDatabase = AudioCatalogDatabase(this)
-        catalog = AudioCatalogRepository(catalogDatabase)
+        catalog = AndroidSqlDelightAudioCatalogFactory(this).create()
         modelReadiness = getSharedModelReadiness(SpeechModelRepository(noBackupFilesDir.resolve("models")))
         ScheduledTranscriptionScheduler.sync(
             this,

@@ -188,7 +188,8 @@ UPDATE audio_files
 SET state = 'PENDING',
     last_error = NULL,
     processed_at = NULL,
-    transcript_text = NULL
+    transcript_text = NULL,
+    duration_us = NULL
 WHERE state = 'PROCESSING';
 
 markClaimed:
@@ -196,7 +197,8 @@ UPDATE audio_files
 SET state = 'PROCESSING',
     last_error = NULL,
     processed_at = NULL,
-    transcript_text = NULL
+    transcript_text = NULL,
+    duration_us = NULL
 WHERE id = ?
   AND state = ?;
 
@@ -214,7 +216,8 @@ UPDATE audio_files
 SET state = 'FAILED',
     last_error = ?,
     processed_at = NULL,
-    transcript_text = NULL
+    transcript_text = NULL,
+    duration_us = NULL
 WHERE id = ?;
 
 markPendingFromProcessing:
@@ -222,7 +225,8 @@ UPDATE audio_files
 SET state = 'PENDING',
     last_error = NULL,
     processed_at = NULL,
-    transcript_text = NULL
+    transcript_text = NULL,
+    duration_us = NULL
 WHERE id = ?
   AND state = 'PROCESSING';
 
@@ -231,6 +235,7 @@ UPDATE audio_files
 SET state = 'PENDING',
     last_error = NULL,
     processed_at = NULL,
-    transcript_text = NULL
+    transcript_text = NULL,
+    duration_us = NULL
 WHERE id = ?
   AND state = 'FAILED';

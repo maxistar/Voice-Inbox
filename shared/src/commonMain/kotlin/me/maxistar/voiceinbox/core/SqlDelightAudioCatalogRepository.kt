@@ -39,9 +39,13 @@ data class SqlDelightAudioCatalogFile(
 }
 
 class SqlDelightAudioCatalogRepository(
-    driver: SqlDriver,
+    private val driver: SqlDriver,
 ) : AudioCatalogQueuePort, AudioCatalogReconciliationPort {
     private val queries = VoiceInboxDatabase(driver).audioFilesQueries
+
+    fun close() {
+        driver.close()
+    }
 
     fun importedFiles(folderUri: String): List<SqlDelightAudioCatalogFile> =
         queries.selectDisplayRows(folderUri, mapper = ::toCatalogFile).executeAsList()

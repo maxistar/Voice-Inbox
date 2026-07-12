@@ -27,7 +27,7 @@ class EndToEndTranscriptionInstrumentedTest {
     fun wavAndM4aBatchAppendSeparateTranscriptEntries() {
         val model = SpeechModelRepository(targetContext.noBackupFilesDir.resolve("models")).inspect()
         assumeTrue(model is InstalledSpeechModelState.Ready)
-        targetContext.deleteDatabase(AudioCatalogDatabase.DATABASE_NAME)
+        targetContext.deleteDatabase(AndroidSqlDelightAudioCatalogFactory.DATABASE_NAME)
 
         val output = File(targetContext.cacheDir, "end-to-end-output.txt").apply {
             writeText("Existing notes")
@@ -35,8 +35,8 @@ class EndToEndTranscriptionInstrumentedTest {
         val wav = copyFixture(TestR.raw.test_audio_wav, "sample.wav")
         val m4a = copyFixture(TestR.raw.test_audio_m4a, "sample.m4a")
         val folder = "content://test/end-to-end"
-        AudioCatalogDatabase(targetContext).use { database ->
-            AudioCatalogRepository(database).reconcile(
+        withRepository { repository ->
+            repository.reconcile(
                 folder,
                 listOf(scanned(folder, wav), scanned(folder, m4a)),
             )
@@ -63,8 +63,7 @@ class EndToEndTranscriptionInstrumentedTest {
         assertTrue(result.contains("\n\nsample.m4a\n"))
         assertEquals(1, Regex("sample\\.wav").findAll(result).count())
         assertEquals(1, Regex("sample\\.m4a").findAll(result).count())
-        AudioCatalogDatabase(targetContext).use { database ->
-            val repository = AudioCatalogRepository(database)
+        withRepository { repository ->
             assertEquals(2, repository.processedEntries(folder).size)
 
             output.appendText("\n\nUser edited this Markdown.")
@@ -89,8 +88,7 @@ class EndToEndTranscriptionInstrumentedTest {
         )
         assertEquals(WorkInfo.State.SUCCEEDED, waitForFinished(workManager, changedRun).state)
 
-        val retryId = AudioCatalogDatabase(targetContext).use { database ->
-            val repository = AudioCatalogRepository(database)
+        val retryId = withRepository { repository ->
             val m4aEntry = repository.processedEntries(folder)
                 .single { it.displayName == "sample.m4a" }
             repository.markFailed(m4aEntry.id, "Simulated publication failure")
@@ -108,8 +106,8 @@ class EndToEndTranscriptionInstrumentedTest {
         assertTrue(reprocessed.contains("User edited this Markdown."))
         assertEquals(2, Regex("sample\\.wav").findAll(reprocessed).count())
         assertEquals(2, Regex("sample\\.m4a").findAll(reprocessed).count())
-        AudioCatalogDatabase(targetContext).use { database ->
-            assertEquals(2, AudioCatalogRepository(database).processedEntries(folder).size)
+        withRepository { repository ->
+            assertEquals(2, repository.processedEntries(folder).size)
         }
     }
 
@@ -136,5 +134,19 @@ class EndToEndTranscriptionInstrumentedTest {
             info = manager.getWorkInfoById(id).get(30, TimeUnit.SECONDS)
         } while (info != null && !info.state.isFinished && System.currentTimeMillis() < deadline)
         return requireNotNull(info)
+    }
+
+    private fun openRepository(): SqlDelightAudioCatalogRepository =
+        AndroidSqlDelightAudioCatalogFactory(targetContext).create()
+
+    private inline fun <T> withRepository(
+        block: (SqlDelightAudioCatalogRepository) -> T,
+    ): T {
+        val repository = openRepository()
+        return try {
+            block(repository)
+        } finally {
+            repository.close()
+        }
     }
 }

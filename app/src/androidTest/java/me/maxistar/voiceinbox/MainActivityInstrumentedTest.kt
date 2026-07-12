@@ -111,9 +111,13 @@ class MainActivityInstrumentedTest {
                     transcriptText = null,
                 )
                 val row = MainActivity::class.java
-                    .getDeclaredMethod("createEntryView", AudioCatalogEntry::class.java)
+                    .getDeclaredMethod(
+                        "createEntryView",
+                        AudioCatalogEntry::class.java,
+                        MainScreenRowState::class.java,
+                    )
                     .apply { isAccessible = true }
-                    .invoke(activity, entry) as android.view.View
+                    .invoke(activity, entry, rowState(entry)) as android.view.View
                 activity.findViewById<android.widget.LinearLayout>(R.id.fileList).addView(row)
             }
 
@@ -143,9 +147,13 @@ class MainActivityInstrumentedTest {
                     transcriptText = "recognized words from the note",
                 )
                 val row = MainActivity::class.java
-                    .getDeclaredMethod("createEntryView", AudioCatalogEntry::class.java)
+                    .getDeclaredMethod(
+                        "createEntryView",
+                        AudioCatalogEntry::class.java,
+                        MainScreenRowState::class.java,
+                    )
                     .apply { isAccessible = true }
-                    .invoke(activity, entry) as android.view.View
+                    .invoke(activity, entry, rowState(entry)) as android.view.View
                 activity.findViewById<android.widget.LinearLayout>(R.id.fileList).addView(row)
             }
 
@@ -161,6 +169,20 @@ class MainActivityInstrumentedTest {
             .edit()
             .clear()
             .commit()
-        context.deleteDatabase(AudioCatalogDatabase.DATABASE_NAME)
+        context.deleteDatabase(AndroidSqlDelightAudioCatalogFactory.DATABASE_NAME)
     }
+
+    private fun rowState(entry: AudioCatalogEntry): MainScreenRowState =
+        MainScreenStateController.rowState(
+            row = MainScreenRowInput(
+                entryId = entry.id,
+                state = entry.state,
+                hasTranscriptText = !entry.transcriptText.isNullOrBlank(),
+            ),
+            activePreviewEntryId = null,
+            previewState = PreviewPlaybackState.IDLE,
+            transcriptionState = TranscriptionObservationState.IDLE,
+            busy = false,
+            retryEnabled = true,
+        )
 }

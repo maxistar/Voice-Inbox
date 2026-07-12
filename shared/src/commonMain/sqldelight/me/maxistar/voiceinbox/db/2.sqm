@@ -1,0 +1,1 @@
+ALTER TABLE audio_files ADD COLUMN duration_us INTEGER;
