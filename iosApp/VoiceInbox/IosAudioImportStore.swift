@@ -7,6 +7,21 @@ enum IosImportedAudioStatus: String, Codable {
     case processed
     case failed
 
+    init(sharedState: AudioFileState) {
+        switch sharedState {
+        case .pending:
+            self = .pending
+        case .processing:
+            self = .processing
+        case .processed:
+            self = .processed
+        case .failed:
+            self = .failed
+        default:
+            self = .pending
+        }
+    }
+
     var sharedState: AudioFileState {
         switch self {
         case .pending:
@@ -108,16 +123,23 @@ final class IosAudioImportStore: ObservableObject {
     @Published var importMessage: String?
 
     private let fileManager: FileManager
+    private let catalog: SqlDelightAudioCatalogRepository
+    private let folderUri = "ios-imported-audio"
     private let supportedExtensions: Set<String> = ["aac", "aiff", "aif", "caf", "flac", "m4a", "mp3", "mp4", "wav"]
 
     init(fileManager: FileManager = .default) {
         self.fileManager = fileManager
+        self.catalog = IosSqlDelightAudioCatalogFactory().create(
+            databaseName: "voice-inbox-catalog.db"
+        )
+        ensureImportDirectoryExists()
+        migrateLegacyCatalogIfNeeded()
         load()
     }
 
     func importFiles(from urls: [URL]) {
         let summary = copySupportedFiles(from: urls)
-        save()
+        load()
         importMessage = summary.message
     }
 
@@ -126,33 +148,28 @@ final class IosAudioImportStore: ObservableObject {
     }
 
     func markProcessing(fileId: Int64) {
-        update(fileId: fileId) { file in
-            file.status = .processing
-            file.lastError = nil
-        }
+        _ = catalog.markProcessing(id: fileId)
+        load()
     }
 
     func markProcessed(fileId: Int64, transcriptText: String, durationUs: Int64?) {
-        update(fileId: fileId) { file in
-            file.status = .processed
-            file.transcriptText = transcriptText
-            file.durationUs = durationUs
-            file.lastError = nil
-        }
+        catalog.markProcessedFile(
+            id: fileId,
+            processedAtMillis: currentTimeMillis(),
+            transcriptText: transcriptText,
+            durationUs: durationUs.map { KotlinLong(longLong: $0) }
+        )
+        load()
     }
 
     func markFailed(fileId: Int64, error: String) {
-        update(fileId: fileId) { file in
-            file.status = .failed
-            file.lastError = error
-        }
+        catalog.markFailed(id: fileId, message: error)
+        load()
     }
 
     func resetToPending(fileId: Int64) {
-        update(fileId: fileId) { file in
-            file.status = .pending
-            file.lastError = nil
-        }
+        _ = catalog.resetForRetry(id: fileId)
+        load()
     }
 
     private var importDirectory: URL {
@@ -190,14 +207,18 @@ final class IosAudioImportStore: ObservableObject {
                 let targetFileName = nextAvailableFileName(for: sourceURL.lastPathComponent)
                 let targetURL = importDirectory.appendingPathComponent(targetFileName)
                 try fileManager.copyItem(at: sourceURL, to: targetURL)
-                files.append(
-                    IosImportedAudioFile(
-                        id: stableId(for: targetFileName),
-                        displayName: sourceURL.lastPathComponent,
-                        localFileName: targetFileName,
-                        sizeBytes: fileSize(at: targetURL),
-                        importedAt: Date()
-                    )
+                _ = catalog.upsertImportedFile(
+                    folderUri: folderUri,
+                    documentUri: targetFileName,
+                    displayName: sourceURL.lastPathComponent,
+                    mimeType: nil,
+                    sizeBytes: KotlinLong(longLong: fileSize(at: targetURL)),
+                    importedAtMillis: KotlinLong(longLong: currentTimeMillis()),
+                    state: AudioFileState.pending,
+                    lastError: nil,
+                    processedAtMillis: nil,
+                    transcriptText: nil,
+                    durationUs: nil
                 )
                 imported += 1
             } catch {
@@ -205,32 +226,50 @@ final class IosAudioImportStore: ObservableObject {
             }
         }
 
-        sortFiles()
-
         return IosAudioImportSummary(imported: imported, skipped: skipped, failed: failed)
     }
 
     private func load() {
-        ensureImportDirectoryExists()
-        guard let data = try? Data(contentsOf: metadataURL) else {
-            files = []
-            return
+        files = catalog.importedFiles(folderUri: folderUri).map(Self.importedFile)
+        sortFiles()
+    }
+
+    private func migrateLegacyCatalogIfNeeded() {
+        guard catalog.importedFiles(folderUri: folderUri).isEmpty else { return }
+        guard let data = try? Data(contentsOf: metadataURL) else { return }
+        guard let legacyFiles = try? JSONDecoder().decode([IosImportedAudioFile].self, from: data) else { return }
+
+        for file in legacyFiles {
+            _ = catalog.upsertImportedFile(
+                folderUri: folderUri,
+                documentUri: file.localFileName,
+                displayName: file.displayName,
+                mimeType: nil,
+                sizeBytes: KotlinLong(longLong: file.sizeBytes),
+                importedAtMillis: KotlinLong(longLong: Int64(file.importedAt.timeIntervalSince1970 * 1000)),
+                state: file.status.sharedState,
+                lastError: file.lastError,
+                processedAtMillis: file.status == .processed
+                    ? KotlinLong(longLong: Int64(file.importedAt.timeIntervalSince1970 * 1000))
+                    : nil,
+                transcriptText: file.transcriptText,
+                durationUs: file.durationUs.map { KotlinLong(longLong: $0) }
+            )
         }
-        files = (try? JSONDecoder().decode([IosImportedAudioFile].self, from: data)) ?? []
-        sortFiles()
     }
 
-    private func save() {
-        ensureImportDirectoryExists()
-        guard let data = try? JSONEncoder().encode(files) else { return }
-        try? data.write(to: metadataURL, options: [.atomic])
-    }
-
-    private func update(fileId: Int64, mutate: (inout IosImportedAudioFile) -> Void) {
-        guard let index = files.firstIndex(where: { $0.id == fileId }) else { return }
-        mutate(&files[index])
-        sortFiles()
-        save()
+    private static func importedFile(_ file: SqlDelightAudioCatalogFile) -> IosImportedAudioFile {
+        IosImportedAudioFile(
+            id: file.id,
+            displayName: file.displayName,
+            localFileName: file.documentUri,
+            sizeBytes: file.sizeBytes?.int64Value ?? 0,
+            importedAt: Date(timeIntervalSince1970: Double(file.modifiedMillis?.int64Value ?? 0) / 1000),
+            status: IosImportedAudioStatus(sharedState: file.state),
+            transcriptText: file.transcriptText,
+            durationUs: file.durationUs?.int64Value,
+            lastError: file.lastError
+        )
     }
 
     private func sortFiles() {
@@ -279,12 +318,7 @@ final class IosAudioImportStore: ObservableObject {
         return Int64(values?.fileSize ?? 0)
     }
 
-    private func stableId(for value: String) -> Int64 {
-        var hash: UInt64 = 14_695_981_039_346_656_037
-        for byte in value.utf8 {
-            hash ^= UInt64(byte)
-            hash &*= 1_099_511_628_211
-        }
-        return Int64(bitPattern: hash)
+    private func currentTimeMillis() -> Int64 {
+        Int64(Date().timeIntervalSince1970 * 1000)
     }
 }

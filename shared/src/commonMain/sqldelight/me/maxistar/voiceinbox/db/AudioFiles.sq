@@ -1,0 +1,236 @@
+CREATE TABLE audio_files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    folder_uri TEXT NOT NULL,
+    document_uri TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    mime_type TEXT,
+    size_bytes INTEGER,
+    modified_millis INTEGER,
+    state TEXT NOT NULL,
+    state_before_missing TEXT,
+    last_error TEXT,
+    processed_at INTEGER,
+    transcript_text TEXT,
+    duration_us INTEGER,
+    UNIQUE(folder_uri, document_uri)
+);
+
+CREATE INDEX index_audio_files_folder_state
+ON audio_files(folder_uri, state);
+
+CREATE INDEX index_audio_files_order
+ON audio_files(folder_uri, modified_millis, display_name);
+
+selectById:
+SELECT *
+FROM audio_files
+WHERE id = ?;
+
+selectByFolderDocument:
+SELECT *
+FROM audio_files
+WHERE folder_uri = ? AND document_uri = ?;
+
+selectDisplayRows:
+SELECT *
+FROM audio_files
+WHERE folder_uri = ?
+  AND state IN ('PENDING', 'PROCESSING', 'PROCESSED', 'FAILED')
+ORDER BY
+    CASE WHEN modified_millis IS NULL THEN 1 ELSE 0 END,
+    modified_millis DESC,
+    display_name COLLATE NOCASE ASC,
+    document_uri ASC;
+
+selectNewDisplayRows:
+SELECT *
+FROM audio_files
+WHERE folder_uri = ?
+  AND state IN ('PENDING', 'PROCESSING')
+ORDER BY
+    CASE WHEN modified_millis IS NULL THEN 1 ELSE 0 END,
+    modified_millis DESC,
+    display_name COLLATE NOCASE ASC,
+    document_uri ASC;
+
+selectProcessedDisplayRows:
+SELECT *
+FROM audio_files
+WHERE folder_uri = ?
+  AND state IN ('PROCESSED', 'FAILED')
+ORDER BY
+    CASE WHEN modified_millis IS NULL THEN 1 ELSE 0 END,
+    modified_millis DESC,
+    display_name COLLATE NOCASE ASC,
+    document_uri ASC;
+
+selectMissingDisplayRows:
+SELECT *
+FROM audio_files
+WHERE folder_uri = ?
+  AND state = 'MISSING'
+ORDER BY
+    CASE WHEN modified_millis IS NULL THEN 1 ELSE 0 END,
+    modified_millis DESC,
+    display_name COLLATE NOCASE ASC,
+    document_uri ASC;
+
+selectExistingForReconciliation:
+SELECT *
+FROM audio_files
+WHERE folder_uri = ?;
+
+pendingCount:
+SELECT count(*)
+FROM audio_files
+WHERE folder_uri = ?
+  AND state = 'PENDING';
+
+selectNextPendingForClaim:
+SELECT *
+FROM audio_files
+WHERE folder_uri = ?
+  AND state = 'PENDING'
+ORDER BY
+    CASE WHEN modified_millis IS NULL THEN 1 ELSE 0 END,
+    modified_millis ASC,
+    display_name COLLATE NOCASE ASC,
+    document_uri ASC
+LIMIT 1;
+
+selectSpecificPendingForClaim:
+SELECT *
+FROM audio_files
+WHERE folder_uri = ?
+  AND state = 'PENDING'
+  AND id = ?;
+
+selectSpecificFailedForClaim:
+SELECT *
+FROM audio_files
+WHERE folder_uri = ?
+  AND state = 'FAILED'
+  AND id = ?;
+
+insertScannedFile:
+INSERT INTO audio_files(
+    folder_uri,
+    document_uri,
+    display_name,
+    mime_type,
+    size_bytes,
+    modified_millis,
+    state,
+    state_before_missing,
+    last_error,
+    processed_at,
+    transcript_text,
+    duration_us
+)
+VALUES (?, ?, ?, ?, ?, ?, 'PENDING', NULL, NULL, NULL, NULL, NULL);
+
+insertImportedFile:
+INSERT OR IGNORE INTO audio_files(
+    folder_uri,
+    document_uri,
+    display_name,
+    mime_type,
+    size_bytes,
+    modified_millis,
+    state,
+    state_before_missing,
+    last_error,
+    processed_at,
+    transcript_text,
+    duration_us
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?);
+
+updateImportedFile:
+UPDATE audio_files
+SET display_name = ?,
+    mime_type = ?,
+    size_bytes = ?,
+    modified_millis = ?,
+    state = ?,
+    state_before_missing = NULL,
+    last_error = ?,
+    processed_at = ?,
+    transcript_text = ?,
+    duration_us = ?
+WHERE folder_uri = ?
+  AND document_uri = ?;
+
+updateScannedFile:
+UPDATE audio_files
+SET folder_uri = ?,
+    document_uri = ?,
+    display_name = ?,
+    mime_type = ?,
+    size_bytes = ?,
+    modified_millis = ?,
+    state = ?,
+    state_before_missing = ?,
+    last_error = CASE WHEN ? THEN NULL ELSE last_error END,
+    processed_at = CASE WHEN ? THEN NULL ELSE processed_at END,
+    transcript_text = CASE WHEN ? THEN NULL ELSE transcript_text END,
+    duration_us = CASE WHEN ? THEN NULL ELSE duration_us END
+WHERE id = ?;
+
+markMissing:
+UPDATE audio_files
+SET state = 'MISSING',
+    state_before_missing = ?
+WHERE id = ?;
+
+recoverInterrupted:
+UPDATE audio_files
+SET state = 'PENDING',
+    last_error = NULL,
+    processed_at = NULL,
+    transcript_text = NULL
+WHERE state = 'PROCESSING';
+
+markClaimed:
+UPDATE audio_files
+SET state = 'PROCESSING',
+    last_error = NULL,
+    processed_at = NULL,
+    transcript_text = NULL
+WHERE id = ?
+  AND state = ?;
+
+markProcessed:
+UPDATE audio_files
+SET state = 'PROCESSED',
+    last_error = NULL,
+    processed_at = ?,
+    transcript_text = ?,
+    duration_us = ?
+WHERE id = ?;
+
+markFailed:
+UPDATE audio_files
+SET state = 'FAILED',
+    last_error = ?,
+    processed_at = NULL,
+    transcript_text = NULL
+WHERE id = ?;
+
+markPendingFromProcessing:
+UPDATE audio_files
+SET state = 'PENDING',
+    last_error = NULL,
+    processed_at = NULL,
+    transcript_text = NULL
+WHERE id = ?
+  AND state = 'PROCESSING';
+
+resetFailedForRetry:
+UPDATE audio_files
+SET state = 'PENDING',
+    last_error = NULL,
+    processed_at = NULL,
+    transcript_text = NULL
+WHERE id = ?
+  AND state = 'FAILED';
