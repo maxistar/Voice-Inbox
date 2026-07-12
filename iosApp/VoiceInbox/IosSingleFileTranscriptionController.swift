@@ -80,6 +80,7 @@ final class IosSingleFileTranscriptionController: ObservableObject {
         file: IosImportedAudioFile,
         localURL: URL,
         modelDirectory: URL,
+        outputDocument: IosSelectedOutputDocument,
         store: IosAudioImportStore,
         onSuccess: ((String) -> Void)? = nil
     ) {
@@ -102,7 +103,12 @@ final class IosSingleFileTranscriptionController: ObservableObject {
 
         task = Task {
             let outcome = await Task.detached(priority: .userInitiated) {
-                Self.runSharedTranscription(file: file, localURL: localURL, modelDirectory: modelDirectory.path) { progress in
+                Self.runSharedTranscription(
+                    file: file,
+                    localURL: localURL,
+                    modelDirectory: modelDirectory.path,
+                    outputDocument: outputDocument
+                ) { progress in
                     Task { @MainActor in
                         self.state = IosSingleFileTranscriptionState(
                             active: true,
@@ -146,6 +152,7 @@ final class IosSingleFileTranscriptionController: ObservableObject {
 
     func transcribeAll(
         modelDirectory: URL,
+        outputDocument: IosSelectedOutputDocument,
         store: IosAudioImportStore,
         onFinished: (() -> Void)? = nil
     ) {
@@ -168,7 +175,10 @@ final class IosSingleFileTranscriptionController: ObservableObject {
 
         task = Task {
             let outcome = await Task.detached(priority: .userInitiated) {
-                Self.runSharedBatchTranscription(modelDirectory: modelDirectory.path) { progress in
+                Self.runSharedBatchTranscription(
+                    modelDirectory: modelDirectory.path,
+                    outputDocument: outputDocument
+                ) { progress in
                     Task { @MainActor in
                         self.state = IosSingleFileTranscriptionState(
                             active: true,
@@ -215,6 +225,7 @@ final class IosSingleFileTranscriptionController: ObservableObject {
         file: IosImportedAudioFile,
         localURL: URL,
         modelDirectory: URL,
+        outputDocument: IosSelectedOutputDocument,
         store: IosAudioImportStore,
         onSuccess: ((String) -> Void)? = nil
     ) {
@@ -223,6 +234,7 @@ final class IosSingleFileTranscriptionController: ObservableObject {
             file: file,
             localURL: localURL,
             modelDirectory: modelDirectory,
+            outputDocument: outputDocument,
             store: store,
             onSuccess: onSuccess
         )
@@ -232,6 +244,7 @@ final class IosSingleFileTranscriptionController: ObservableObject {
         file: IosImportedAudioFile,
         localURL: URL,
         modelDirectory: String,
+        outputDocument: IosSelectedOutputDocument,
         onProgress: @escaping (SingleFileTranscriptionProgress) -> Void
     ) -> SingleFileTranscriptionOutcome {
         let decoder = IosPlatformAudioDecoder(localURL: localURL)
@@ -245,7 +258,14 @@ final class IosSingleFileTranscriptionController: ObservableObject {
         }
         let staging = IosTranscriptStaging()
         let formatter = IosTimestampLabelFormatter()
-        let output = IosShellTranscriptOutput()
+        let output = CallbackTranscriptOutput(
+            readTailBlock: { _ in
+                IosOutputDocumentStore.readTail(outputDocument.url)
+            },
+            appendBlock: { _, text in
+                IosOutputDocumentStore.append(text, to: outputDocument.url)
+            }
+        )
         let useCase = SingleFileTranscriptionUseCase(
             audioDecoder: decoder,
             nativeTranscriber: transcriber,
@@ -257,8 +277,10 @@ final class IosSingleFileTranscriptionController: ObservableObject {
             input: SingleFileTranscriptionInput(
                 audioId: localURL.path,
                 audioName: file.displayName,
-                outputId: "ios-shell-output",
-                fallbackRecordingTimeMillis: nil
+                outputId: outputDocument.id,
+                fallbackRecordingTimeMillis: KotlinLong(
+                    longLong: Int64(file.importedAt.timeIntervalSince1970 * 1000)
+                )
             ),
             onProgress: onProgress
         )
@@ -266,13 +288,17 @@ final class IosSingleFileTranscriptionController: ObservableObject {
 
     nonisolated private static func runSharedBatchTranscription(
         modelDirectory: String,
+        outputDocument: IosSelectedOutputDocument,
         onProgress: @escaping (BatchTranscriptionProgress) -> Void
     ) -> BatchTranscriptionResult {
         let catalog = IosSqlDelightAudioCatalogFactory().create(
             databaseName: IosAudioCatalogConstants.databaseName
         )
         defer { catalog.close() }
-        let transcriber = IosBatchEntryOutcomeTranscriber(modelDirectory: modelDirectory)
+        let transcriber = IosBatchEntryOutcomeTranscriber(
+            modelDirectory: modelDirectory,
+            outputDocument: outputDocument
+        )
         let useCase = OutcomeBatchTranscriptionUseCase(
             catalog: catalog,
             transcriber: transcriber,
@@ -281,7 +307,7 @@ final class IosSingleFileTranscriptionController: ObservableObject {
         return useCase.transcribe(
             input: BatchTranscriptionInput(
                 folderId: IosAudioCatalogConstants.importedFolderUri,
-                outputId: "ios-shell-output",
+                outputId: outputDocument.id,
                 runId: UUID().uuidString,
                 retryEntryId: nil
             ),
@@ -292,9 +318,11 @@ final class IosSingleFileTranscriptionController: ObservableObject {
 
 private final class IosBatchEntryOutcomeTranscriber: OutcomeBatchEntryTranscriber {
     private let modelDirectory: String
+    private let outputDocument: IosSelectedOutputDocument
 
-    init(modelDirectory: String) {
+    init(modelDirectory: String, outputDocument: IosSelectedOutputDocument) {
         self.modelDirectory = modelDirectory
+        self.outputDocument = outputDocument
     }
 
     func transcribe(
@@ -316,6 +344,7 @@ private final class IosBatchEntryOutcomeTranscriber: OutcomeBatchEntryTranscribe
             ),
             localURL: Self.localURL(documentUri: entry.documentUri),
             modelDirectory: modelDirectory,
+            outputDocument: outputDocument,
             onProgress: onProgress
         )
     }
@@ -520,18 +549,15 @@ private final class IosTranscriptStaging: PlatformTranscriptStaging {
 
 private final class IosTimestampLabelFormatter: PlatformTimestampLabelFormatter {
     func formatRecordingTime(recordingTimeMillis: KotlinLong?) -> String? {
-        nil
-    }
-}
-
-private final class IosShellTranscriptOutput: PlatformTranscriptOutput {
-    private static var output = ""
-
-    func readTail(outputId: String) -> String {
-        String(Self.output.suffix(4096))
+        guard let recordingTimeMillis else { return nil }
+        let date = Date(timeIntervalSince1970: Double(recordingTimeMillis.int64Value) / 1000)
+        return Self.formatter.string(from: date)
     }
 
-    func append(outputId: String, text: String) {
-        Self.output.append(text)
-    }
+    private static let formatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .medium
+        return formatter
+    }()
 }

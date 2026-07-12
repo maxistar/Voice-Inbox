@@ -10,6 +10,19 @@ interface PlatformFileAccess {
     fun append(documentId: String, text: String)
 }
 
+class CallbackTranscriptOutput(
+    private val readTailBlock: (String) -> String,
+    private val appendBlock: (String, String) -> String?,
+) : PlatformTranscriptOutput {
+    override fun readTail(outputId: String): String =
+        readTailBlock(outputId)
+
+    override fun append(outputId: String, text: String) {
+        val error = appendBlock(outputId, text)
+        if (error != null) throw IllegalStateException(error)
+    }
+}
+
 interface PlatformAudioDecoder {
     fun decode(
         audioId: String,

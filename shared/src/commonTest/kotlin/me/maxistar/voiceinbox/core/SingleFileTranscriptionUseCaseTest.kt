@@ -27,7 +27,7 @@ class SingleFileTranscriptionUseCaseTest {
         assertEquals(10L, result.durationUs)
         assertEquals(listOf("one two three", "one two three four"), staging.writes)
         assertEquals(
-            "\n\nvoice.m4a\nRecorded at 100\none two three four",
+            "\n\nvoice.m4a\n- recorded: Recorded at 100\none two three four",
             output.appended.single(),
         )
         assertTrue(staging.cleaned)
@@ -57,7 +57,7 @@ class SingleFileTranscriptionUseCaseTest {
             output = output,
         ).transcribe(input(fallbackRecordingTimeMillis = 200L)) {}
 
-        assertEquals("voice.m4a\nRecorded at 200\nhello", output.appended.single())
+        assertEquals("voice.m4a\n- recorded: Recorded at 200\nhello", output.appended.single())
     }
 
     @Test

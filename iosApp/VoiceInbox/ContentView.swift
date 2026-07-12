@@ -6,19 +6,22 @@ struct ContentView: View {
     private let shellState = IosMainScreenShellState()
 
     @StateObject private var importStore = IosAudioImportStore()
+    @StateObject private var outputStore = IosOutputDocumentStore()
     @StateObject private var previewPlayer = IosAudioPreviewPlayer()
     @StateObject private var speechModelStore = IosSpeechModelStore()
     @StateObject private var transcriber = IosSingleFileTranscriptionController()
     @State private var selectedTab = IosShellCatalogSelection.new
     @State private var showingImporter = false
     @State private var showingInboxFolderPicker = false
+    @State private var showingOutputPicker = false
     @State private var showingModelImporter = false
     @State private var shownTranscript: String?
 
     var body: some View {
         let transcriptionBackendConfigured = transcriber.backendConfigured
         let speechModelReady = speechModelStore.isReady
-        let transcriptionReady = transcriptionBackendConfigured && speechModelReady && !speechModelStore.isBusy
+        let outputReady = outputStore.isReady
+        let transcriptionReady = transcriptionBackendConfigured && speechModelReady && !speechModelStore.isBusy && outputReady
         let modelStatusMessage = iOSModelStatusMessage(
             transcriptionBackendConfigured: transcriptionBackendConfigured,
             speechModelReady: speechModelReady
@@ -34,6 +37,7 @@ struct ContentView: View {
             modelDownloadAvailable: modelDownloadAvailable,
             modelDownloadProgress: speechModelStore.downloadProgress?.percent,
             modelMessage: modelStatusMessage,
+            outputReady: outputReady,
             activePreviewEntryId: previewPlayer.playingFileId,
             previewState: previewPlayer.playingFileId == nil ? PreviewPlaybackState.idle : PreviewPlaybackState.playing,
             transcription: transcriber.state
@@ -66,9 +70,14 @@ struct ContentView: View {
 
                     if screen.state.list.transcribeAllVisible {
                         Button {
+                            guard let outputDocument = outputStore.currentDocument() else {
+                                outputStore.refreshAccess()
+                                return
+                            }
                             previewPlayer.stop()
                             transcriber.transcribeAll(
                                 modelDirectory: speechModelStore.modelDirectory,
+                                outputDocument: outputDocument,
                                 store: importStore,
                                 onFinished: {
                                     selectedTab = .processed
@@ -84,6 +93,23 @@ struct ContentView: View {
                         showingImporter = true
                     } label: {
                         Label("Import Audio Files", systemImage: "square.and.arrow.down")
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(outputStore.status.title)
+                            .font(.headline)
+                        Text(outputStore.status.message)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Button {
+                        showingOutputPicker = true
+                    } label: {
+                        Label(
+                            outputStore.isReady ? "Change Output File" : "Select Output File",
+                            systemImage: "doc.badge.plus"
+                        )
                     }
                 }
 
@@ -180,10 +206,15 @@ struct ContentView: View {
 
                                         if importedFile.status == .pending {
                                             Button {
+                                                guard let outputDocument = outputStore.currentDocument() else {
+                                                    outputStore.refreshAccess()
+                                                    return
+                                                }
                                                 transcriber.transcribe(
                                                     file: importedFile,
                                                     localURL: importStore.localURL(for: importedFile),
                                                     modelDirectory: speechModelStore.modelDirectory,
+                                                    outputDocument: outputDocument,
                                                     store: importStore,
                                                     onSuccess: { transcript in
                                                         shownTranscript = transcript
@@ -201,10 +232,15 @@ struct ContentView: View {
 
                                         if importedFile.status == .failed {
                                             Button {
+                                                guard let outputDocument = outputStore.currentDocument() else {
+                                                    outputStore.refreshAccess()
+                                                    return
+                                                }
                                                 transcriber.retry(
                                                     file: importedFile,
                                                     localURL: importStore.localURL(for: importedFile),
                                                     modelDirectory: speechModelStore.modelDirectory,
+                                                    outputDocument: outputDocument,
                                                     store: importStore,
                                                     onSuccess: { transcript in
                                                         shownTranscript = transcript
@@ -332,6 +368,12 @@ struct ContentView: View {
                     importStore.selectInboxFolder(url)
                     showingInboxFolderPicker = false
                     selectedTab = .new
+                }
+            }
+            .sheet(isPresented: $showingOutputPicker) {
+                IosOutputDocumentPicker { url in
+                    outputStore.selectOutputFile(url)
+                    showingOutputPicker = false
                 }
             }
             .sheet(isPresented: $showingModelImporter) {

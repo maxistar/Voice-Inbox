@@ -13,13 +13,13 @@ class TranscriptOutputTest {
             transcript = " recognized text ",
         )
 
-        assertEquals("meeting.m4a\nJan 1, 1970, 12:00:00 AM\nrecognized text", output)
+        assertEquals("meeting.m4a\n- recorded: Jan 1, 1970, 12:00:00 AM\nrecognized text", output)
     }
 
     @Test
     fun missingTimestampIsExplicit() {
         assertEquals(
-            "audio.wav\nRecording time unknown\ntext",
+            "audio.wav\n- recorded: unknown\ntext",
             TranscriptOutput.formatEntry("audio.wav", null, "text"),
         )
     }

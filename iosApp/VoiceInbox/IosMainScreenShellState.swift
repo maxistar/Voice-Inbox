@@ -53,6 +53,7 @@ final class IosMainScreenShellState {
         modelDownloadAvailable: Bool,
         modelDownloadProgress: Int?,
         modelMessage: String,
+        outputReady: Bool,
         activePreviewEntryId: Int64?,
         previewState: PreviewPlaybackState,
         transcription: IosSingleFileTranscriptionState? = nil
@@ -71,6 +72,7 @@ final class IosMainScreenShellState {
                 modelDownloadAvailable: modelDownloadAvailable,
                 modelDownloadProgress: modelDownloadProgress,
                 modelMessage: modelMessage,
+                outputReady: outputReady,
                 activePreviewEntryId: activePreviewEntryId,
                 previewState: previewState,
                 transcription: transcription,
@@ -101,7 +103,7 @@ final class IosMainScreenShellState {
     private func displayRows(for selection: IosShellCatalogSelection, importedFiles: [IosImportedAudioFile]) -> [DisplayRow] {
         switch selection {
         case .new:
-            importedFiles.filter { $0.status != .processed }.map { file in
+            importedFiles.filter { $0.status == .pending || $0.status == .processing }.map { file in
                 DisplayRow(
                     input: MainScreenRowInput(
                         entryId: file.id,
@@ -118,7 +120,7 @@ final class IosMainScreenShellState {
                 )
             }
         case .processed:
-            importedFiles.filter { $0.status == .processed }.map { file in
+            importedFiles.filter { $0.status == .processed || $0.status == .failed }.map { file in
                 DisplayRow(
                     input: MainScreenRowInput(
                         entryId: file.id,
@@ -164,6 +166,7 @@ final class IosMainScreenShellState {
         modelDownloadAvailable: Bool,
         modelDownloadProgress: Int?,
         modelMessage: String,
+        outputReady: Bool,
         activePreviewEntryId: Int64?,
         previewState: PreviewPlaybackState,
         transcription: IosSingleFileTranscriptionState?,
@@ -179,7 +182,7 @@ final class IosMainScreenShellState {
             modelDownloadAvailable: modelDownloadAvailable,
             modelDownloadProgress: modelDownloadProgress.map { KotlinInt(int: Int32($0)) },
             modelReady: ready,
-            outputSelected: true,
+            outputSelected: outputReady,
             folderSelected: true,
             pendingCount: Int32(pendingCount),
             folderChecking: false,
