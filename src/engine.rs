@@ -4,7 +4,9 @@ use std::sync::{Arc, Condvar, Mutex};
 use transcribe_rs::engines::parakeet::ParakeetEngine;
 use transcribe_rs::TranscriptionEngine;
 
+#[cfg(target_os = "android")]
 use jni::objects::{GlobalRef, JObject};
+#[cfg(target_os = "android")]
 use jni::JNIEnv;
 
 static GLOBAL_ENGINE: Lazy<Mutex<Option<Arc<Mutex<ParakeetEngine>>>>> =
@@ -57,6 +59,7 @@ pub fn ensure_loaded_without_callback() -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(target_os = "android")]
 fn notify_status(env: &mut JNIEnv, obj: &JObject, msg: &str) {
     if let Ok(jmsg) = env.new_string(msg) {
         let _ = env.call_method(
@@ -68,6 +71,7 @@ fn notify_status(env: &mut JNIEnv, obj: &JObject, msg: &str) {
     }
 }
 
+#[cfg(target_os = "android")]
 pub fn ensure_loaded(env: &mut JNIEnv, context: &JObject) -> Result<(), String> {
     if is_engine_loaded() {
         notify_status(env, context, "Ready");
@@ -120,6 +124,7 @@ pub fn ensure_loaded(env: &mut JNIEnv, context: &JObject) -> Result<(), String> 
     }
 }
 
+#[cfg(target_os = "android")]
 pub fn ensure_loaded_from_thread(
     jvm: &Arc<jni::JavaVM>,
     target_ref: &GlobalRef,
@@ -192,6 +197,7 @@ pub fn ensure_loaded_from_thread(
     }
 }
 
+#[cfg(target_os = "android")]
 fn do_load(env: &mut JNIEnv, context: &JObject) -> Result<(), String> {
     let path = MODEL_DIRECTORY
         .lock()

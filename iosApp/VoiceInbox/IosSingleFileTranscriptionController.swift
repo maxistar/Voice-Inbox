@@ -98,12 +98,12 @@ final class IosSingleFileTranscriptionController: ObservableObject {
         onProgress: @escaping (SingleFileTranscriptionProgress) -> Void
     ) -> SingleFileTranscriptionOutcome {
         let decoder = IosPlatformAudioDecoder(localURL: localURL)
-        let transcriber = IosUnavailableNativeTranscriber()
-        guard transcriber.initialize(modelDirectory: "") else {
+        let transcriber = IosNativeTranscriber(modelDirectory: IosNativeTranscriber.defaultModelDirectory())
+        guard transcriber.initialize(modelDirectory: transcriber.modelDirectory) else {
             return SingleFileTranscriptionOutcome(
                 success: false,
                 result: nil,
-                errorMessage: "iOS speech recognition is not available yet."
+                errorMessage: transcriber.lastError ?? "iOS speech recognition is not available yet."
             )
         }
         let staging = IosTranscriptStaging()
@@ -190,13 +190,63 @@ private final class IosPlatformAudioDecoder: PlatformAudioDecoder {
     }
 }
 
-private final class IosUnavailableNativeTranscriber: PlatformNativeTranscriber {
+private final class IosNativeTranscriber: PlatformNativeTranscriber {
+    let modelDirectory: String
+    private(set) var lastError: String?
+
+    init(modelDirectory: String) {
+        self.modelDirectory = modelDirectory
+    }
+
+    static func defaultModelDirectory() -> String {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first ?? FileManager.default.temporaryDirectory
+        return base.appendingPathComponent("SpeechModel", isDirectory: true).path
+    }
+
     func initialize(modelDirectory: String) -> Bool {
-        false
+        let ok = modelDirectory.withCString { pointer in
+            voiceinbox_transcription_initialize(pointer)
+        }
+        if !ok {
+            lastError = Self.consumeNativeError()
+        }
+        return ok
     }
 
     func transcribeChunk(samples: KotlinFloatArray) -> String? {
-        nil
+        var buffer = [Float]()
+        buffer.reserveCapacity(Int(samples.size))
+        for index in 0..<samples.size {
+            buffer.append(samples.get(index: index))
+        }
+
+        let result = buffer.withUnsafeBufferPointer { pointer in
+            voiceinbox_transcription_transcribe_chunk_json(pointer.baseAddress, pointer.count)
+        }
+        guard let result else {
+            lastError = Self.consumeNativeError()
+            return nil
+        }
+        defer { voiceinbox_transcription_string_free(result) }
+
+        let json = String(cString: result)
+        guard let data = json.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let text = object["text"] as? String
+        else {
+            lastError = "Native transcription returned invalid JSON."
+            return nil
+        }
+        return text
+    }
+
+    private static func consumeNativeError() -> String {
+        guard let pointer = voiceinbox_transcription_last_error() else {
+            return "iOS native transcription failed."
+        }
+        defer { voiceinbox_transcription_string_free(pointer) }
+        return String(cString: pointer)
     }
 }
 

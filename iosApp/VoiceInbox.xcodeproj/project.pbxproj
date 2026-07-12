@@ -84,6 +84,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 101010101010101010101014 /* Build configuration list for PBXNativeTarget "VoiceInbox" */;
 			buildPhases = (
+				101010101010101010101038 /* Build Native Bridge */,
 				101010101010101010101008 /* Build Shared Framework */,
 				101010101010101010101009 /* Sources */,
 				101010101010101010101035 /* Resources */,
@@ -161,6 +162,29 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "export JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\"\nexport PATH=\"$JAVA_HOME/bin:$PATH\"\n\ncd \"$SRCROOT/..\"\n./gradlew :shared:embedAndSignAppleFrameworkForXcode\n";
+		};
+		101010101010101010101038 /* Build Native Bridge */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/../Cargo.toml",
+				"$(SRCROOT)/../Cargo.lock",
+				"$(SRCROOT)/../src/lib.rs",
+			);
+			name = "Build Native Bridge";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(SRCROOT)/NativeBuild/$(CONFIGURATION)/$(SDK_NAME)/libnotes_recognition.a",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "cd \"$SRCROOT/..\"\n./scripts/build-ios-native.sh\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -318,17 +342,23 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/NativeBuild/$(CONFIGURATION)/$(SDK_NAME)",
+				);
 				MARKETING_VERSION = 0.1;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-framework",
 					Shared,
+					"-lnotes_recognition",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = me.maxistar.voiceinbox.ios;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "VoiceInbox/VoiceInbox-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -357,17 +387,23 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/NativeBuild/$(CONFIGURATION)/$(SDK_NAME)",
+				);
 				MARKETING_VERSION = 0.1;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-framework",
 					Shared,
+					"-lnotes_recognition",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = me.maxistar.voiceinbox.ios;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "VoiceInbox/VoiceInbox-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};

@@ -1,11 +1,27 @@
+#[cfg(not(target_os = "ios"))]
 pub mod engine;
 
+#[cfg(target_os = "ios")]
+use once_cell::sync::Lazy;
+#[cfg(target_os = "ios")]
+use std::ffi::{CStr, CString};
+#[cfg(target_os = "ios")]
+use std::os::raw::{c_char, c_float};
+#[cfg(target_os = "ios")]
+use std::sync::Mutex;
+
+#[cfg(target_os = "android")]
 use jni::objects::{JClass, JFloatArray, JString};
+#[cfg(target_os = "android")]
 use jni::sys::{jboolean, jstring, JNI_FALSE, JNI_TRUE};
+#[cfg(target_os = "android")]
 use jni::JNIEnv;
+#[cfg(target_os = "android")]
 use std::path::PathBuf;
+#[cfg(not(target_os = "ios"))]
 use transcribe_rs::TranscriptionEngine;
 
+#[cfg(not(target_os = "ios"))]
 fn serialize_chunk_result(result: transcribe_rs::TranscriptionResult) -> String {
     let words = result
         .segments
@@ -26,6 +42,7 @@ fn serialize_chunk_result(result: transcribe_rs::TranscriptionResult) -> String 
     .to_string()
 }
 
+#[cfg(target_os = "android")]
 #[no_mangle]
 pub unsafe extern "system" fn Java_me_maxistar_voiceinbox_NativeTranscriptionBridge_initialize(
     mut env: JNIEnv,
@@ -55,6 +72,7 @@ pub unsafe extern "system" fn Java_me_maxistar_voiceinbox_NativeTranscriptionBri
     }
 }
 
+#[cfg(target_os = "android")]
 #[no_mangle]
 pub unsafe extern "system" fn Java_me_maxistar_voiceinbox_NativeTranscriptionBridge_transcribeChunkJson(
     env: JNIEnv,
@@ -93,6 +111,87 @@ pub unsafe extern "system" fn Java_me_maxistar_voiceinbox_NativeTranscriptionBri
             log::error!("Chunk transcription failed: {error}");
             std::ptr::null_mut()
         }
+    }
+}
+
+#[cfg(target_os = "ios")]
+static IOS_LAST_ERROR: Lazy<Mutex<Option<String>>> = Lazy::new(|| Mutex::new(None));
+
+#[cfg(target_os = "ios")]
+fn set_ios_error(message: impl Into<String>) {
+    *IOS_LAST_ERROR.lock().unwrap() = Some(message.into());
+}
+
+#[cfg(target_os = "ios")]
+fn take_ios_error() -> String {
+    IOS_LAST_ERROR
+        .lock()
+        .unwrap()
+        .take()
+        .unwrap_or_else(|| "iOS native transcription failed".to_string())
+}
+
+#[cfg(target_os = "ios")]
+fn into_c_string(text: String) -> *mut c_char {
+    CString::new(text)
+        .unwrap_or_else(|_| CString::new("iOS native transcription returned invalid text").unwrap())
+        .into_raw()
+}
+
+#[cfg(target_os = "ios")]
+#[no_mangle]
+pub unsafe extern "C" fn voiceinbox_transcription_initialize(
+    model_directory: *const c_char,
+) -> bool {
+    if model_directory.is_null() {
+        set_ios_error("Model directory was not provided");
+        return false;
+    }
+
+    let model_directory = match CStr::from_ptr(model_directory).to_str() {
+        Ok(path) if !path.is_empty() => path,
+        Ok(_) => {
+            set_ios_error("Model directory was empty");
+            return false;
+        }
+        Err(_) => {
+            set_ios_error("Model directory was not valid UTF-8");
+            return false;
+        }
+    };
+
+    set_ios_error(format!(
+        "iOS ONNX Runtime backend is not linked yet for model directory: {model_directory}"
+    ));
+    false
+}
+
+#[cfg(target_os = "ios")]
+#[no_mangle]
+pub unsafe extern "C" fn voiceinbox_transcription_transcribe_chunk_json(
+    samples: *const c_float,
+    sample_count: usize,
+) -> *mut c_char {
+    if samples.is_null() || sample_count == 0 {
+        set_ios_error("No PCM samples were provided");
+        return std::ptr::null_mut();
+    }
+
+    set_ios_error("iOS ONNX Runtime backend is not linked yet");
+    std::ptr::null_mut()
+}
+
+#[cfg(target_os = "ios")]
+#[no_mangle]
+pub extern "C" fn voiceinbox_transcription_last_error() -> *mut c_char {
+    into_c_string(take_ios_error())
+}
+
+#[cfg(target_os = "ios")]
+#[no_mangle]
+pub unsafe extern "C" fn voiceinbox_transcription_string_free(value: *mut c_char) {
+    if !value.is_null() {
+        drop(CString::from_raw(value));
     }
 }
 
