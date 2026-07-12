@@ -122,28 +122,94 @@ struct IosAudioImportSummary {
     }
 }
 
+struct IosInboxFolderStatus {
+    let displayName: String?
+    let message: String?
+    let needsSelection: Bool
+
+    var title: String {
+        displayName ?? "No audio folder selected"
+    }
+}
+
 @MainActor
 final class IosAudioImportStore: ObservableObject {
     @Published private(set) var files: [IosImportedAudioFile] = []
+    @Published private(set) var inboxFolderStatus = IosInboxFolderStatus(
+        displayName: nil,
+        message: "Choose a folder to use it as your audio inbox.",
+        needsSelection: true
+    )
+    @Published private(set) var isScanningFolder = false
     @Published var importMessage: String?
 
     private let fileManager: FileManager
     private let catalog: SqlDelightAudioCatalogRepository
+    private let userDefaults: UserDefaults
     private let supportedExtensions: Set<String> = ["aac", "aiff", "aif", "caf", "flac", "m4a", "mp3", "mp4", "wav"]
 
-    init(fileManager: FileManager = .default) {
+    init(fileManager: FileManager = .default, userDefaults: UserDefaults = .standard) {
         self.fileManager = fileManager
+        self.userDefaults = userDefaults
         self.catalog = IosSqlDelightAudioCatalogFactory().create(
             databaseName: IosAudioCatalogConstants.databaseName
         )
         ensureImportDirectoryExists()
         migrateLegacyCatalogIfNeeded()
+        restoreInboxFolderStatus()
         load()
     }
 
     func importFiles(from urls: [URL]) {
         let summary = copySupportedFiles(from: urls)
         load()
+        importMessage = summary.message
+    }
+
+    func selectInboxFolder(_ url: URL) {
+        let didStartAccessing = url.startAccessingSecurityScopedResource()
+        defer {
+            if didStartAccessing {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        do {
+            let bookmark = try url.bookmarkData(
+                options: [],
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            )
+            userDefaults.set(bookmark, forKey: Self.inboxFolderBookmarkKey)
+            userDefaults.set(url.lastPathComponent, forKey: Self.inboxFolderDisplayNameKey)
+            inboxFolderStatus = IosInboxFolderStatus(
+                displayName: url.lastPathComponent,
+                message: "Audio folder selected. Refresh to scan for notes.",
+                needsSelection: false
+            )
+            refreshInboxFolder()
+        } catch {
+            inboxFolderStatus = IosInboxFolderStatus(
+                displayName: url.lastPathComponent,
+                message: "Could not save access to this folder. Choose it again.",
+                needsSelection: true
+            )
+        }
+    }
+
+    func refreshInboxFolder() {
+        guard !isScanningFolder else { return }
+        guard let folder = resolveInboxFolder() else { return }
+
+        isScanningFolder = true
+        let summary = scanInboxFolder(folder.url, folderIdentity: stableFolderIdentity(for: folder.url))
+        load()
+        isScanningFolder = false
+        inboxFolderStatus = IosInboxFolderStatus(
+            displayName: folder.url.lastPathComponent,
+            message: summary.message,
+            needsSelection: false
+        )
         importMessage = summary.message
     }
 
@@ -194,6 +260,140 @@ final class IosAudioImportStore: ObservableObject {
 
     private var documentsDirectory: URL {
         fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    }
+
+    private func restoreInboxFolderStatus() {
+        guard userDefaults.data(forKey: Self.inboxFolderBookmarkKey) != nil else { return }
+        let displayName = userDefaults.string(forKey: Self.inboxFolderDisplayNameKey)
+        if resolveInboxFolder(updateStatusOnFailure: false) != nil {
+            inboxFolderStatus = IosInboxFolderStatus(
+                displayName: displayName,
+                message: "Audio folder is ready to refresh.",
+                needsSelection: false
+            )
+        } else {
+            inboxFolderStatus = IosInboxFolderStatus(
+                displayName: displayName,
+                message: "Folder access expired. Choose the folder again.",
+                needsSelection: true
+            )
+        }
+    }
+
+    private func resolveInboxFolder(updateStatusOnFailure: Bool = true) -> (url: URL, stale: Bool)? {
+        guard let bookmark = userDefaults.data(forKey: Self.inboxFolderBookmarkKey) else {
+            if updateStatusOnFailure {
+                inboxFolderStatus = IosInboxFolderStatus(
+                    displayName: nil,
+                    message: "Choose a folder to use it as your audio inbox.",
+                    needsSelection: true
+                )
+            }
+            return nil
+        }
+
+        do {
+            var stale = false
+            let url = try URL(
+                resolvingBookmarkData: bookmark,
+                options: [],
+                relativeTo: nil,
+                bookmarkDataIsStale: &stale
+            )
+            if stale, updateStatusOnFailure {
+                inboxFolderStatus = IosInboxFolderStatus(
+                    displayName: userDefaults.string(forKey: Self.inboxFolderDisplayNameKey),
+                    message: "Folder access needs to be refreshed. Choose the folder again.",
+                    needsSelection: true
+                )
+            }
+            return (url, stale)
+        } catch {
+            if updateStatusOnFailure {
+                inboxFolderStatus = IosInboxFolderStatus(
+                    displayName: userDefaults.string(forKey: Self.inboxFolderDisplayNameKey),
+                    message: "Could not access the selected folder. Choose it again.",
+                    needsSelection: true
+                )
+            }
+            return nil
+        }
+    }
+
+    private func scanInboxFolder(_ folderURL: URL, folderIdentity: String) -> IosAudioImportSummary {
+        let didStartAccessing = folderURL.startAccessingSecurityScopedResource()
+        defer {
+            if didStartAccessing {
+                folderURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        do {
+            let urls = try fileManager.contentsOfDirectory(
+                at: folderURL,
+                includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey],
+                options: [.skipsHiddenFiles]
+            )
+            return copySupportedFolderFiles(from: urls, folderIdentity: folderIdentity)
+        } catch {
+            return IosAudioImportSummary(imported: 0, skipped: 0, failed: 1)
+        }
+    }
+
+    private func copySupportedFolderFiles(from urls: [URL], folderIdentity: String) -> IosAudioImportSummary {
+        ensureImportDirectoryExists()
+        var imported = 0
+        var skipped = 0
+        var failed = 0
+        let existingByLocalName = Dictionary(uniqueKeysWithValues: files.map { ($0.localFileName, $0) })
+
+        for sourceURL in urls {
+            guard isSupportedAudio(sourceURL) else {
+                skipped += 1
+                continue
+            }
+            guard isDirectFile(sourceURL) else {
+                skipped += 1
+                continue
+            }
+
+            let targetFileName = folderLocalFileName(for: sourceURL, folderIdentity: folderIdentity)
+            let targetURL = importDirectory.appendingPathComponent(targetFileName)
+            let sizeBytes = fileSize(at: sourceURL)
+            let modifiedMillis = fileModifiedMillis(at: sourceURL) ?? currentTimeMillis()
+
+            if let existing = existingByLocalName[targetFileName],
+               existing.sizeBytes == sizeBytes,
+               isSameMillis(Int64(existing.importedAt.timeIntervalSince1970 * 1000), modifiedMillis) {
+                skipped += 1
+                continue
+            }
+
+            do {
+                if fileManager.fileExists(atPath: targetURL.path) {
+                    try fileManager.removeItem(at: targetURL)
+                }
+                try fileManager.copyItem(at: sourceURL, to: targetURL)
+                _ = catalog.upsertImportedFile(
+                    folderUri: IosAudioCatalogConstants.importedFolderUri,
+                    documentUri: targetFileName,
+                    displayName: sourceURL.lastPathComponent,
+                    mimeType: nil,
+                    sizeBytes: KotlinLong(longLong: fileSize(at: targetURL)),
+                    importedAtMillis: KotlinLong(longLong: modifiedMillis),
+                    state: AudioFileState.pending,
+                    lastError: nil,
+                    processedAtMillis: nil,
+                    transcriptText: nil,
+                    durationUs: nil
+                )
+                imported += 1
+            } catch {
+                failed += 1
+            }
+        }
+
+        return IosAudioImportSummary(imported: imported, skipped: skipped, failed: failed)
     }
 
     private func copySupportedFiles(from urls: [URL]) -> IosAudioImportSummary {
@@ -301,6 +501,11 @@ final class IosAudioImportStore: ObservableObject {
         supportedExtensions.contains(url.pathExtension.lowercased())
     }
 
+    private func isDirectFile(_ url: URL) -> Bool {
+        let values = try? url.resourceValues(forKeys: [.isDirectoryKey])
+        return values?.isDirectory != true
+    }
+
     private func nextAvailableFileName(for originalName: String) -> String {
         let sanitized = sanitizedFileName(originalName)
         let base = (sanitized as NSString).deletingPathExtension
@@ -325,12 +530,42 @@ final class IosAudioImportStore: ObservableObject {
         return sanitized.isEmpty ? "audio-file" : sanitized
     }
 
+    private func folderLocalFileName(for url: URL, folderIdentity: String) -> String {
+        let sanitized = sanitizedFileName(url.lastPathComponent)
+        return "\(Self.folderImportPrefix)\(folderIdentity)-\(sanitized)"
+    }
+
+    private func stableFolderIdentity(for url: URL) -> String {
+        stableHash(url.standardizedFileURL.path)
+    }
+
+    private func stableHash(_ value: String) -> String {
+        var hash: UInt64 = 5381
+        for byte in value.utf8 {
+            hash = ((hash << 5) &+ hash) &+ UInt64(byte)
+        }
+        return String(hash, radix: 16)
+    }
+
+    private func isSameMillis(_ lhs: Int64, _ rhs: Int64) -> Bool {
+        abs(lhs - rhs) <= 1
+    }
+
     private func fileSize(at url: URL) -> Int64 {
         let values = try? url.resourceValues(forKeys: [.fileSizeKey])
         return Int64(values?.fileSize ?? 0)
     }
 
+    private func fileModifiedMillis(at url: URL) -> Int64? {
+        let values = try? url.resourceValues(forKeys: [.contentModificationDateKey])
+        return values?.contentModificationDate.map { Int64($0.timeIntervalSince1970 * 1000) }
+    }
+
     private func currentTimeMillis() -> Int64 {
         Int64(Date().timeIntervalSince1970 * 1000)
     }
+
+    private static let inboxFolderBookmarkKey = "iosInboxFolderBookmark"
+    private static let inboxFolderDisplayNameKey = "iosInboxFolderDisplayName"
+    private static let folderImportPrefix = "folder-"
 }

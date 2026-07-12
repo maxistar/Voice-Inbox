@@ -11,6 +11,7 @@ struct ContentView: View {
     @StateObject private var transcriber = IosSingleFileTranscriptionController()
     @State private var selectedTab = IosShellCatalogSelection.new
     @State private var showingImporter = false
+    @State private var showingInboxFolderPicker = false
     @State private var showingModelImporter = false
     @State private var shownTranscript: String?
 
@@ -86,11 +87,51 @@ struct ContentView: View {
                     }
                 }
 
+                Section("Audio Inbox") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(importStore.inboxFolderStatus.title)
+                            .font(.headline)
+                        if let message = importStore.inboxFolderStatus.message {
+                            Text(message)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                        if importStore.isScanningFolder {
+                            ProgressView()
+                        }
+                    }
+
+                    Button {
+                        showingInboxFolderPicker = true
+                    } label: {
+                        Label(
+                            importStore.inboxFolderStatus.needsSelection ? "Select Audio Folder" : "Change Audio Folder",
+                            systemImage: "folder"
+                        )
+                    }
+                    .disabled(importStore.isScanningFolder)
+
+                    if !importStore.inboxFolderStatus.needsSelection {
+                        Button {
+                            importStore.refreshInboxFolder()
+                            selectedTab = .new
+                        } label: {
+                            Label("Refresh Audio Folder", systemImage: "arrow.clockwise")
+                        }
+                        .disabled(importStore.isScanningFolder)
+                    }
+                }
+
                 Section(selectedTab.title) {
                     if screen.state.list.emptyVisible {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(screen.state.list.emptyMessage)
                                 .foregroundStyle(.secondary)
+                            Button {
+                                showingInboxFolderPicker = true
+                            } label: {
+                                Label("Select Audio Folder", systemImage: "folder")
+                            }
                             Button {
                                 showingImporter = true
                             } label: {
@@ -283,6 +324,13 @@ struct ContentView: View {
                 IosAudioDocumentPicker { urls in
                     importStore.importFiles(from: urls)
                     showingImporter = false
+                    selectedTab = .new
+                }
+            }
+            .sheet(isPresented: $showingInboxFolderPicker) {
+                IosSpeechModelDirectoryPicker { url in
+                    importStore.selectInboxFolder(url)
+                    showingInboxFolderPicker = false
                     selectedTab = .new
                 }
             }
