@@ -2,6 +2,21 @@ import AVFoundation
 import Foundation
 import Shared
 
+@_silgen_name("voiceinbox_transcription_initialize")
+private func voiceinbox_transcription_initialize(_ modelDirectory: UnsafePointer<CChar>) -> Bool
+
+@_silgen_name("voiceinbox_transcription_transcribe_chunk_json")
+private func voiceinbox_transcription_transcribe_chunk_json(
+    _ samples: UnsafePointer<Float>?,
+    _ sampleCount: Int
+) -> UnsafeMutablePointer<CChar>?
+
+@_silgen_name("voiceinbox_transcription_last_error")
+private func voiceinbox_transcription_last_error() -> UnsafeMutablePointer<CChar>?
+
+@_silgen_name("voiceinbox_transcription_string_free")
+private func voiceinbox_transcription_string_free(_ value: UnsafeMutablePointer<CChar>?)
+
 struct IosSingleFileTranscriptionState {
     let active: Bool
     let fileId: Int64?
