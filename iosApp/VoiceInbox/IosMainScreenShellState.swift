@@ -29,7 +29,6 @@ enum IosShellCatalogSelection: String, CaseIterable, Identifiable {
 struct IosShellMainScreen {
     let state: MainScreenState
     let rows: [IosShellAudioRow]
-    let emptyStatePreview: MainScreenListState
 }
 
 struct IosShellAudioRow: Identifiable {
@@ -48,6 +47,12 @@ final class IosMainScreenShellState {
     func screen(
         selection: IosShellCatalogSelection,
         importedFiles: [IosImportedAudioFile],
+        runtimeReady: Bool,
+        modelReady: Bool,
+        modelInstalling: Bool,
+        modelMessage: String,
+        activePreviewEntryId: Int64?,
+        previewState: PreviewPlaybackState,
         transcription: IosSingleFileTranscriptionState? = nil
     ) -> IosShellMainScreen {
         let rowsForSelection = displayRows(for: selection, importedFiles: importedFiles)
@@ -57,6 +62,12 @@ final class IosMainScreenShellState {
                 selectedTab: selection.sharedTab,
                 pendingCount: 0,
                 displayedRowCount: Int32(rows.count),
+                runtimeReady: runtimeReady,
+                modelReady: modelReady,
+                modelInstalling: modelInstalling,
+                modelMessage: modelMessage,
+                activePreviewEntryId: activePreviewEntryId,
+                previewState: previewState,
                 transcription: transcription,
                 rows: rows
             )
@@ -76,35 +87,10 @@ final class IosMainScreenShellState {
                 state: rowState
             )
         }
-        let emptyPreview = MainScreenStateController.shared.state(
-            input: input(
-                selectedTab: MainScreenCatalogTab.theNew,
-                pendingCount: 0,
-                displayedRowCount: 0,
-                transcription: nil,
-                rows: []
-            )
-        ).list
         return IosShellMainScreen(
             state: state,
-            rows: displayRows,
-            emptyStatePreview: emptyPreview
+            rows: displayRows
         )
-    }
-
-    private var processedSamples: [DisplayRow] {
-        [
-            DisplayRow(
-                input: MainScreenRowInput(entryId: 201, state: AudioFileState.processed, hasTranscriptText: true),
-                title: "daily-idea.m4a",
-                subtitle: "Sample processed row • Transcript available",
-                badge: "Sample",
-                imported: false,
-                status: nil,
-                transcriptText: "Sample processed transcript text.",
-                lastError: nil
-            ),
-        ]
     }
 
     private func displayRows(for selection: IosShellCatalogSelection, importedFiles: [IosImportedAudioFile]) -> [DisplayRow] {
@@ -142,7 +128,7 @@ final class IosMainScreenShellState {
                     transcriptText: file.transcriptText,
                     lastError: file.lastError
                 )
-            } + processedSamples
+            }
         }
     }
 
@@ -167,25 +153,32 @@ final class IosMainScreenShellState {
         selectedTab: MainScreenCatalogTab,
         pendingCount: Int,
         displayedRowCount: Int32,
+        runtimeReady: Bool,
+        modelReady: Bool,
+        modelInstalling: Bool,
+        modelMessage: String,
+        activePreviewEntryId: Int64?,
+        previewState: PreviewPlaybackState,
         transcription: IosSingleFileTranscriptionState?,
         rows: [MainScreenRowInput]
     ) -> MainScreenInput {
         let active = transcription?.active == true
         let processedUs = transcription?.processedUs ?? 0
         let durationUs = transcription?.durationUs ?? 0
+        let ready = runtimeReady && modelReady && !modelInstalling
         return MainScreenInput(
-            modelMessage: "iOS transcription is future work",
-            modelLoading: false,
+            modelMessage: modelMessage,
+            modelLoading: modelInstalling,
             modelDownloadAvailable: false,
             modelDownloadProgress: nil,
-            modelReady: false,
+            modelReady: ready,
             outputSelected: true,
             folderSelected: true,
             pendingCount: Int32(pendingCount),
             folderChecking: false,
             folderScanQueued: false,
             scanning: false,
-            scanMessage: "iOS imported audio prototype",
+            scanMessage: nil,
             transcriptionState: active ? TranscriptionObservationState.active : TranscriptionObservationState.idle,
             transcriptionPhase: transcription?.phase,
             transcriptionFilename: transcription?.fileName,
@@ -199,8 +192,8 @@ final class IosMainScreenShellState {
             errorMessage: nil,
             selectedTab: selectedTab,
             displayedRowCount: displayedRowCount,
-            activePreviewEntryId: nil,
-            previewState: PreviewPlaybackState.idle,
+            activePreviewEntryId: activePreviewEntryId.map { KotlinLong(longLong: $0) },
+            previewState: previewState,
             rows: rows
         )
     }

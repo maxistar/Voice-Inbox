@@ -18,27 +18,26 @@ struct ContentView: View {
         let transcriptionBackendConfigured = transcriber.backendConfigured
         let speechModelReady = speechModelStore.isReady
         let transcriptionReady = transcriptionBackendConfigured && speechModelReady && !speechModelStore.isInstalling
+        let modelStatusMessage = iOSModelStatusMessage(
+            transcriptionBackendConfigured: transcriptionBackendConfigured,
+            speechModelReady: speechModelReady
+        )
         let screen = shellState.screen(
             selection: selectedTab,
             importedFiles: importStore.files,
+            runtimeReady: transcriptionBackendConfigured,
+            modelReady: speechModelReady,
+            modelInstalling: speechModelStore.isInstalling,
+            modelMessage: modelStatusMessage,
+            activePreviewEntryId: previewPlayer.playingFileId,
+            previewState: previewPlayer.playingFileId == nil ? PreviewPlaybackState.idle : PreviewPlaybackState.playing,
             transcription: transcriber.state
         )
 
         NavigationStack {
             List {
-                Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Voice Inbox")
-                            .font(.largeTitle)
-                            .fontWeight(.bold)
-                        Text("iOS shell")
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 8)
-                }
 
-                Section("Shared main screen state") {
+                Section("Status") {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(screen.state.status.title)
                             .font(.headline)
@@ -163,13 +162,6 @@ struct ContentView: View {
                                         }
                                     }
 
-                                    if row.state.retryVisible {
-                                        if row.imported == false {
-                                            Text("Retry: future")
-                                                .foregroundStyle(.secondary)
-                                        }
-                                    }
-
                                     if row.state.showTextVisible {
                                         Button("Show Text") {
                                             shownTranscript = row.transcriptText
@@ -237,13 +229,6 @@ struct ContentView: View {
                     }
                 }
 
-                Section("Shared empty state preview") {
-                    Text(screen.emptyStatePreview.emptyMessage)
-                    Text("Transcribe All visible: \(screen.emptyStatePreview.transcribeAllVisible ? "yes" : "no")")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-
                 Section("Shared framework") {
                     LabeledContent("Model", value: manifest.modelId)
                     LabeledContent("Version", value: manifest.version)
@@ -256,12 +241,6 @@ struct ContentView: View {
                     } label: {
                         Label("Settings", systemImage: "gearshape")
                     }
-                }
-
-                Section("Future work") {
-                    Text("Imported files are copied into app-local storage for shell verification. Transcribe All, output writing, and scheduled iOS execution are intentionally future work.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
                 }
             }
             .navigationTitle("Voice Inbox")
@@ -315,6 +294,22 @@ struct ContentView: View {
     private func importedFile(for row: IosShellAudioRow) -> IosImportedAudioFile? {
         guard row.imported else { return nil }
         return importStore.files.first { $0.id == row.id }
+    }
+
+    private func iOSModelStatusMessage(
+        transcriptionBackendConfigured: Bool,
+        speechModelReady: Bool
+    ) -> String {
+        if !transcriptionBackendConfigured {
+            return IosSingleFileTranscriptionController.backendUnavailableMessage
+        }
+        if speechModelStore.isInstalling {
+            return "Installing speech model..."
+        }
+        if !speechModelReady {
+            return speechModelStore.status.summary
+        }
+        return "Ready"
     }
 
     private func formatBytes(_ bytes: Int64) -> String {
