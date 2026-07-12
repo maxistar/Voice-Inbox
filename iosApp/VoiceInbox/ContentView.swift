@@ -6,6 +6,7 @@ struct ContentView: View {
     private let shellState = IosMainScreenShellState()
 
     @StateObject private var importStore = IosAudioImportStore()
+    @StateObject private var previewPlayer = IosAudioPreviewPlayer()
     @State private var selectedTab = IosShellCatalogSelection.new
     @State private var showingImporter = false
 
@@ -94,8 +95,20 @@ struct ContentView: View {
                                 }
 
                                 HStack {
-                                    Text("Preview: \(row.state.preview.label) (future)")
-                                        .foregroundStyle(.secondary)
+                                    if let importedFile = importedFile(for: row) {
+                                        Button {
+                                            previewPlayer.toggle(
+                                                fileId: importedFile.id,
+                                                url: importStore.localURL(for: importedFile)
+                                            )
+                                        } label: {
+                                            Label(
+                                                previewPlayer.playingFileId == importedFile.id ? "Stop" : row.state.preview.label,
+                                                systemImage: previewPlayer.playingFileId == importedFile.id ? "stop.fill" : "play.fill"
+                                            )
+                                        }
+                                        .disabled(!row.state.preview.enabled)
+                                    }
 
                                     if row.state.retryVisible {
                                         Text("Retry: future")
@@ -118,6 +131,16 @@ struct ContentView: View {
                     Section("Import result") {
                         Text(importMessage)
                             .foregroundStyle(.secondary)
+                    }
+                }
+
+                if let playbackError = previewPlayer.errorMessage {
+                    Section("Playback") {
+                        Text(playbackError)
+                            .foregroundStyle(.secondary)
+                        Button("Dismiss") {
+                            previewPlayer.clearError()
+                        }
                     }
                 }
 
@@ -156,7 +179,15 @@ struct ContentView: View {
                     selectedTab = .new
                 }
             }
+            .onChange(of: importStore.files) { files in
+                previewPlayer.stopIfUnavailable(availableFileIds: Set(files.map(\.id)))
+            }
         }
+    }
+
+    private func importedFile(for row: IosShellAudioRow) -> IosImportedAudioFile? {
+        guard row.imported else { return nil }
+        return importStore.files.first { $0.id == row.id }
     }
 
     private func formatBytes(_ bytes: Int64) -> String {
