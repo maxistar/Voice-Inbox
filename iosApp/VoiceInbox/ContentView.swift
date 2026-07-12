@@ -17,17 +17,20 @@ struct ContentView: View {
     var body: some View {
         let transcriptionBackendConfigured = transcriber.backendConfigured
         let speechModelReady = speechModelStore.isReady
-        let transcriptionReady = transcriptionBackendConfigured && speechModelReady && !speechModelStore.isInstalling
+        let transcriptionReady = transcriptionBackendConfigured && speechModelReady && !speechModelStore.isBusy
         let modelStatusMessage = iOSModelStatusMessage(
             transcriptionBackendConfigured: transcriptionBackendConfigured,
             speechModelReady: speechModelReady
         )
+        let modelDownloadAvailable = !speechModelReady && !speechModelStore.isBusy
         let screen = shellState.screen(
             selection: selectedTab,
             importedFiles: importStore.files,
             runtimeReady: transcriptionBackendConfigured,
             modelReady: speechModelReady,
             modelInstalling: speechModelStore.isInstalling,
+            modelDownloadAvailable: modelDownloadAvailable,
+            modelDownloadProgress: speechModelStore.downloadProgress?.percent,
             modelMessage: modelStatusMessage,
             activePreviewEntryId: previewPlayer.playingFileId,
             previewState: previewPlayer.playingFileId == nil ? PreviewPlaybackState.idle : PreviewPlaybackState.playing,
@@ -193,7 +196,7 @@ struct ContentView: View {
                     }
                 }
 
-                if !transcriptionBackendConfigured || !speechModelReady || speechModelStore.isInstalling || speechModelStore.message != nil || transcriber.message != nil {
+                if !transcriptionBackendConfigured || !speechModelReady || speechModelStore.isBusy || speechModelStore.message != nil || transcriber.message != nil {
                     Section("Transcription Setup") {
                         if !transcriptionBackendConfigured {
                             Text(IosSingleFileTranscriptionController.backendUnavailableMessage)
@@ -202,7 +205,14 @@ struct ContentView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Text(speechModelStore.status.summary)
                             if speechModelStore.isInstalling {
-                                ProgressView()
+                                if let progress = speechModelStore.downloadProgress {
+                                    ProgressView(value: Double(progress.percent), total: 100)
+                                    Text("\(progress.percent)% • \(formatBytes(progress.bytesDownloaded)) of \(formatBytes(progress.totalBytes))")
+                                        .font(.footnote)
+                                        .foregroundStyle(.secondary)
+                                } else {
+                                    ProgressView()
+                                }
                             }
                             if let detail = speechModelStore.status.detail {
                                 Text(detail)
@@ -215,12 +225,22 @@ struct ContentView: View {
                                     .foregroundStyle(.secondary)
                             }
                         }
+
+                        if modelDownloadAvailable {
+                            Button {
+                                speechModelStore.downloadModel()
+                            } label: {
+                                Label("Download Speech Model", systemImage: "arrow.down.circle")
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+
                         Button {
                             showingModelImporter = true
                         } label: {
                             Label(speechModelReady ? "Replace Speech Model" : "Install Speech Model", systemImage: "square.and.arrow.down")
                         }
-                        .disabled(speechModelStore.isInstalling)
+                        .disabled(speechModelStore.isBusy)
 
                         if let transcriptionMessage = transcriber.message {
                             Text(transcriptionMessage)
@@ -302,6 +322,9 @@ struct ContentView: View {
     ) -> String {
         if !transcriptionBackendConfigured {
             return IosSingleFileTranscriptionController.backendUnavailableMessage
+        }
+        if let progress = speechModelStore.downloadProgress {
+            return progress.message
         }
         if speechModelStore.isInstalling {
             return "Installing speech model..."

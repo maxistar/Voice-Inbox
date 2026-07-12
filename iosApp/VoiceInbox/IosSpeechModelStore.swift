@@ -1,5 +1,7 @@
 import Combine
+import CryptoKit
 import Foundation
+import Shared
 
 struct IosSpeechModelStatus {
     let directory: URL
@@ -39,8 +41,23 @@ enum IosSpeechModelPaths {
         applicationSupportDirectory.appendingPathComponent("SpeechModel.installing", isDirectory: true)
     }
 
+    static var stagingDirectory: URL {
+        applicationSupportDirectory.appendingPathComponent("SpeechModel.staging", isDirectory: true)
+    }
+
     static var backupDirectory: URL {
         applicationSupportDirectory.appendingPathComponent("SpeechModel.previous", isDirectory: true)
+    }
+}
+
+struct IosSpeechModelDownloadProgress {
+    let message: String
+    let bytesDownloaded: Int64
+    let totalBytes: Int64
+
+    var percent: Int {
+        guard totalBytes > 0 else { return 0 }
+        return Int((bytesDownloaded.clamped(to: 0...totalBytes) * 100) / totalBytes)
     }
 }
 
@@ -48,7 +65,10 @@ enum IosSpeechModelPaths {
 final class IosSpeechModelStore: ObservableObject {
     @Published private(set) var status: IosSpeechModelStatus
     @Published private(set) var isInstalling = false
+    @Published private(set) var downloadProgress: IosSpeechModelDownloadProgress?
     @Published var message: String?
+
+    private var downloadTask: Task<Void, Never>?
 
     init() {
         let directory = IosSpeechModelPaths.modelDirectory
@@ -63,14 +83,19 @@ final class IosSpeechModelStore: ObservableObject {
         status.directory
     }
 
+    var isBusy: Bool {
+        isInstalling || downloadTask != nil
+    }
+
     func reload() {
         status = Self.validate(directory: IosSpeechModelPaths.modelDirectory)
     }
 
     func installModel(from sourceURL: URL) {
-        guard !isInstalling else { return }
+        guard !isBusy else { return }
 
         isInstalling = true
+        downloadProgress = nil
         message = "Installing speech model..."
 
         Task {
@@ -82,6 +107,45 @@ final class IosSpeechModelStore: ObservableObject {
             status = Self.validate(directory: IosSpeechModelPaths.modelDirectory)
             message = result.message
         }
+    }
+
+    func downloadModel() {
+        guard !isBusy else { return }
+
+        isInstalling = true
+        message = "Preparing speech model download..."
+        downloadProgress = IosSpeechModelDownloadProgress(
+            message: "Preparing speech model download...",
+            bytesDownloaded: 0,
+            totalBytes: Self.manifestTotalSizeBytes()
+        )
+
+        downloadTask = Task {
+            let result = await Self.downloadAndInstallModel { [weak self] progress in
+                Task { @MainActor in
+                    self?.downloadProgress = progress
+                    self?.message = progress.message
+                }
+            }
+
+            if Task.isCancelled {
+                result.cleanup()
+            }
+
+            isInstalling = false
+            downloadTask = nil
+            status = Self.validate(directory: IosSpeechModelPaths.modelDirectory)
+            downloadProgress = nil
+            message = result.message
+        }
+    }
+
+    func cancelDownload() {
+        downloadTask?.cancel()
+        downloadTask = nil
+        isInstalling = false
+        downloadProgress = nil
+        message = "Speech model download cancelled."
     }
 
     nonisolated private static func validate(directory: URL) -> IosSpeechModelStatus {
@@ -100,22 +164,19 @@ final class IosSpeechModelStore: ObservableObject {
             return ModelValidationResult(missingFiles: ["model directory"])
         }
 
-        var missingFiles = [String]()
-        for fileName in ["nemo128.onnx", "vocab.txt"] where !fileManager.isReadableFile(atPath: directory.appendingPathComponent(fileName).path) {
-            missingFiles.append(fileName)
+        var validationIssues = [String]()
+        for entry in manifestFiles() {
+            let fileURL = directory.appendingPathComponent(entry.name)
+            if !fileManager.isReadableFile(atPath: fileURL.path) {
+                validationIssues.append(entry.name)
+                continue
+            }
+            if !isValidFile(fileURL, entry: entry) {
+                validationIssues.append("\(entry.name) checksum or size mismatch")
+            }
         }
 
-        let encoderNames = ["encoder-model.int8.onnx", "encoder-model.onnx"]
-        if firstReadableFile(named: encoderNames, in: directory) == nil {
-            missingFiles.append("encoder-model.int8.onnx or encoder-model.onnx")
-        }
-
-        let decoderNames = ["decoder_joint-model.int8.onnx", "decoder_joint-model.onnx"]
-        if firstReadableFile(named: decoderNames, in: directory) == nil {
-            missingFiles.append("decoder_joint-model.int8.onnx or decoder_joint-model.onnx")
-        }
-
-        return ModelValidationResult(missingFiles: missingFiles)
+        return ModelValidationResult(missingFiles: validationIssues)
     }
 
     nonisolated private static func installModelFiles(from sourceURL: URL) -> InstallResult {
@@ -138,6 +199,7 @@ final class IosSpeechModelStore: ObservableObject {
                 withIntermediateDirectories: true
             )
             try removeItemIfExists(IosSpeechModelPaths.installDirectory)
+            try removeItemIfExists(IosSpeechModelPaths.stagingDirectory)
             try removeItemIfExists(IosSpeechModelPaths.backupDirectory)
             try fileManager.createDirectory(
                 at: IosSpeechModelPaths.installDirectory,
@@ -173,16 +235,8 @@ final class IosSpeechModelStore: ObservableObject {
     }
 
     nonisolated private static func copyRequiredFiles(from sourceURL: URL, to destinationURL: URL) throws {
-        for fileName in ["nemo128.onnx", "vocab.txt"] {
-            try copyFile(named: fileName, from: sourceURL, to: destinationURL)
-        }
-
-        if let encoderName = firstReadableFile(named: ["encoder-model.int8.onnx", "encoder-model.onnx"], in: sourceURL) {
-            try copyFile(named: encoderName, from: sourceURL, to: destinationURL)
-        }
-
-        if let decoderName = firstReadableFile(named: ["decoder_joint-model.int8.onnx", "decoder_joint-model.onnx"], in: sourceURL) {
-            try copyFile(named: decoderName, from: sourceURL, to: destinationURL)
+        for entry in manifestFiles() {
+            try copyFile(named: entry.name, from: sourceURL, to: destinationURL)
         }
     }
 
@@ -193,9 +247,77 @@ final class IosSpeechModelStore: ObservableObject {
         )
     }
 
-    nonisolated private static func firstReadableFile(named fileNames: [String], in directory: URL) -> String? {
-        fileNames.first { fileName in
-            FileManager.default.isReadableFile(atPath: directory.appendingPathComponent(fileName).path)
+    nonisolated private static func downloadAndInstallModel(
+        progress: @escaping @Sendable (IosSpeechModelDownloadProgress) -> Void
+    ) async -> InstallResult {
+        let fileManager = FileManager.default
+        let files = manifestFiles()
+        let totalBytes = manifestTotalSizeBytes()
+
+        do {
+            try fileManager.createDirectory(
+                at: IosSpeechModelPaths.applicationSupportDirectory,
+                withIntermediateDirectories: true
+            )
+            try removeItemIfExists(IosSpeechModelPaths.stagingDirectory)
+            try removeItemIfExists(IosSpeechModelPaths.installDirectory)
+            try fileManager.createDirectory(
+                at: IosSpeechModelPaths.stagingDirectory,
+                withIntermediateDirectories: true
+            )
+
+            var completedBytes: Int64 = 0
+            progress(IosSpeechModelDownloadProgress(
+                message: "Downloading speech model",
+                bytesDownloaded: completedBytes,
+                totalBytes: totalBytes
+            ))
+
+            for entry in files {
+                try Task.checkCancellation()
+                let destination = IosSpeechModelPaths.stagingDirectory.appendingPathComponent(entry.name)
+                if isValidFile(destination, entry: entry) {
+                    completedBytes += entry.sizeBytes
+                    continue
+                }
+
+                try cleanupPartialFile(for: entry)
+                try await downloadFile(entry, completedBytes: completedBytes, totalBytes: totalBytes, progress: progress)
+                let temporary = temporaryFile(for: entry)
+                guard isValidFile(temporary, entry: entry) else {
+                    try? removeItemIfExists(temporary)
+                    return InstallResult(message: "Downloaded \(entry.name) failed verification.")
+                }
+                try fileManager.moveItem(at: temporary, to: destination)
+                completedBytes += entry.sizeBytes
+                progress(IosSpeechModelDownloadProgress(
+                    message: "Verified \(entry.name)",
+                    bytesDownloaded: completedBytes,
+                    totalBytes: totalBytes
+                ))
+            }
+
+            progress(IosSpeechModelDownloadProgress(
+                message: "Activating speech model...",
+                bytesDownloaded: totalBytes,
+                totalBytes: totalBytes
+            ))
+
+            let stagedValidation = validateModelFiles(in: IosSpeechModelPaths.stagingDirectory)
+            guard stagedValidation.missingFiles.isEmpty else {
+                return InstallResult(
+                    message: "Downloaded model is incomplete. Missing: \(stagedValidation.missingFiles.joined(separator: ", "))"
+                )
+            }
+
+            try activateStagedModel()
+            return InstallResult(message: "Speech model downloaded and installed.")
+        } catch is CancellationError {
+            try? removeItemIfExists(IosSpeechModelPaths.stagingDirectory)
+            return InstallResult(message: "Speech model download cancelled.")
+        } catch {
+            try? removeItemIfExists(IosSpeechModelPaths.stagingDirectory)
+            return InstallResult(message: "Could not download speech model: \(error.localizedDescription)")
         }
     }
 
@@ -205,11 +327,187 @@ final class IosSpeechModelStore: ObservableObject {
         }
     }
 
+    nonisolated private static func downloadFile(
+        _ entry: IosSpeechModelManifestFile,
+        completedBytes: Int64,
+        totalBytes: Int64,
+        progress: @escaping @Sendable (IosSpeechModelDownloadProgress) -> Void
+    ) async throws {
+        guard let url = URL(string: entry.downloadUrl) else {
+            throw ModelDownloadError.invalidUrl(entry.downloadUrl)
+        }
+
+        let (bytes, response) = try await URLSession.shared.bytes(from: url)
+        if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
+            throw ModelDownloadError.httpStatus(httpResponse.statusCode)
+        }
+
+        let temporary = temporaryFile(for: entry)
+        try removeItemIfExists(temporary)
+        FileManager.default.createFile(atPath: temporary.path, contents: nil)
+        let handle = try FileHandle(forWritingTo: temporary)
+        defer {
+            try? handle.close()
+        }
+
+        var fileBytes: Int64 = 0
+        var lastReported: Int64 = 0
+        var buffer = [UInt8]()
+        buffer.reserveCapacity(128 * 1024)
+
+        for try await byte in bytes {
+            try Task.checkCancellation()
+            buffer.append(byte)
+            fileBytes += 1
+
+            if buffer.count >= 128 * 1024 {
+                try handle.write(contentsOf: Data(buffer))
+                buffer.removeAll(keepingCapacity: true)
+            }
+
+            if fileBytes - lastReported >= 2 * 1024 * 1024 {
+                progress(IosSpeechModelDownloadProgress(
+                    message: "Downloading \(entry.name)",
+                    bytesDownloaded: completedBytes + fileBytes,
+                    totalBytes: totalBytes
+                ))
+                lastReported = fileBytes
+            }
+        }
+
+        if !buffer.isEmpty {
+            try handle.write(contentsOf: Data(buffer))
+        }
+    }
+
+    nonisolated private static func activateStagedModel() throws {
+        let fileManager = FileManager.default
+        try removeItemIfExists(IosSpeechModelPaths.installDirectory)
+        try fileManager.moveItem(
+            at: IosSpeechModelPaths.stagingDirectory,
+            to: IosSpeechModelPaths.installDirectory
+        )
+        try removeItemIfExists(IosSpeechModelPaths.backupDirectory)
+
+        if fileManager.fileExists(atPath: IosSpeechModelPaths.modelDirectory.path) {
+            try fileManager.moveItem(at: IosSpeechModelPaths.modelDirectory, to: IosSpeechModelPaths.backupDirectory)
+        }
+
+        do {
+            try fileManager.moveItem(at: IosSpeechModelPaths.installDirectory, to: IosSpeechModelPaths.modelDirectory)
+            try removeItemIfExists(IosSpeechModelPaths.backupDirectory)
+        } catch {
+            if fileManager.fileExists(atPath: IosSpeechModelPaths.backupDirectory.path) {
+                try? fileManager.moveItem(at: IosSpeechModelPaths.backupDirectory, to: IosSpeechModelPaths.modelDirectory)
+            }
+            throw error
+        }
+    }
+
+    nonisolated private static func cleanupPartialFile(for entry: IosSpeechModelManifestFile) throws {
+        try removeItemIfExists(temporaryFile(for: entry))
+        let destination = IosSpeechModelPaths.stagingDirectory.appendingPathComponent(entry.name)
+        if !isValidFile(destination, entry: entry) {
+            try removeItemIfExists(destination)
+        }
+    }
+
+    nonisolated private static func temporaryFile(for entry: IosSpeechModelManifestFile) -> URL {
+        IosSpeechModelPaths.stagingDirectory.appendingPathComponent("\(entry.name).part")
+    }
+
+    nonisolated private static func isValidFile(_ url: URL, entry: IosSpeechModelManifestFile) -> Bool {
+        guard FileManager.default.isReadableFile(atPath: url.path) else {
+            return false
+        }
+        guard fileSize(url) == entry.sizeBytes else {
+            return false
+        }
+        return sha256(url) == entry.sha256
+    }
+
+    nonisolated private static func fileSize(_ url: URL) -> Int64? {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let size = attributes[.size] as? NSNumber else {
+            return nil
+        }
+        return size.int64Value
+    }
+
+    nonisolated private static func sha256(_ url: URL) -> String? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else {
+            return nil
+        }
+        defer {
+            try? handle.close()
+        }
+
+        var hasher = SHA256()
+        while true {
+            let data = handle.readData(ofLength: 1024 * 1024)
+            if data.isEmpty {
+                break
+            }
+            hasher.update(data: data)
+        }
+
+        let digest = hasher.finalize()
+        return digest.map { String(format: "%02x", $0) }.joined()
+    }
+
+    nonisolated private static func manifestTotalSizeBytes() -> Int64 {
+        manifestFiles().reduce(0) { $0 + $1.sizeBytes }
+    }
+
+    nonisolated private static func manifestFiles() -> [IosSpeechModelManifestFile] {
+        let manifest = EmbeddedSpeechModel.shared.manifest
+        return manifest.files.compactMap { item in
+            guard let file = item as? SpeechModelFile else { return nil }
+            return IosSpeechModelManifestFile(
+                name: file.name,
+                sizeBytes: file.sizeBytes,
+                sha256: file.sha256,
+                downloadUrl: manifest.downloadUrl(file: file)
+            )
+        }
+    }
+
     private struct ModelValidationResult {
         let missingFiles: [String]
     }
 
     private struct InstallResult {
         let message: String
+
+        func cleanup() {
+            try? IosSpeechModelStore.removeItemIfExists(IosSpeechModelPaths.stagingDirectory)
+        }
+    }
+
+    private struct IosSpeechModelManifestFile {
+        let name: String
+        let sizeBytes: Int64
+        let sha256: String
+        let downloadUrl: String
+    }
+
+    private enum ModelDownloadError: LocalizedError {
+        case invalidUrl(String)
+        case httpStatus(Int)
+
+        var errorDescription: String? {
+            switch self {
+            case let .invalidUrl(url):
+                return "Invalid model URL: \(url)"
+            case let .httpStatus(status):
+                return "HTTP \(status)"
+            }
+        }
+    }
+}
+
+private extension Comparable {
+    func clamped(to limits: ClosedRange<Self>) -> Self {
+        min(max(self, limits.lowerBound), limits.upperBound)
     }
 }
