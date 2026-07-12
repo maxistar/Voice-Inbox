@@ -235,12 +235,14 @@ struct ContentView: View {
                             .buttonStyle(.borderedProminent)
                         }
 
-                        Button {
-                            showingModelImporter = true
-                        } label: {
-                            Label(speechModelReady ? "Replace Speech Model" : "Install Speech Model", systemImage: "square.and.arrow.down")
+                        if !speechModelReady {
+                            Button {
+                                showingModelImporter = true
+                            } label: {
+                                Label("Install Speech Model Manually", systemImage: "square.and.arrow.down")
+                            }
+                            .disabled(speechModelStore.isBusy)
                         }
-                        .disabled(speechModelStore.isBusy)
 
                         if let transcriptionMessage = transcriber.message {
                             Text(transcriptionMessage)
