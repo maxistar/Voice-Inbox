@@ -38,18 +38,26 @@ struct IosShellAudioRow: Identifiable {
     let subtitle: String
     let badge: String
     let imported: Bool
+    let status: IosImportedAudioStatus?
+    let transcriptText: String?
+    let lastError: String?
     let state: MainScreenRowState
 }
 
 final class IosMainScreenShellState {
-    func screen(selection: IosShellCatalogSelection, importedFiles: [IosImportedAudioFile]) -> IosShellMainScreen {
+    func screen(
+        selection: IosShellCatalogSelection,
+        importedFiles: [IosImportedAudioFile],
+        transcription: IosSingleFileTranscriptionState? = nil
+    ) -> IosShellMainScreen {
         let rowsForSelection = displayRows(for: selection, importedFiles: importedFiles)
         let rows = rowsForSelection.map { $0.input }
         let state = MainScreenStateController.shared.state(
             input: input(
                 selectedTab: selection.sharedTab,
-                pendingCount: importedFiles.count,
+                pendingCount: 0,
                 displayedRowCount: Int32(rows.count),
+                transcription: transcription,
                 rows: rows
             )
         )
@@ -62,6 +70,9 @@ final class IosMainScreenShellState {
                 subtitle: row.subtitle,
                 badge: row.badge,
                 imported: row.imported,
+                status: row.status,
+                transcriptText: row.transcriptText,
+                lastError: row.lastError,
                 state: rowState
             )
         }
@@ -70,6 +81,7 @@ final class IosMainScreenShellState {
                 selectedTab: MainScreenCatalogTab.theNew,
                 pendingCount: 0,
                 displayedRowCount: 0,
+                transcription: nil,
                 rows: []
             )
         ).list
@@ -87,7 +99,10 @@ final class IosMainScreenShellState {
                 title: "daily-idea.m4a",
                 subtitle: "Sample processed row • Transcript available",
                 badge: "Sample",
-                imported: false
+                imported: false,
+                status: nil,
+                transcriptText: "Sample processed transcript text.",
+                lastError: nil
             ),
         ]
     }
@@ -95,27 +110,70 @@ final class IosMainScreenShellState {
     private func displayRows(for selection: IosShellCatalogSelection, importedFiles: [IosImportedAudioFile]) -> [DisplayRow] {
         switch selection {
         case .new:
-            importedFiles.map { file in
+            importedFiles.filter { $0.status != .processed }.map { file in
                 DisplayRow(
-                    input: MainScreenRowInput(entryId: file.id, state: AudioFileState.pending, hasTranscriptText: false),
+                    input: MainScreenRowInput(
+                        entryId: file.id,
+                        state: file.status.sharedState,
+                        hasTranscriptText: file.transcriptText?.isEmpty == false
+                    ),
                     title: file.displayName,
-                    subtitle: "Imported • \(file.formattedSize)",
-                    badge: "New",
-                    imported: true
+                    subtitle: subtitle(for: file),
+                    badge: file.status.badge,
+                    imported: true,
+                    status: file.status,
+                    transcriptText: file.transcriptText,
+                    lastError: file.lastError
                 )
             }
         case .processed:
-            processedSamples
+            importedFiles.filter { $0.status == .processed }.map { file in
+                DisplayRow(
+                    input: MainScreenRowInput(
+                        entryId: file.id,
+                        state: file.status.sharedState,
+                        hasTranscriptText: file.transcriptText?.isEmpty == false
+                    ),
+                    title: file.displayName,
+                    subtitle: subtitle(for: file),
+                    badge: file.status.badge,
+                    imported: true,
+                    status: file.status,
+                    transcriptText: file.transcriptText,
+                    lastError: file.lastError
+                )
+            } + processedSamples
         }
+    }
+
+    private func subtitle(for file: IosImportedAudioFile) -> String {
+        var parts = ["Imported", file.formattedSize]
+        if let lastError = file.lastError, !lastError.isEmpty {
+            parts.append(lastError)
+        } else if let durationUs = file.durationUs, durationUs > 0 {
+            parts.append(formatDuration(microseconds: durationUs))
+        }
+        return parts.joined(separator: " • ")
+    }
+
+    private func formatDuration(microseconds: Int64) -> String {
+        let totalSeconds = microseconds / 1_000_000
+        let minutes = totalSeconds / 60
+        let seconds = String(format: "%02d", totalSeconds % 60)
+        return "\(minutes):\(seconds)"
     }
 
     private func input(
         selectedTab: MainScreenCatalogTab,
         pendingCount: Int,
         displayedRowCount: Int32,
+        transcription: IosSingleFileTranscriptionState?,
         rows: [MainScreenRowInput]
     ) -> MainScreenInput {
-        MainScreenInput(
+        let active = transcription?.active == true
+        let processedUs = transcription?.processedUs ?? 0
+        let durationUs = transcription?.durationUs ?? 0
+        return MainScreenInput(
             modelMessage: "iOS transcription is future work",
             modelLoading: false,
             modelDownloadAvailable: false,
@@ -128,13 +186,13 @@ final class IosMainScreenShellState {
             folderScanQueued: false,
             scanning: false,
             scanMessage: "iOS imported audio prototype",
-            transcriptionState: TranscriptionObservationState.idle,
-            transcriptionPhase: nil,
-            transcriptionFilename: nil,
-            transcriptionIndeterminate: false,
-            transcriptionProgress: 0,
-            processedUs: 0,
-            durationUs: 0,
+            transcriptionState: active ? TranscriptionObservationState.active : TranscriptionObservationState.idle,
+            transcriptionPhase: transcription?.phase,
+            transcriptionFilename: transcription?.fileName,
+            transcriptionIndeterminate: active && transcription?.progressPercent == nil,
+            transcriptionProgress: Int32(transcription?.progressPercent ?? 0),
+            processedUs: processedUs,
+            durationUs: durationUs,
             completedFiles: 0,
             totalFiles: 0,
             failedFiles: 0,
@@ -153,5 +211,8 @@ final class IosMainScreenShellState {
         let subtitle: String
         let badge: String
         let imported: Bool
+        let status: IosImportedAudioStatus?
+        let transcriptText: String?
+        let lastError: String?
     }
 }

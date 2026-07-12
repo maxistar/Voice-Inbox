@@ -7,11 +7,17 @@ struct ContentView: View {
 
     @StateObject private var importStore = IosAudioImportStore()
     @StateObject private var previewPlayer = IosAudioPreviewPlayer()
+    @StateObject private var transcriber = IosSingleFileTranscriptionController()
     @State private var selectedTab = IosShellCatalogSelection.new
     @State private var showingImporter = false
+    @State private var shownTranscript: String?
 
     var body: some View {
-        let screen = shellState.screen(selection: selectedTab, importedFiles: importStore.files)
+        let screen = shellState.screen(
+            selection: selectedTab,
+            importedFiles: importStore.files,
+            transcription: transcriber.state
+        )
 
         NavigationStack {
             List {
@@ -108,15 +114,45 @@ struct ContentView: View {
                                             )
                                         }
                                         .disabled(!row.state.preview.enabled)
+
+                                        if importedFile.status == .pending {
+                                            Button {
+                                                transcriber.transcribe(
+                                                    file: importedFile,
+                                                    localURL: importStore.localURL(for: importedFile),
+                                                    store: importStore
+                                                )
+                                            } label: {
+                                                Label("Transcribe", systemImage: "text.badge.checkmark")
+                                            }
+                                            .disabled(transcriber.activeFileId != nil)
+                                        }
+
+                                        if importedFile.status == .failed {
+                                            Button {
+                                                transcriber.retry(
+                                                    file: importedFile,
+                                                    localURL: importStore.localURL(for: importedFile),
+                                                    store: importStore
+                                                )
+                                            } label: {
+                                                Label("Retry", systemImage: "arrow.clockwise")
+                                            }
+                                            .disabled(transcriber.activeFileId != nil)
+                                        }
                                     }
 
                                     if row.state.retryVisible {
-                                        Text("Retry: future")
-                                            .foregroundStyle(.secondary)
+                                        if row.imported == false {
+                                            Text("Retry: future")
+                                                .foregroundStyle(.secondary)
+                                        }
                                     }
 
                                     if row.state.showTextVisible {
-                                        Button("Show Text") {}
+                                        Button("Show Text") {
+                                            shownTranscript = row.transcriptText
+                                        }
                                     }
                                 }
                                 .buttonStyle(.bordered)
@@ -141,6 +177,13 @@ struct ContentView: View {
                         Button("Dismiss") {
                             previewPlayer.clearError()
                         }
+                    }
+                }
+
+                if let transcriptionMessage = transcriber.message {
+                    Section("Transcription") {
+                        Text(transcriptionMessage)
+                            .foregroundStyle(.secondary)
                     }
                 }
 
@@ -182,7 +225,35 @@ struct ContentView: View {
             .onChange(of: importStore.files) { files in
                 previewPlayer.stopIfUnavailable(availableFileIds: Set(files.map(\.id)))
             }
+            .sheet(item: transcriptBinding) { transcript in
+                NavigationStack {
+                    ScrollView {
+                        Text(transcript.text)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding()
+                    }
+                    .navigationTitle("Transcript")
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") {
+                                shownTranscript = nil
+                            }
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    private var transcriptBinding: Binding<IosDisplayedTranscript?> {
+        Binding(
+            get: {
+                shownTranscript.map(IosDisplayedTranscript.init(text:))
+            },
+            set: { value in
+                shownTranscript = value?.text
+            }
+        )
     }
 
     private func importedFile(for row: IosShellAudioRow) -> IosImportedAudioFile? {
@@ -196,4 +267,9 @@ struct ContentView: View {
         formatter.countStyle = .file
         return formatter.string(fromByteCount: bytes)
     }
+}
+
+private struct IosDisplayedTranscript: Identifiable {
+    let id = UUID()
+    let text: String
 }
