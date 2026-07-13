@@ -349,7 +349,16 @@ struct ContentView: View {
 
                 Section {
                     NavigationLink {
-                        SettingsView()
+                        SettingsView(
+                            importStore: importStore,
+                            outputStore: outputStore,
+                            selectInboxFolder: {
+                                showingInboxFolderPicker = true
+                            },
+                            selectOutputFile: {
+                                showingOutputPicker = true
+                            }
+                        )
                     } label: {
                         Label("Settings", systemImage: "gearshape")
                     }

@@ -4,6 +4,11 @@ import SwiftUI
 struct SettingsView: View {
     private let store = IosScheduledTranscriptionSettingsStore()
 
+    @ObservedObject var importStore: IosAudioImportStore
+    @ObservedObject var outputStore: IosOutputDocumentStore
+    let selectInboxFolder: () -> Void
+    let selectOutputFile: () -> Void
+
     @State private var enabled = false
     @State private var hour = Int(ScheduledTranscriptionRules.shared.DEFAULT_HOUR)
     @State private var minute = Int(ScheduledTranscriptionRules.shared.DEFAULT_MINUTE)
@@ -11,6 +16,50 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            Section("Storage") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Audio inbox folder")
+                        .font(.headline)
+                    Text(importStore.inboxFolderStatus.title)
+                    if let message = importStore.inboxFolderStatus.message {
+                        Text(message)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    if importStore.isScanningFolder {
+                        ProgressView()
+                    }
+                }
+
+                Button {
+                    selectInboxFolder()
+                } label: {
+                    Label(
+                        importStore.inboxFolderStatus.needsSelection ? "Select Audio Folder" : "Change Audio Folder",
+                        systemImage: "folder"
+                    )
+                }
+                .disabled(importStore.isScanningFolder)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Transcript output file")
+                        .font(.headline)
+                    Text(outputStore.status.title)
+                    Text(outputStore.status.message)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                Button {
+                    selectOutputFile()
+                } label: {
+                    Label(
+                        outputStore.isReady ? "Change Output File" : "Select Output File",
+                        systemImage: "doc.badge.plus"
+                    )
+                }
+            }
+
             Section("Scheduled transcription") {
                 Toggle("Enabled", isOn: $enabled)
                     .onChange(of: enabled) { _ in saveIfLoaded() }
