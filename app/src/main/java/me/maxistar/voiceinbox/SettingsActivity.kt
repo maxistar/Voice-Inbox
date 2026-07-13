@@ -3,6 +3,7 @@ package me.maxistar.voiceinbox
 import me.maxistar.voiceinbox.core.*
 
 import android.app.TimePickerDialog
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -73,11 +74,21 @@ class SettingsActivity : AppCompatActivity() {
         scheduledTime = findViewById(R.id.scheduledTime)
         scheduledTimeDetail = findViewById(R.id.scheduledTimeDetail)
         scheduledSwitch = findViewById(R.id.scheduledSwitch)
+        findViewById<TextView>(R.id.settingsAboutVersion).text = getString(
+            R.string.settings_about_version,
+            appVersionName(),
+        )
         findViewById<View>(R.id.settingsFolderRow).setOnClickListener {
             folderPicker.launch(selectionStore.loadFolderUri()?.let(Uri::parse))
         }
         findViewById<View>(R.id.settingsOutputRow).setOnClickListener {
             outputPicker.launch(FileSelectionRules.outputMimeTypes)
+        }
+        findViewById<View>(R.id.settingsWebsiteRow).setOnClickListener {
+            openExternalUrl(WEBSITE_URL)
+        }
+        findViewById<View>(R.id.settingsLegalRow).setOnClickListener {
+            openExternalUrl(LEGAL_URL)
         }
         scheduledSwitch.isChecked = settings.enabled
         scheduledSwitch.setOnCheckedChangeListener { _, enabled ->
@@ -224,5 +235,27 @@ class SettingsActivity : AppCompatActivity() {
         )
         scheduledTime.text = text
         scheduledTimeDetail.text = text
+    }
+
+    private fun openExternalUrl(url: String) {
+        runCatching {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        }.onFailure { error ->
+            if (error is ActivityNotFoundException) {
+                Toast.makeText(this, R.string.settings_about_link_error, Toast.LENGTH_LONG).show()
+            } else {
+                throw error
+            }
+        }
+    }
+
+    private fun appVersionName(): String =
+        runCatching {
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "Unknown"
+        }.getOrDefault("Unknown")
+
+    private companion object {
+        const val WEBSITE_URL = "https://projects.maxistar.me/Voice-Inbox/"
+        const val LEGAL_URL = "https://projects.maxistar.me/Voice-Inbox/legal/"
     }
 }

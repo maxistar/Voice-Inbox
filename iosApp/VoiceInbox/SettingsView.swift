@@ -13,6 +13,8 @@ struct SettingsView: View {
     @State private var hour = Int(ScheduledTranscriptionRules.shared.DEFAULT_HOUR)
     @State private var minute = Int(ScheduledTranscriptionRules.shared.DEFAULT_MINUTE)
     @State private var loaded = false
+    private let websiteURL = URL(string: "https://projects.maxistar.me/Voice-Inbox/")!
+    private let legalURL = URL(string: "https://projects.maxistar.me/Voice-Inbox/legal/")!
 
     var body: some View {
         Form {
@@ -85,9 +87,27 @@ struct SettingsView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
+
+            Section("About") {
+                LabeledContent("Version", value: appVersion)
+                Link("Website", destination: websiteURL)
+                Link("Legal information", destination: legalURL)
+            }
         }
         .navigationTitle("Settings")
         .onAppear(perform: load)
+    }
+
+    private var appVersion: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+        if let version, !version.isEmpty {
+            return version
+        }
+        if let build, !build.isEmpty {
+            return build
+        }
+        return "Unknown"
     }
 
     private var formattedTime: String {
