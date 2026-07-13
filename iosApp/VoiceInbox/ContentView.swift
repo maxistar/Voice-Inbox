@@ -2,7 +2,6 @@ import Shared
 import SwiftUI
 
 struct ContentView: View {
-    private let manifest = EmbeddedSpeechModel.shared.manifest
     private let shellState = IosMainScreenShellState()
 
     @StateObject private var importStore = IosAudioImportStore()
@@ -21,6 +20,7 @@ struct ContentView: View {
         let transcriptionBackendConfigured = transcriber.backendConfigured
         let speechModelReady = speechModelStore.isReady
         let outputReady = outputStore.isReady
+        let storageSetupComplete = outputReady && !importStore.inboxFolderStatus.needsSelection
         let transcriptionReady = transcriptionBackendConfigured && speechModelReady && !speechModelStore.isBusy && outputReady
         let modelStatusMessage = iOSModelStatusMessage(
             transcriptionBackendConfigured: transcriptionBackendConfigured,
@@ -95,47 +95,40 @@ struct ContentView: View {
                         Label("Import Audio Files", systemImage: "square.and.arrow.down")
                     }
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(outputStore.status.title)
-                            .font(.headline)
-                        Text(outputStore.status.message)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Button {
-                        showingOutputPicker = true
-                    } label: {
-                        Label(
-                            outputStore.isReady ? "Change Output File" : "Select Output File",
-                            systemImage: "doc.badge.plus"
-                        )
-                    }
-                }
-
-                Section("Audio Inbox") {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(importStore.inboxFolderStatus.title)
-                            .font(.headline)
-                        if let message = importStore.inboxFolderStatus.message {
-                            Text(message)
+                    if !outputReady {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(outputStore.status.title)
+                                .font(.headline)
+                            Text(outputStore.status.message)
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         }
-                        if importStore.isScanningFolder {
-                            ProgressView()
+
+                        Button {
+                            showingOutputPicker = true
+                        } label: {
+                            Label("Select Output File", systemImage: "doc.badge.plus")
                         }
                     }
 
-                    Button {
-                        showingInboxFolderPicker = true
-                    } label: {
-                        Label(
-                            importStore.inboxFolderStatus.needsSelection ? "Select Audio Folder" : "Change Audio Folder",
-                            systemImage: "folder"
-                        )
+                    if importStore.inboxFolderStatus.needsSelection {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(importStore.inboxFolderStatus.title)
+                                .font(.headline)
+                            if let message = importStore.inboxFolderStatus.message {
+                                Text(message)
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        Button {
+                            showingInboxFolderPicker = true
+                        } label: {
+                            Label("Select Audio Folder", systemImage: "folder")
+                        }
+                        .disabled(importStore.isScanningFolder)
                     }
-                    .disabled(importStore.isScanningFolder)
 
                     if !importStore.inboxFolderStatus.needsSelection {
                         Button {
@@ -146,9 +139,13 @@ struct ContentView: View {
                         }
                         .disabled(importStore.isScanningFolder)
                     }
+
+                    if importStore.isScanningFolder {
+                        ProgressView()
+                    }
                 }
 
-                Section(selectedTab.title) {
+                Section {
                     if screen.state.list.emptyVisible {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(screen.state.list.emptyMessage)
@@ -269,6 +266,10 @@ struct ContentView: View {
                             .padding(.vertical, 4)
                         }
                     }
+                } header: {
+                    if !storageSetupComplete {
+                        Text(selectedTab.title)
+                    }
                 }
 
                 if let importMessage = importStore.importMessage {
@@ -339,15 +340,10 @@ struct ContentView: View {
                     }
                 }
 
-                if modelSetupVisible {
-                    Section("Shared framework") {
-                        LabeledContent("Model", value: manifest.modelId)
-                        LabeledContent("Version", value: manifest.version)
-                        LabeledContent("Required free space", value: formatBytes(manifest.requiredFreeBytes))
-                    }
-                }
-
-                Section {
+            }
+            .navigationTitle("Voice Inbox")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
                     NavigationLink {
                         SettingsView(
                             importStore: importStore,
@@ -360,11 +356,11 @@ struct ContentView: View {
                             }
                         )
                     } label: {
-                        Label("Settings", systemImage: "gearshape")
+                        Image(systemName: "gearshape")
                     }
+                    .accessibilityLabel("Settings")
                 }
             }
-            .navigationTitle("Voice Inbox")
             .sheet(isPresented: $showingImporter) {
                 IosAudioDocumentPicker { urls in
                     importStore.importFiles(from: urls)
