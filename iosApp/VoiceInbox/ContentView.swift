@@ -10,12 +10,16 @@ struct ContentView: View {
     @StateObject private var previewPlayer = IosAudioPreviewPlayer()
     @StateObject private var speechModelStore = IosSpeechModelStore()
     @StateObject private var transcriber = IosSingleFileTranscriptionController()
+    @StateObject private var startupPolicyStore = IosStartupProcessingPolicyStore()
     @State private var selectedTab = IosShellCatalogSelection.new
     @State private var showingImporter = false
     @State private var showingInboxFolderPicker = false
     @State private var showingOutputPicker = false
     @State private var showingModelImporter = false
     @State private var shownTranscript: String?
+    @State private var startupProcessingChecked = false
+    @State private var startupFolderRefreshChecked = false
+    @State private var startupProcessingPrompt: IosStartupProcessingPrompt?
 
     var body: some View {
         let transcriptionBackendConfigured = transcriber.backendConfigured
@@ -349,6 +353,7 @@ struct ContentView: View {
                         SettingsView(
                             importStore: importStore,
                             outputStore: outputStore,
+                            startupPolicyStore: startupPolicyStore,
                             selectInboxFolder: {
                                 showingInboxFolderPicker = true
                             },
@@ -392,15 +397,13 @@ struct ContentView: View {
                 previewPlayer.stopIfUnavailable(availableFileIds: Set(files.map(\.id)))
             }
             .onAppear {
-                if importStore.ingestSharedImports()?.imported ?? 0 > 0 {
-                    selectedTab = .new
-                }
+                refreshStartupSources()
+                evaluateStartupProcessingIfNeeded()
             }
             .onChange(of: scenePhase) { phase in
                 guard phase == .active else { return }
-                if importStore.ingestSharedImports()?.imported ?? 0 > 0 {
-                    selectedTab = .new
-                }
+                refreshStartupSources()
+                evaluateStartupProcessingIfNeeded()
             }
             .sheet(item: transcriptBinding) { transcript in
                 NavigationStack {
@@ -419,6 +422,24 @@ struct ContentView: View {
                     }
                 }
             }
+            .sheet(item: $startupProcessingPrompt) { prompt in
+                StartupProcessingPromptView(
+                    pendingCount: prompt.pendingCount,
+                    onYes: { alwaysAtStartup in
+                        startupProcessingPrompt = nil
+                        if alwaysAtStartup {
+                            startupPolicyStore.policy = .yes
+                        }
+                        startStartupProcessing()
+                    },
+                    onNo: { alwaysAtStartup in
+                        startupProcessingPrompt = nil
+                        if alwaysAtStartup {
+                            startupPolicyStore.policy = .no
+                        }
+                    }
+                )
+            }
         }
     }
 
@@ -436,6 +457,73 @@ struct ContentView: View {
     private func importedFile(for row: IosShellAudioRow) -> IosImportedAudioFile? {
         guard row.imported else { return nil }
         return importStore.files.first { $0.id == row.id }
+    }
+
+    private func refreshStartupSources() {
+        var foundNewWork = false
+        if importStore.ingestSharedImports()?.imported ?? 0 > 0 {
+            foundNewWork = true
+        }
+
+        if !startupFolderRefreshChecked,
+           !importStore.inboxFolderStatus.needsSelection {
+            startupFolderRefreshChecked = true
+            let pendingBeforeRefresh = importStore.pendingCount
+            importStore.refreshInboxFolder()
+            foundNewWork = foundNewWork || importStore.pendingCount > pendingBeforeRefresh
+        }
+
+        if foundNewWork {
+            selectedTab = .new
+            startupProcessingChecked = false
+        }
+    }
+
+    private func evaluateStartupProcessingIfNeeded() {
+        guard !startupProcessingChecked else { return }
+        startupProcessingChecked = true
+        guard importStore.pendingCount > 0 else { return }
+
+        switch startupPolicyStore.policy {
+        case .ask:
+            startupProcessingPrompt = IosStartupProcessingPrompt(pendingCount: importStore.pendingCount)
+        case .yes:
+            startStartupProcessing()
+        case .no:
+            break
+        }
+    }
+
+    private func startStartupProcessing() {
+        guard importStore.pendingCount > 0 else { return }
+        guard !transcriber.isActive else {
+            importStore.importMessage = "Found files to process, but transcription is already running."
+            return
+        }
+        guard transcriber.backendConfigured else {
+            importStore.importMessage = "Found files to process, but the iOS transcription backend is not configured."
+            return
+        }
+        guard speechModelStore.isReady, !speechModelStore.isBusy else {
+            importStore.importMessage = "Found files to process, but the speech model is not ready."
+            return
+        }
+        guard let outputDocument = outputStore.currentDocument() else {
+            outputStore.refreshAccess()
+            importStore.importMessage = "Found files to process, but the output file is not ready."
+            return
+        }
+
+        previewPlayer.stop()
+        selectedTab = .new
+        transcriber.transcribeAll(
+            modelDirectory: speechModelStore.modelDirectory,
+            outputDocument: outputDocument,
+            store: importStore,
+            onFinished: {
+                selectedTab = .processed
+            }
+        )
     }
 
     private func iOSModelStatusMessage(
@@ -468,4 +556,58 @@ struct ContentView: View {
 private struct IosDisplayedTranscript: Identifiable {
     let id = UUID()
     let text: String
+}
+
+private struct IosStartupProcessingPrompt: Identifiable {
+    let id = UUID()
+    let pendingCount: Int
+}
+
+private struct StartupProcessingPromptView: View {
+    let pendingCount: Int
+    let onYes: (Bool) -> Void
+    let onNo: (Bool) -> Void
+
+    @State private var alwaysAtStartup = false
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Found files to process. Process now?")
+                        .font(.title3)
+                        .fontWeight(.semibold)
+                    Text(summary)
+                        .foregroundStyle(.secondary)
+                }
+
+                Toggle("Always do this at startup", isOn: $alwaysAtStartup)
+
+                Spacer()
+            }
+            .padding()
+            .navigationTitle("Process Files")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("No") {
+                        onNo(alwaysAtStartup)
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Yes") {
+                        onYes(alwaysAtStartup)
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+
+    private var summary: String {
+        if pendingCount == 1 {
+            return "1 file is waiting in New."
+        }
+        return "\(pendingCount) files are waiting in New."
+    }
 }

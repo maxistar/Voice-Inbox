@@ -1,9 +1,63 @@
 import Shared
 import SwiftUI
 
+enum IosStartupProcessingPolicy: String, CaseIterable, Identifiable {
+    case ask
+    case yes
+    case no
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .ask:
+            "Ask"
+        case .yes:
+            "Yes"
+        case .no:
+            "No"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .ask:
+            "Ask before processing queued files when Voice Inbox starts."
+        case .yes:
+            "Automatically process queued files when Voice Inbox starts."
+        case .no:
+            "Do not process queued files automatically at startup."
+        }
+    }
+}
+
+@MainActor
+final class IosStartupProcessingPolicyStore: ObservableObject {
+    @Published var policy: IosStartupProcessingPolicy {
+        didSet {
+            defaults.set(policy.rawValue, forKey: Self.policyKey)
+        }
+    }
+
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        if let rawValue = defaults.string(forKey: Self.policyKey),
+           let storedPolicy = IosStartupProcessingPolicy(rawValue: rawValue) {
+            policy = storedPolicy
+        } else {
+            policy = .ask
+        }
+    }
+
+    private static let policyKey = "iosStartupProcessingPolicy"
+}
+
 struct SettingsView: View {
     @ObservedObject var importStore: IosAudioImportStore
     @ObservedObject var outputStore: IosOutputDocumentStore
+    @ObservedObject var startupPolicyStore: IosStartupProcessingPolicyStore
     let selectInboxFolder: () -> Void
     let selectOutputFile: () -> Void
 
@@ -54,6 +108,18 @@ struct SettingsView: View {
                         systemImage: "doc.badge.plus"
                     )
                 }
+            }
+
+            Section("Startup Processing") {
+                Picker("When queued files are found", selection: $startupPolicyStore.policy) {
+                    ForEach(IosStartupProcessingPolicy.allCases) { policy in
+                        Text(policy.title).tag(policy)
+                    }
+                }
+
+                Text(startupPolicyStore.policy.detail)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             Section("About") {
