@@ -47,17 +47,26 @@ import Layout from '../layouts/Layout.astro';
     <details>
       <summary>Which devices are supported?</summary>
       <p>
-        The app targets ARM64 Android devices running Android 7.0 (API 24) or later.
+        Android targets ARM64 devices running Android 7.0 (API 24) or later. iOS support is currently an MVP and not yet presented as a full store-ready release.
+      </p>
+    </details>
+
+    <details>
+      <summary>Is iOS supported?</summary>
+      <p>
+        iOS has an active MVP: import audio files, preview playback, speech model download, local transcription,
+        transcript display, and output append are available in the development app. Folder automation, scheduled background transcription,
+        and full Android parity are still in progress.
       </p>
     </details>
 
     <details>
       <summary>Which audio formats work?</summary>
       <p>
-        The app uses Android platform decoders. Tested input includes PCM WAV, AAC in M4A/MP4, MP3, ADTS AAC,
+        Android uses Android platform decoders. Tested input includes PCM WAV, AAC in M4A/MP4, MP3, ADTS AAC,
         mono or stereo FLAC, Ogg Vorbis, Ogg Opus, AMR-NB, and AMR-WB.
       </p>
-      <p>Encrypted, DRM-protected, malformed, unsupported codec/container, and unsupported multichannel inputs are rejected.</p>
+      <p>iOS uses platform audio decoding in the MVP. Encrypted, DRM-protected, malformed, unsupported codec/container, and unsupported multichannel inputs may be rejected.</p>
     </details>
 
     <details>
@@ -71,7 +80,8 @@ import Layout from '../layouts/Layout.astro';
     <details>
       <summary>Can scheduled transcription run exactly at my selected time?</summary>
       <p>
-        No exact timing is promised. Voice Inbox uses Android background work, and Android may delay scheduled work depending on system state.
+        No exact timing is promised on Android. Voice Inbox uses Android background work, and Android may delay scheduled work depending on system state.
+        Scheduled background transcription is not part of the current iOS MVP.
       </p>
     </details>
 

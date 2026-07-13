@@ -39,7 +39,7 @@ const releaseUrl = `${githubUrl}/releases`;
     <p class="eyebrow">Legal information</p>
     <h1>App and publication details</h1>
     <p>
-      This page collects information useful for users and Google Play publication preparation.
+      This page collects information useful for users and app store publication preparation.
       Fields marked as placeholders must be reviewed and replaced by the maintainer before store submission.
     </p>
 
@@ -48,6 +48,7 @@ const releaseUrl = `${githubUrl}/releases`;
       <div class="table">
         <div class="row"><strong>App name</strong><span>Voice Inbox</span></div>
         <div class="row"><strong>Android package</strong><span><code>me.maxistar.voiceinbox</code></span></div>
+        <div class="row"><strong>iOS bundle status</strong><span>iOS MVP in development; final bundle identifier and store listing details must be confirmed before release.</span></div>
         <div class="row"><strong>Developer / publisher</strong><span>TODO: maintainer legal or publisher name</span></div>
         <div class="row"><strong>Support contact</strong><span>TODO: support email or support URL</span></div>
         <div class="row"><strong>Privacy policy</strong><span><a href="../privacy/">Privacy page</a></span></div>
@@ -60,6 +61,7 @@ const releaseUrl = `${githubUrl}/releases`;
       <h2>Requirements and limitations</h2>
       <ul>
         <li>Requires an ARM64 Android device running Android 7.0 (API 24) or later.</li>
+        <li>iOS support is currently an MVP and should not be described as full Android parity or a final App Store release.</li>
         <li>Requires network access for the first speech model download.</li>
         <li>Requires about 704 MiB of free storage for model installation.</li>
         <li>Scheduled transcription uses Android background work and is not an exact alarm.</li>
@@ -71,7 +73,7 @@ const releaseUrl = `${githubUrl}/releases`;
       <h2>License and acknowledgements</h2>
       <p>
         Voice Inbox is distributed from its public source repository. TODO: confirm final app license text
-        and add third-party acknowledgements for AndroidX, ONNX Runtime, Rust crates, and the speech model before publication.
+        and add third-party acknowledgements for AndroidX, Apple platform APIs, ONNX Runtime, Rust crates, Kotlin Multiplatform libraries, and the speech model before publication.
       </p>
     </section>
 

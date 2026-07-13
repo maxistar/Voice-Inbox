@@ -6,7 +6,7 @@ interface Props {
 
 const {
   title,
-  description = 'Voice Inbox turns accumulated Android voice recordings into a local Markdown or text inbox.',
+  description = 'Voice Inbox turns accumulated voice recordings into a local Markdown or text inbox.',
 } = Astro.props;
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const githubUrl = 'https://github.com/maxistar/Voice-Inbox';
@@ -15,8 +15,6 @@ const nav = [
   ['Home', '/'],
   ['Setup', '/setup/'],
   ['FAQ', '/faq/'],
-  ['Privacy', '/privacy/'],
-  ['Legal', '/legal/'],
   ['Other Projects', '/projects/'],
 ];
 ---
@@ -248,9 +246,11 @@ const nav = [
     </main>
     <footer>
       <div class="footer-inner">
-        <span>Voice Inbox - local-first Android transcription.</span>
+        <span>Voice Inbox - local-first voice note transcription.</span>
         <span class="footer-links">
           <a href={releaseUrl} target="_blank" rel="noopener">Releases</a>
+          <a href={`${base}/setup/`}>Setup</a>
+          <a href={`${base}/faq/`}>FAQ</a>
           <a href={`${base}/privacy/`}>Privacy</a>
           <a href={`${base}/legal/`}>Legal</a>
         </span>
@@ -258,4 +258,3 @@ const nav = [
     </footer>
   </body>
 </html>
-
