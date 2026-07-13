@@ -3,19 +3,24 @@ import Layout from '../layouts/Layout.astro';
 
 const projects = [
   {
-    name: 'Keyboard Helper',
-    description: 'A desktop overlay that visualizes split and ergonomic keyboard layouts in real time.',
-    href: 'https://github.com/maxistar/keyboard_helper',
+    name: 'Simple Text Editor',
+    description: 'A small Android app for editing plain text files, quick notes, and drafts on your device.',
+    href: 'https://simpleditor.org/',
   },
   {
-    name: 'Voice Inbox',
-    description: 'This local-first voice note transcription app: Android ready, iOS MVP in progress.',
-    href: 'https://github.com/maxistar/Voice-Inbox',
+    name: 'GitSy',
+    description: 'Sync a Notes Folder with Git',
+    href: 'https://gitsy.de/',
+  },
+  {
+    name: 'Watchface Fun',
+    description: 'Functional Watchfaces for Meaningful Living',
+    href: 'https://watchface.fun/',
   },
   {
     name: 'More projects',
-    description: 'TODO: add more maintainer projects here as publication links become final.',
-    href: '',
+    description: 'Browse more projects by the maintainer.',
+    href: 'https://projects.maxistar.me/',
   },
 ];
 ---
@@ -43,11 +48,7 @@ const projects = [
       <article class="card">
         <h2>{project.name}</h2>
         <p>{project.description}</p>
-        {project.href ? (
-          <p class="project-link"><a href={project.href} target="_blank" rel="noopener">Open project</a></p>
-        ) : (
-          <p class="project-link">Link coming later</p>
-        )}
+        <p class="project-link"><a href={project.href} target="_blank" rel="noopener">Open project</a></p>
       </article>
     ))}
   </section>
