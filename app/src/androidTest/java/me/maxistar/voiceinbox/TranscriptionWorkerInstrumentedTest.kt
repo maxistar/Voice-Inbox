@@ -27,7 +27,7 @@ class TranscriptionWorkerInstrumentedTest {
 
     @Before
     fun cleanCatalog() {
-        targetContext.deleteDatabase(AudioCatalogDatabase.DATABASE_NAME)
+        targetContext.deleteDatabase(AndroidSqlDelightAudioCatalogFactory.DATABASE_NAME)
     }
 
     @Test
@@ -88,8 +88,8 @@ class TranscriptionWorkerInstrumentedTest {
         val output = File(targetContext.cacheDir, "failure-isolation-output.txt").apply {
             writeText("Existing")
         }
-        AudioCatalogDatabase(targetContext).use { database ->
-            AudioCatalogRepository(database).reconcile(
+        withRepository { repository ->
+            repository.reconcile(
                 FOLDER,
                 listOf(
                     scanned(invalid, "first-invalid.bin", modified = 1),
@@ -113,12 +113,12 @@ class TranscriptionWorkerInstrumentedTest {
             assertEquals(WorkInfo.State.SUCCEEDED, info.state)
         }
 
-        AudioCatalogDatabase(targetContext).use { database ->
-            val repository = AudioCatalogRepository(database)
-            val newEntries = repository.newEntries(FOLDER)
-            assertEquals(AudioFileState.FAILED, newEntries.single().state)
-            assertEquals("first-invalid.bin", newEntries.single().displayName)
-            assertEquals("second-valid.wav", repository.processedEntries(FOLDER).single().displayName)
+        withRepository { repository ->
+            val processedEntries = repository.processedEntries(FOLDER)
+            val failed = processedEntries.single { it.state == AudioFileState.FAILED }
+            val processed = processedEntries.single { it.state == AudioFileState.PROCESSED }
+            assertEquals("first-invalid.bin", failed.displayName)
+            assertEquals("second-valid.wav", processed.displayName)
         }
         val result = output.readText()
         assertTrue(result.startsWith("Existing\n\nsecond-valid.wav\n"))
@@ -139,8 +139,8 @@ class TranscriptionWorkerInstrumentedTest {
 
         assertEquals(WorkInfo.State.SUCCEEDED, info.state)
         assertEquals("unchanged", output.readText())
-        AudioCatalogDatabase(targetContext).use { database ->
-            val failed = AudioCatalogRepository(database).newEntries(FOLDER).single()
+        withRepository { repository ->
+            val failed = repository.processedEntries(FOLDER).single()
             assertEquals(AudioFileState.FAILED, failed.state)
             assertTrue(failed.lastError?.isNotBlank() == true)
         }
@@ -151,8 +151,8 @@ class TranscriptionWorkerInstrumentedTest {
     }
 
     private fun seed(audio: File, audioName: String) {
-        AudioCatalogDatabase(targetContext).use { database ->
-            AudioCatalogRepository(database).reconcile(
+        withRepository { repository ->
+            repository.reconcile(
                 FOLDER,
                 listOf(
                     scanned(audio, audioName, audio.lastModified()),
@@ -193,6 +193,20 @@ class TranscriptionWorkerInstrumentedTest {
             SpeechModelRepository(targetContext.noBackupFilesDir.resolve("models")).inspect()
                 is InstalledSpeechModelState.Ready,
         )
+    }
+
+    private fun openRepository(): SqlDelightAudioCatalogRepository =
+        AndroidSqlDelightAudioCatalogFactory(targetContext).create()
+
+    private inline fun <T> withRepository(
+        block: (SqlDelightAudioCatalogRepository) -> T,
+    ): T {
+        val repository = openRepository()
+        return try {
+            block(repository)
+        } finally {
+            repository.close()
+        }
     }
 
     private fun copyFixture(resource: Int, name: String): File =

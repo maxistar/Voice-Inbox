@@ -56,7 +56,7 @@ class ScheduledTranscriptionWorker(
         ).inspect() as? InstalledSpeechModelState.Ready ?: return
         if (!NativeTranscriptionBridge.initialize(model.directory.absolutePath)) return
 
-        val catalog = AudioCatalogRepository(AudioCatalogDatabase(applicationContext))
+        val catalog = AndroidSqlDelightAudioCatalogFactory(applicationContext).create()
         val files = folderScanner.scan(folder)
         catalog.reconcile(folder.toString(), files)
         val pending = catalog.pendingCount(folder.toString())

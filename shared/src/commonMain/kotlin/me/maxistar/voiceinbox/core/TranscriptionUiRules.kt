@@ -223,6 +223,8 @@ object TranscriptionUiRules {
 
     private fun formatDuration(microseconds: Long): String {
         val totalSeconds = microseconds / 1_000_000
-        return "%d:%02d".format(totalSeconds / 60, totalSeconds % 60)
+        val minutes = totalSeconds / 60
+        val seconds = (totalSeconds % 60).toString().padStart(2, '0')
+        return "$minutes:$seconds"
     }
 }

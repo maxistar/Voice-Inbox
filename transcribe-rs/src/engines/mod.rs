@@ -43,5 +43,5 @@
 //! ```
 
 pub mod parakeet;
-#[cfg(not(target_os = "android"))]
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub mod whisper;

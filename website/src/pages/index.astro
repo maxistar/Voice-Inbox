@@ -4,10 +4,11 @@ import Layout from '../layouts/Layout.astro';
 const githubUrl = 'https://github.com/maxistar/Voice-Inbox';
 const releaseUrl = `${githubUrl}/releases`;
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const androidScreenshot = `${base}/screenshots/android-main.jpg`;
 ---
 <Layout
   title="Voice notes to Markdown"
-  description="Voice Inbox is a local-first Android app for turning accumulated voice recordings into a Markdown or plain-text inbox."
+  description="Voice Inbox is a local-first app for turning accumulated voice recordings into a Markdown or plain-text inbox. Android is ready; iOS is an active MVP."
 >
   <style>
     .hero {
@@ -28,71 +29,37 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       box-shadow: var(--shadow);
       padding: 18px;
     }
-    .phone {
+    .screenshot-shell {
       border: 10px solid #111827;
       border-radius: 28px;
       background: #f8fafc;
       overflow: hidden;
+      max-height: 620px;
     }
-    .phone-header {
-      padding: 18px;
-      color: #fff;
-      background: #2563eb;
-      font-weight: 800;
+    .screenshot-shell img {
+      display: block;
+      width: 100%;
+      height: auto;
     }
-    .screen {
-      padding: 18px;
-    }
-    .status {
-      margin-bottom: 14px;
-      border-radius: 8px;
-      background: #dbeafe;
-      padding: 12px;
-      color: #1e3a8a;
+    .caption {
+      margin: 14px 0 0;
+      color: var(--soft);
       font-size: 0.9rem;
-      font-weight: 700;
-    }
-    .tabs {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      margin-bottom: 14px;
-      border: 1px solid #cbd5e1;
-      border-radius: 8px;
-      overflow: hidden;
-      font-size: 0.85rem;
-      font-weight: 800;
       text-align: center;
     }
-    .tabs span {
-      padding: 9px;
-    }
-    .tabs span:first-child {
-      color: #fff;
-      background: #2563eb;
-    }
-    .row {
-      display: flex;
-      justify-content: space-between;
+    .platform-card {
+      display: grid;
       gap: 12px;
-      border-bottom: 1px solid #e2e8f0;
-      padding: 12px 0;
     }
-    .row strong {
-      display: block;
-      margin-bottom: 3px;
-      font-size: 0.93rem;
-    }
-    .row small {
-      color: #64748b;
-    }
-    .pill {
-      align-self: center;
-      border-radius: 8px;
-      background: #eff6ff;
-      padding: 7px 9px;
-      color: #1d4ed8;
-      font-size: 0.72rem;
-      font-weight: 900;
+    .status-badge {
+      display: inline-flex;
+      width: fit-content;
+      border-radius: 999px;
+      padding: 5px 10px;
+      color: var(--accent-strong);
+      background: var(--accent-soft);
+      font-size: 0.78rem;
+      font-weight: 850;
     }
     .flow {
       counter-reset: flow;
@@ -132,12 +99,12 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   <section class="hero">
     <div class="hero-copy">
-      <p class="eyebrow">Local-first Android transcription</p>
+      <p class="eyebrow">Local-first voice note transcription</p>
       <h1>Turn voice notes into a Markdown inbox.</h1>
       <p>
-        Voice Inbox watches the folder where your recordings collect, transcribes new audio locally
-        after the speech model is installed, and appends each result to your chosen <code>.md</code>
-        or <code>.txt</code> file.
+        Voice Inbox turns accumulated recordings into a readable text inbox. Android has the mature
+        folder workflow today; iOS now has an active MVP for importing, previewing, transcribing,
+        and appending individual recordings locally.
       </p>
       <div class="button-row">
         <a class="button primary" href={releaseUrl} target="_blank" rel="noopener">Download from GitHub Releases</a>
@@ -147,24 +114,31 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     </div>
 
     <div class="hero-visual" aria-label="Voice Inbox app preview">
-      <div class="phone">
-        <div class="phone-header">Voice Inbox</div>
-        <div class="screen">
-          <div class="status">Speech model ready</div>
-          <div class="tabs"><span>New</span><span>Processed</span></div>
-          <div class="row">
-            <div><strong>2026-07-11 note.m4a</strong><small>New - 2.4 MB</small></div>
-            <span class="pill">Play</span>
-          </div>
-          <div class="row">
-            <div><strong>walk home.mp3</strong><small>New - 6.8 MB</small></div>
-            <span class="pill">Play</span>
-          </div>
-          <div class="row">
-            <div><strong>meeting recap.flac</strong><small>Processed - 14 MB</small></div>
-            <span class="pill">Done</span>
-          </div>
-        </div>
+      <div class="screenshot-shell">
+        <img src={androidScreenshot} alt="Voice Inbox Android app showing scanned audio files and playback actions" />
+      </div>
+      <p class="caption">Android workflow screenshot. iOS MVP is evolving alongside the shared core.</p>
+    </div>
+  </section>
+
+  <section class="section">
+    <p class="eyebrow">Platform status</p>
+    <h2>Android is ready; iOS is catching up fast.</h2>
+    <div class="grid">
+      <div class="card platform-card">
+        <span class="status-badge">Android ready</span>
+        <h3>Full folder workflow</h3>
+        <p>Scan a selected audio folder, preview recordings, transcribe individual files or all New files, append to Markdown or text, retry failures, and schedule best-effort background runs.</p>
+      </div>
+      <div class="card platform-card">
+        <span class="status-badge">iOS MVP</span>
+        <h3>Manual import workflow</h3>
+        <p>Import audio files, preview them, download the speech model, transcribe locally, show recognized text, and append output. Folder automation and scheduling are still in progress.</p>
+      </div>
+      <div class="card platform-card">
+        <span class="status-badge">Shared core</span>
+        <h3>Kotlin Multiplatform foundation</h3>
+        <p>Catalog and transcription use cases are moving into shared code so Android and iOS can converge without hiding platform-specific storage and background limitations.</p>
       </div>
     </div>
   </section>
@@ -179,7 +153,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       </div>
       <div class="card">
         <h3>Local recognition</h3>
-        <p>After the first model download, recognition runs on the Android device instead of sending audio to an app cloud service.</p>
+        <p>After the first model download, recognition runs on device instead of sending audio to an app cloud service.</p>
       </div>
       <div class="card">
         <h3>Markdown or plain text output</h3>
@@ -191,7 +165,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       </div>
       <div class="card">
         <h3>Scheduled processing</h3>
-        <p>Optionally ask Android to run scheduled transcription around your chosen time. Exact execution is not guaranteed.</p>
+        <p>On Android, optionally ask the app to run scheduled transcription around your chosen time. Exact execution is not guaranteed.</p>
       </div>
       <div class="card">
         <h3>Transparent history</h3>
@@ -214,10 +188,10 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   <section class="section requirements">
     <p class="eyebrow">Requirements</p>
-    <h2>Designed for ARM64 Android devices.</h2>
+    <h2>Designed for local, on-device recognition.</h2>
     <p>
-      Voice Inbox requires Android 7.0 (API 24) or later, an ARM64 device, network access for
-      the first model download, and about 704 MiB of free storage for model installation.
+      Android requires Android 7.0 (API 24) or later on an ARM64 device. Both Android and the iOS MVP
+      need network access for the first model download and enough free storage for model installation.
     </p>
     <div class="button-row">
       <a class="button primary" href={releaseUrl} target="_blank" rel="noopener">Get the APK</a>

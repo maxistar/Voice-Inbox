@@ -1,7 +1,7 @@
 package me.maxistar.voiceinbox.core
 
 object TranscriptOutput {
-    const val UNKNOWN_RECORDING_TIME_LABEL = "Recording time unknown"
+    const val UNKNOWN_RECORDING_TIME_LABEL = "unknown"
 
     fun formatEntry(
         audioName: String,
@@ -9,7 +9,7 @@ object TranscriptOutput {
         transcript: String,
     ): String {
         val label = recordingTimeLabel ?: UNKNOWN_RECORDING_TIME_LABEL
-        return "$audioName\n$label\n${transcript.trim()}"
+        return "$audioName\n- recorded: $label\n${transcript.trim()}"
     }
 
     fun separatorFor(existingTail: String): String {

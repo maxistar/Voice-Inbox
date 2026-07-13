@@ -30,12 +30,10 @@ class TranscriptionWorker(
             ?: return@withContext failure("Output file is missing")
         val retryId = inputData.getLong(KEY_RETRY_ID, NO_RETRY_ID).takeIf { it != NO_RETRY_ID }
         val catalog: AudioCatalogQueuePort =
-            AudioCatalogRepository(AudioCatalogDatabase(applicationContext))
-        var currentEntry: AudioCatalogEntry? = null
+            AndroidSqlDelightAudioCatalogFactory(applicationContext).create()
 
         try {
             setForeground(foreground("Preparing transcription", 0, true))
-            catalog.recoverInterrupted()
             val model = SpeechModelRepository(
                 applicationContext.noBackupFilesDir.resolve("models"),
             ).inspect() as? InstalledSpeechModelState.Ready
@@ -45,72 +43,38 @@ class TranscriptionWorker(
                 return@withContext failure("Speech model failed to load")
             }
 
-            val total = if (retryId == null) catalog.pendingCount(folderUri) else 1
-            var completed = 0
-            var failed = 0
-            val transcriber = SingleFileTranscriber(applicationContext)
-
-            while (true) {
-                currentEntry = if (retryId == null) {
-                    catalog.claimPending(folderUri)
-                } else if (completed == 0) {
-                    catalog.claimFailed(folderUri, retryId)
-                } else {
-                    null
-                }
-                val entry = currentEntry ?: break
-                try {
-                    val result = transcriber.transcribe(entry, outputUri, id.toString()) { progress ->
-                        val percent = BatchTranscriptionRules.percent(
-                            progress.processedUs,
-                            progress.durationUs,
-                        )
-                        publishAsync(
-                            phase = progress.phase,
-                            filename = entry.displayName,
-                            completed = completed,
-                            total = total,
-                            processedUs = progress.processedUs,
-                            durationUs = progress.durationUs,
-                            progress = percent,
-                        )
-                    }
-                    catalog.markProcessed(entry.id, System.currentTimeMillis(), result.transcriptText)
-                } catch (cancelled: CancellationException) {
-                    catalog.markPending(entry.id)
-                    throw cancelled
-                } catch (error: Throwable) {
-                    catalog.markFailed(entry.id, error.message ?: "Transcription failed")
-                    failed += 1
-                }
-                completed += 1
-                currentEntry = null
-                publish(
-                    phase = BatchTranscriptionRules.summary(completed, total, failed),
-                    filename = null,
-                    completed = completed,
-                    total = total,
-                    processedUs = null,
-                    durationUs = null,
-                )
-                if (retryId != null) break
+            val batch = BatchTranscriptionUseCase(
+                catalog = catalog,
+                transcriber = AndroidBatchEntryTranscriber(
+                    SingleFileTranscriber(applicationContext),
+                    outputUri,
+                ),
+                clock = SystemBatchClock,
+            )
+            val result = batch.transcribe(
+                BatchTranscriptionInput(
+                    folderId = folderUri,
+                    outputId = outputUri.toString(),
+                    runId = id.toString(),
+                    retryEntryId = retryId,
+                ),
+            ) { progress ->
+                publishAsync(progress)
             }
 
             Result.success(
                 workDataOf(
-                    KEY_PHASE to BatchTranscriptionRules.summary(completed, total, failed),
-                    KEY_COMPLETED_FILES to completed,
-                    KEY_TOTAL_FILES to total,
-                    KEY_FAILED_FILES to failed,
-                    KEY_PROGRESS to 100,
-                    KEY_INDETERMINATE to false,
+                    KEY_PHASE to result.summary,
+                    KEY_COMPLETED_FILES to result.completed,
+                    KEY_TOTAL_FILES to result.total,
+                    KEY_FAILED_FILES to result.failed,
+                    KEY_PROGRESS to result.progress,
+                    KEY_INDETERMINATE to result.indeterminate,
                 ),
             )
         } catch (cancelled: CancellationException) {
-            currentEntry?.let { catalog.markPending(it.id) }
             throw cancelled
         } catch (error: Throwable) {
-            currentEntry?.let { catalog.markPending(it.id) }
             failure(error.message ?: "Transcription failed")
         }
     }
@@ -129,6 +93,7 @@ class TranscriptionWorker(
             filename,
             completed,
             total,
+            failed = 0,
             processedUs,
             durationUs,
             percent,
@@ -137,11 +102,25 @@ class TranscriptionWorker(
         setForeground(foreground(notificationText(phase, filename, completed, total), percent ?: 0, percent == null))
     }
 
+    private fun publishAsync(progress: BatchTranscriptionProgress) {
+        publishAsync(
+            phase = progress.phase,
+            filename = progress.filename,
+            completed = progress.completed,
+            total = progress.total,
+            failed = progress.failed,
+            processedUs = progress.processedUs,
+            durationUs = progress.durationUs,
+            progress = progress.progress,
+        )
+    }
+
     private fun publishAsync(
         phase: String,
         filename: String?,
         completed: Int,
         total: Int,
+        failed: Int,
         processedUs: Long?,
         durationUs: Long?,
         progress: Int?,
@@ -151,6 +130,7 @@ class TranscriptionWorker(
             filename,
             completed,
             total,
+            failed,
             processedUs,
             durationUs,
             progress,
@@ -170,6 +150,7 @@ class TranscriptionWorker(
         filename: String?,
         completed: Int,
         total: Int,
+        failed: Int,
         processedUs: Long?,
         durationUs: Long?,
         progress: Int?,
@@ -178,6 +159,7 @@ class TranscriptionWorker(
         KEY_FILENAME to filename,
         KEY_COMPLETED_FILES to completed,
         KEY_TOTAL_FILES to total,
+        KEY_FAILED_FILES to failed,
         KEY_PROGRESS to (progress ?: 0),
         KEY_INDETERMINATE to (progress == null),
         KEY_PROCESSED_US to (processedUs ?: -1L),
@@ -218,6 +200,37 @@ class TranscriptionWorker(
 
     private fun failure(message: String): Result =
         Result.failure(workDataOf(KEY_ERROR to message, KEY_PHASE to "Failed"))
+
+    private class AndroidBatchEntryTranscriber(
+        private val transcriber: SingleFileTranscriber,
+        private val outputUri: Uri,
+    ) : BatchEntryTranscriber {
+        override fun transcribe(
+            entry: AudioCatalogEntry,
+            outputId: String,
+            runId: String,
+            onProgress: (SingleFileTranscriptionProgress) -> Unit,
+        ): SingleFileTranscriptionResult {
+            val result = transcriber.transcribe(entry, outputUri, runId) { progress ->
+                onProgress(
+                    SingleFileTranscriptionProgress(
+                        phase = progress.phase,
+                        processedUs = progress.processedUs,
+                        durationUs = progress.durationUs,
+                    ),
+                )
+            }
+            return SingleFileTranscriptionResult(
+                durationUs = result.durationUs,
+                transcriptLength = result.transcriptLength,
+                transcriptText = result.transcriptText,
+            )
+        }
+    }
+
+    private object SystemBatchClock : BatchClock {
+        override fun currentTimeMillis(): Long = System.currentTimeMillis()
+    }
 
     companion object {
         const val UNIQUE_WORK_NAME = "audio-folder-transcription"

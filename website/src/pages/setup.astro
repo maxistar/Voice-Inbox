@@ -4,7 +4,7 @@ import Layout from '../layouts/Layout.astro';
 const githubUrl = 'https://github.com/maxistar/Voice-Inbox';
 const releaseUrl = `${githubUrl}/releases`;
 ---
-<Layout title="Setup" description="How to install and configure Voice Inbox on Android.">
+<Layout title="Setup" description="How to install and configure Voice Inbox on Android and use the current iOS MVP.">
   <style>
     .intro { max-width: 760px; }
     .steps {
@@ -29,20 +29,24 @@ const releaseUrl = `${githubUrl}/releases`;
     <p class="eyebrow">Setup guide</p>
     <h1>Get Voice Inbox ready for your recordings.</h1>
     <p>
-      Voice Inbox works with an existing output document and one selected audio folder.
-      The first model download is large, but after verification recognition runs locally.
+      Voice Inbox works with an existing output document and user-selected audio. Android is the full
+      folder workflow today; iOS currently supports a manual import MVP. The first model download is large,
+      but after verification recognition runs locally.
     </p>
   </section>
 
   <section class="steps">
     <div class="step">
-      <h2>1. Install the Android app</h2>
+      <h2>1. Install the app</h2>
       <p>
-        Download the latest APK from
+        Download the latest Android APK from
         <a href={releaseUrl} target="_blank" rel="noopener">GitHub Releases</a>
         and install it on an ARM64 Android device running Android 7.0 or later.
       </p>
-      <p class="note">If a Google Play listing is added later, this page can link to it as the primary install path.</p>
+      <p class="note">
+        iOS is currently an MVP built from source rather than a store release. When Google Play or App Store
+        listings exist, this page can link to them as the primary install paths.
+      </p>
     </div>
 
     <div class="step">
@@ -58,14 +62,17 @@ const releaseUrl = `${githubUrl}/releases`;
       <h2>3. Select an output document</h2>
       <p>
         Choose an existing writable <code>.txt</code> or <code>.md</code> file. Voice Inbox appends new entries
-        and preserves existing document content.
+        and preserves existing document content. On iOS, this uses the document picker and security-scoped access.
       </p>
     </div>
 
     <div class="step">
-      <h2>4. Select your audio folder</h2>
+      <h2>4. Select recordings</h2>
       <p>
-        Choose one readable folder that contains audio recordings. The app scans direct children only and does not traverse nested folders.
+        On Android, choose one readable folder that contains audio recordings. The app scans direct children only and does not traverse nested folders.
+      </p>
+      <p>
+        On iOS, use the current manual import workflow to add audio files to the app-local catalog.
       </p>
     </div>
 
@@ -86,6 +93,7 @@ const releaseUrl = `${githubUrl}/releases`;
         Open Settings to enable scheduled transcription and choose a preferred time. Android may delay background work,
         so scheduled runs should be treated as best-effort rather than exact alarms.
       </p>
+      <p>Scheduled background transcription is not part of the current iOS MVP.</p>
     </div>
   </section>
 </Layout>

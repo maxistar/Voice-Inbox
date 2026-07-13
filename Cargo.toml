@@ -5,14 +5,23 @@ edition = "2021"
 
 [lib]
 name = "notes_recognition"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "staticlib"]
+
+[features]
+default = ["native-transcription"]
+native-transcription = ["dep:ort", "dep:transcribe-rs"]
+ios-onnx = ["native-transcription"]
 
 [dependencies]
 log = "0.4"
-android_logger = "0.13"
-transcribe-rs = { path = "transcribe-rs" }
-jni = "0.21"
 once_cell = "1.19"
 serde_json = "1"
+transcribe-rs = { path = "transcribe-rs", optional = true }
+ort = { version = "=2.0.0-rc.10", optional = true }
 
-ort = { version = "=2.0.0-rc.10", features = ["load-dynamic"] }
+[target.'cfg(target_os = "android")'.dependencies]
+android_logger = "0.13"
+jni = "0.21"
+
+[target.'cfg(not(target_os = "ios"))'.dependencies]
+ort = { version = "=2.0.0-rc.10", features = ["load-dynamic"], optional = true }

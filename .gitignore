@@ -15,5 +15,12 @@ local.properties
 /target
 /transcribe-rs/target
 /app/src/main/jniLibs/arm64-v8a
+/ios-onnx-runtime/
 .idea
 **/build/
+/iosApp/NativeBuild/
+
+# Xcode user-local state
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint

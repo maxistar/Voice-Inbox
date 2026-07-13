@@ -19,6 +19,12 @@ data class SingleFileTranscriptionResult(
     val transcriptText: String,
 )
 
+data class SingleFileTranscriptionOutcome(
+    val success: Boolean,
+    val result: SingleFileTranscriptionResult?,
+    val errorMessage: String?,
+)
+
 interface PlatformTranscriptStaging {
     fun write(transcript: String)
     fun cleanup()
@@ -48,6 +54,7 @@ class SingleFileTranscriptionUseCase(
             onProgress(SingleFileTranscriptionProgress(PHASE_DECODING_AUDIO))
             var transcript = ""
             var durationUs: Long? = null
+            var transcriptionError: String? = null
             val info = audioDecoder.decode(
                 audioId = input.audioId,
                 onProgress = { processed, total ->
@@ -60,14 +67,18 @@ class SingleFileTranscriptionUseCase(
                         ),
                     )
                 },
-                onChunk = { samples ->
+                onChunk = onChunk@ { samples ->
                     val chunkText = nativeTranscriber.transcribeChunk(samples)
-                        ?: throw IllegalStateException(ERROR_SPEECH_RECOGNITION_FAILED)
+                    if (chunkText == null) {
+                        transcriptionError = ERROR_SPEECH_RECOGNITION_FAILED
+                        return@onChunk
+                    }
                     transcript = TranscriptMerger.merge(transcript, chunkText)
                     staging.write(transcript)
                 },
             )
             durationUs = info.durationUs ?: durationUs
+            transcriptionError?.let { throw IllegalStateException(it) }
             if (transcript.isBlank()) throw IllegalStateException(ERROR_NO_TEXT_RECOGNIZED)
             val finalTranscript = transcript.trim()
 
@@ -91,6 +102,24 @@ class SingleFileTranscriptionUseCase(
             staging.cleanup()
         }
     }
+
+    fun tryTranscribe(
+        input: SingleFileTranscriptionInput,
+        onProgress: (SingleFileTranscriptionProgress) -> Unit,
+    ): SingleFileTranscriptionOutcome =
+        try {
+            SingleFileTranscriptionOutcome(
+                success = true,
+                result = transcribe(input, onProgress),
+                errorMessage = null,
+            )
+        } catch (error: Throwable) {
+            SingleFileTranscriptionOutcome(
+                success = false,
+                result = null,
+                errorMessage = error.message ?: ERROR_SPEECH_RECOGNITION_FAILED,
+            )
+        }
 
     companion object {
         const val PHASE_DECODING_AUDIO = "Decoding audio"

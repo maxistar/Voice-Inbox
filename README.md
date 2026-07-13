@@ -83,6 +83,49 @@ Requirements:
 The Gradle build extracts ONNX Runtime, builds the Rust JNI library for
 `arm64-v8a`, and packages the required native libraries.
 
+## iOS Shell
+
+The repository includes a minimal SwiftUI iOS shell at
+`iosApp/VoiceInbox.xcodeproj`. It is a KMP wiring milestone: the app launches to
+a simple screen and imports the generated `Shared` Kotlin Multiplatform
+framework to display speech-model metadata from shared core. The shell also
+includes a Settings screen that persists scheduled transcription preferences in
+iOS `UserDefaults` and normalizes them through shared scheduling rules; iOS
+scheduled execution itself remains future work.
+
+Open the project from `notes_recognition`:
+
+```sh
+open iosApp/VoiceInbox.xcodeproj
+```
+
+Or verify the shell from the command line after full Xcode is selected:
+
+```sh
+xcodebuild -project iosApp/VoiceInbox.xcodeproj -scheme VoiceInbox -configuration Debug -sdk iphonesimulator build
+```
+
+If `xcodebuild` reports that the active developer directory is
+`/Library/Developer/CommandLineTools`, switch to the installed Xcode developer
+directory before building the iOS shell.
+
+The iOS target has an Xcode build phase that runs:
+
+```sh
+./gradlew :shared:embedAndSignAppleFrameworkForXcode
+```
+
+That Gradle task builds, embeds, and signs `Shared.framework` for the active
+Xcode SDK/configuration. The lower-level shared compile checks remain:
+
+```sh
+./gradlew :shared:compileKotlinIosSimulatorArm64 :shared:compileKotlinIosX64 :shared:compileKotlinIosArm64
+```
+
+This shell intentionally does not implement document picking, folder scanning,
+audio playback, catalog persistence, transcription execution, settings,
+scheduling, output-file writing, or Rust/iOS native bridging.
+
 ## GitHub Actions
 
 The repository includes two GitHub Actions workflows:

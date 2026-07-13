@@ -4,8 +4,6 @@
         <provider
             android:name="me.maxistar.voiceinbox.TestAudioDocumentsProvider"
             android:authorities="me.maxistar.voiceinbox.test.documents"
-            android:exported="true"
-            android:permission="android.permission.MANAGE_DOCUMENTS"
-            android:grantUriPermissions="true" />
+            android:exported="true" />
     </application>
 </manifest>

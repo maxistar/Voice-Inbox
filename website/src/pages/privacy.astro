@@ -27,8 +27,8 @@ import Layout from '../layouts/Layout.astro';
     <section>
       <h2>Audio recognition</h2>
       <p>
-        Voice Inbox runs speech recognition locally on the Android device after the speech model is installed.
-        Audio files are read from the folder selected by the user.
+        Voice Inbox runs speech recognition locally on device after the speech model is installed.
+        On Android, audio files are read from the folder selected by the user. On iOS, the current MVP works with imported audio files stored in the app-local catalog.
       </p>
     </section>
 
@@ -42,22 +42,23 @@ import Layout from '../layouts/Layout.astro';
     <section>
       <h2>Selected files and folders</h2>
       <p>
-        The app uses Android document access selected by the user: one output <code>.txt</code> or <code>.md</code> document and one audio folder.
-        It appends recognized text only to the selected output document.
+        The app uses platform document access selected by the user. Android uses one output <code>.txt</code> or <code>.md</code> document and one audio folder.
+        iOS uses document picker access for imported audio and selected output documents in the current MVP.
+        Voice Inbox appends recognized text only to the selected output document.
       </p>
     </section>
 
     <section>
       <h2>Catalog storage</h2>
       <p>
-        Voice Inbox keeps a private local catalog of discovered audio files and processing state so it can distinguish New and Processed files.
+        Voice Inbox keeps a private local catalog of discovered or imported audio files and processing state so it can distinguish New and Processed files.
       </p>
     </section>
 
     <section>
-      <h2>External providers and Android services</h2>
+      <h2>External providers and platform services</h2>
       <p>
-        Android document providers, media decoders, storage behavior, and background scheduling are provided by the operating system or selected providers.
+        Document providers, media decoders, storage behavior, and background scheduling are provided by the operating system or selected providers.
         Voice Inbox cannot control or make privacy claims on behalf of those external components.
       </p>
     </section>
