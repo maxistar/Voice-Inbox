@@ -159,14 +159,6 @@ class MainActivity : AppCompatActivity() {
                 }
                 true
             }
-            R.id.menuSelectOutput -> {
-                launchOutputPickerIfEnabled()
-                true
-            }
-            R.id.menuSelectFolder -> {
-                launchFolderPickerIfEnabled()
-                true
-            }
             R.id.menuSettings -> {
                 startActivity(Intent(this, SettingsActivity::class.java))
                 true
@@ -872,14 +864,6 @@ class MainActivity : AppCompatActivity() {
     private fun updateMenu(menu: Menu) {
         val controls = currentMainScreenState().controls
         menu.findItem(R.id.menuRefreshFolder)?.isEnabled = controls.refreshEnabled
-        menu.findItem(R.id.menuSelectOutput)?.apply {
-            isEnabled = controls.outputEnabled
-            setTitle(if (outputUri == null) R.string.menu_select_output else R.string.menu_change_output)
-        }
-        menu.findItem(R.id.menuSelectFolder)?.apply {
-            isEnabled = controls.folderEnabled
-            setTitle(if (folderUri == null) R.string.menu_select_folder else R.string.menu_change_folder)
-        }
     }
 
     private fun updateOutputSummary(displayName: String?) {

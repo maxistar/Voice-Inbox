@@ -8,14 +8,6 @@
         app:showAsAction="ifRoom" />
 
     <item
-        android:id="@+id/menuSelectOutput"
-        android:title="@string/menu_select_output" />
-
-    <item
-        android:id="@+id/menuSelectFolder"
-        android:title="@string/menu_select_folder" />
-
-    <item
         android:id="@+id/menuSettings"
         android:title="@string/menu_settings" />
 </menu>
