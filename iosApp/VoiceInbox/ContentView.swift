@@ -4,6 +4,7 @@ import SwiftUI
 struct ContentView: View {
     private let shellState = IosMainScreenShellState()
 
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var importStore = IosAudioImportStore()
     @StateObject private var outputStore = IosOutputDocumentStore()
     @StateObject private var previewPlayer = IosAudioPreviewPlayer()
@@ -389,6 +390,17 @@ struct ContentView: View {
             }
             .onChange(of: importStore.files) { files in
                 previewPlayer.stopIfUnavailable(availableFileIds: Set(files.map(\.id)))
+            }
+            .onAppear {
+                if importStore.ingestSharedImports()?.imported ?? 0 > 0 {
+                    selectedTab = .new
+                }
+            }
+            .onChange(of: scenePhase) { phase in
+                guard phase == .active else { return }
+                if importStore.ingestSharedImports()?.imported ?? 0 > 0 {
+                    selectedTab = .new
+                }
             }
             .sheet(item: transcriptBinding) { transcript in
                 NavigationStack {

@@ -166,6 +166,26 @@ final class IosAudioImportStore: ObservableObject {
         importMessage = summary.message
     }
 
+    @discardableResult
+    func ingestSharedImports() -> IosAudioImportSummary? {
+        guard let directory = try? IosSharedImportStaging.stagingDirectory(fileManager: fileManager) else { return nil }
+        guard let urls = try? fileManager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return nil
+        }
+
+        let stagedFiles = urls.filter { $0.pathExtension.lowercased() != IosSharedImportStaging.manifestExtension }
+        guard !stagedFiles.isEmpty else { return nil }
+
+        let summary = copySupportedSharedFiles(from: stagedFiles)
+        load()
+        importMessage = summary.message
+        return summary
+    }
+
     func selectInboxFolder(_ url: URL) {
         let didStartAccessing = url.startAccessingSecurityScopedResource()
         defer {
@@ -432,6 +452,50 @@ final class IosAudioImportStore: ObservableObject {
                     transcriptText: nil,
                     durationUs: nil
                 )
+                imported += 1
+            } catch {
+                failed += 1
+            }
+        }
+
+        return IosAudioImportSummary(imported: imported, skipped: skipped, failed: failed)
+    }
+
+    private func copySupportedSharedFiles(from urls: [URL]) -> IosAudioImportSummary {
+        ensureImportDirectoryExists()
+        var imported = 0
+        var skipped = 0
+        var failed = 0
+
+        for stagedURL in urls {
+            guard isSupportedAudio(stagedURL) else {
+                IosSharedImportStaging.removeStagedFileAndMetadata(stagedURL, fileManager: fileManager)
+                skipped += 1
+                continue
+            }
+
+            let metadata = IosSharedImportStaging.readMetadata(for: stagedURL)
+            let displayName = metadata?.displayName ?? stagedURL.lastPathComponent
+            let importedAtMillis = metadata?.modifiedMillis ?? metadata?.stagedAtMillis ?? currentTimeMillis()
+
+            do {
+                let targetFileName = nextAvailableFileName(for: displayName)
+                let targetURL = importDirectory.appendingPathComponent(targetFileName)
+                try fileManager.copyItem(at: stagedURL, to: targetURL)
+                _ = catalog.upsertImportedFile(
+                    folderUri: IosAudioCatalogConstants.importedFolderUri,
+                    documentUri: targetFileName,
+                    displayName: displayName,
+                    mimeType: nil,
+                    sizeBytes: KotlinLong(longLong: fileSize(at: targetURL)),
+                    importedAtMillis: KotlinLong(longLong: importedAtMillis),
+                    state: AudioFileState.pending,
+                    lastError: nil,
+                    processedAtMillis: nil,
+                    transcriptText: nil,
+                    durationUs: nil
+                )
+                IosSharedImportStaging.removeStagedFileAndMetadata(stagedURL, fileManager: fileManager)
                 imported += 1
             } catch {
                 failed += 1
