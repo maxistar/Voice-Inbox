@@ -21,6 +21,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      PUBLIC_GA_ID: ${{ vars.PUBLIC_GA_ID }}
 
     defaults:
       run:
@@ -42,6 +44,18 @@ jobs:
 
       - name: Build site
         run: npm run build
+
+      - name: Verify analytics snippet
+        run: |
+          if [ -z "$PUBLIC_GA_ID" ]; then
+            echo "::notice::PUBLIC_GA_ID is not configured; Google Analytics snippet was intentionally omitted."
+            exit 0
+          fi
+
+          if ! grep -R "googletagmanager.com/gtag/js?id=$PUBLIC_GA_ID" dist >/dev/null; then
+            echo "::error::PUBLIC_GA_ID is configured, but the Google Analytics snippet was not found in dist."
+            exit 1
+          fi
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
