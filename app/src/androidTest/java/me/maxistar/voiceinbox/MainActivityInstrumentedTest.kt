@@ -19,13 +19,14 @@ import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.hamcrest.Matchers.containsString
 import org.hamcrest.Matchers.not
+import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class MainActivityInstrumentedTest {
     @Test
-    fun selectionSummariesAndMenuActionsAreVisible() {
+    fun selectionSummariesAndCurrentMenuActionsAreVisible() {
         clearActivityState()
         ActivityScenario.launch(MainActivity::class.java).use {
             onView(withId(R.id.statusTitle)).check(matches(isDisplayed()))
@@ -39,8 +40,7 @@ class MainActivityInstrumentedTest {
             openActionBarOverflowOrOptionsMenu(
                 InstrumentationRegistry.getInstrumentation().targetContext,
             )
-            onView(withText(R.string.menu_select_output)).check(matches(isDisplayed()))
-            onView(withText(R.string.menu_select_folder)).check(matches(isDisplayed()))
+            onView(withText(R.string.menu_settings)).check(matches(isDisplayed()))
         }
     }
 
@@ -89,6 +89,44 @@ class MainActivityInstrumentedTest {
             scenario.recreate()
 
             onView(withId(R.id.statusTitle)).check(matches(isDisplayed()))
+        }
+    }
+
+    @Test
+    fun rememberedStartupPromptActionsPersistTheirPolicies() {
+        clearActivityState()
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            showStartupPrompt(scenario, pendingCount = 2)
+            onView(withText(R.string.startup_processing_prompt_title)).check(matches(isDisplayed()))
+            onView(withText(R.string.startup_processing_remember_choice)).perform(click())
+            onView(withText(R.string.startup_processing_process_now)).perform(click())
+        }
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val store = StartupProcessingPolicyStore(
+            context.getSharedPreferences(StartupProcessingPolicyStore.PREFERENCES_NAME, Context.MODE_PRIVATE),
+        )
+        assertEquals(StartupProcessingPolicy.AUTOMATIC, store.load())
+
+        clearActivityState()
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            showStartupPrompt(scenario, pendingCount = 1)
+            onView(withText(R.string.startup_processing_remember_choice)).perform(click())
+            onView(withText(R.string.startup_processing_leave_queued)).perform(click())
+        }
+
+        assertEquals(StartupProcessingPolicy.LEAVE_QUEUED, store.load())
+    }
+
+    @Test
+    fun startupPromptSurvivesActivityRecreationWithoutASecondDecision() {
+        clearActivityState()
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            showStartupPrompt(scenario, pendingCount = 2)
+            scenario.recreate()
+
+            onView(withText(R.string.startup_processing_prompt_title)).check(matches(isDisplayed()))
+            onView(withText(R.string.startup_processing_leave_queued)).perform(click())
         }
     }
 
@@ -169,7 +207,31 @@ class MainActivityInstrumentedTest {
             .edit()
             .clear()
             .commit()
+        context.getSharedPreferences(StartupProcessingPolicyStore.PREFERENCES_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .clear()
+            .commit()
         context.deleteDatabase(AndroidSqlDelightAudioCatalogFactory.DATABASE_NAME)
+    }
+
+    private fun showStartupPrompt(
+        scenario: ActivityScenario<MainActivity>,
+        pendingCount: Int,
+    ) {
+        scenario.onActivity { activity ->
+            val coordinator = MainActivity::class.java.getDeclaredField("startupCoordinator")
+                .apply { isAccessible = true }
+                .get(activity) as StartupProcessingCoordinator
+            coordinator.beginStartupScan(99)
+            coordinator.setFolderReady(true)
+            coordinator.setOutputReady(true)
+            coordinator.setModelReady(true)
+            coordinator.setTranscriptionState(known = true, active = false)
+            coordinator.onStartupCatalogReady(99, pendingCount, failedCount = 0)
+            MainActivity::class.java.getDeclaredMethod("evaluateStartupProcessing")
+                .apply { isAccessible = true }
+                .invoke(activity)
+        }
     }
 
     private fun rowState(entry: AudioCatalogEntry): MainScreenRowState =

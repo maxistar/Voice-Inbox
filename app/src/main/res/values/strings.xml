@@ -20,6 +20,20 @@
     <string name="settings_scheduled_transcription_time">Scheduled time: %1$02d:%2$02d</string>
     <string name="settings_change_scheduled_time">Change scheduled time</string>
     <string name="settings_scheduled_transcription_note">Android may delay background work to save battery. The feature is off by default.</string>
+    <string name="settings_startup_processing_title">Startup processing</string>
+    <string name="settings_startup_processing_subtitle">Choose what happens when Voice Inbox opens and finds queued notes.</string>
+    <string name="settings_startup_processing_ask">Ask every time</string>
+    <string name="settings_startup_processing_automatic">Transcribe automatically</string>
+    <string name="settings_startup_processing_leave_queued">Leave files queued</string>
+    <string name="settings_startup_processing_note">Startup processing runs only when you open the app. Nightly transcription is a separate background option.</string>
+    <string name="startup_processing_prompt_title">Process queued notes?</string>
+    <plurals name="startup_processing_prompt_message">
+        <item quantity="one">%1$d file is ready to transcribe.</item>
+        <item quantity="other">%1$d files are ready to transcribe.</item>
+    </plurals>
+    <string name="startup_processing_remember_choice">Always do this when Voice Inbox starts</string>
+    <string name="startup_processing_process_now">Process now</string>
+    <string name="startup_processing_leave_queued">Leave queued</string>
     <string name="output_not_selected">Output: not selected</string>
     <string name="output_selected">Output: %1$s</string>
     <string name="select_output_file">Select output file</string>

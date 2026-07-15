@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.view.MenuItem
 import android.view.View
+import android.widget.RadioGroup
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
@@ -21,6 +22,7 @@ import java.util.concurrent.Executors
 
 class SettingsActivity : AppCompatActivity() {
     private lateinit var settingsStore: ScheduledTranscriptionSettingsStore
+    private lateinit var startupPolicyStore: StartupProcessingPolicyStore
     private lateinit var selectionStore: DocumentSelectionStore
     private lateinit var documentAccess: DocumentAccess
     private lateinit var folderScanner: AudioFolderScanner
@@ -63,6 +65,9 @@ class SettingsActivity : AppCompatActivity() {
         settingsStore = ScheduledTranscriptionSettingsStore(
             getSharedPreferences(ScheduledTranscriptionSettingsStore.PREFERENCES_NAME, MODE_PRIVATE),
         )
+        startupPolicyStore = StartupProcessingPolicyStore(
+            getSharedPreferences(StartupProcessingPolicyStore.PREFERENCES_NAME, MODE_PRIVATE),
+        )
         selectionStore = DocumentSelectionStore(
             getSharedPreferences(DocumentSelectionStore.PREFERENCES_NAME, MODE_PRIVATE),
         )
@@ -89,6 +94,22 @@ class SettingsActivity : AppCompatActivity() {
         }
         findViewById<View>(R.id.settingsLegalRow).setOnClickListener {
             openExternalUrl(LEGAL_URL)
+        }
+        val startupPolicyGroup = findViewById<RadioGroup>(R.id.startupProcessingPolicy)
+        startupPolicyGroup.check(
+            when (startupPolicyStore.load()) {
+                StartupProcessingPolicy.ASK -> R.id.startupProcessingAsk
+                StartupProcessingPolicy.AUTOMATIC -> R.id.startupProcessingAutomatic
+                StartupProcessingPolicy.LEAVE_QUEUED -> R.id.startupProcessingLeaveQueued
+            },
+        )
+        startupPolicyGroup.setOnCheckedChangeListener { _, checkedId ->
+            val policy = when (checkedId) {
+                R.id.startupProcessingAutomatic -> StartupProcessingPolicy.AUTOMATIC
+                R.id.startupProcessingLeaveQueued -> StartupProcessingPolicy.LEAVE_QUEUED
+                else -> StartupProcessingPolicy.ASK
+            }
+            startupPolicyStore.save(policy)
         }
         scheduledSwitch.isChecked = settings.enabled
         scheduledSwitch.setOnCheckedChangeListener { _, enabled ->

@@ -8,7 +8,8 @@ into an existing plain-text (`.txt`) or Markdown (`.md`) file.
 1. Download and verify the speech model on first launch.
 2. Select an existing writable `.txt` or `.md` file.
 3. Select a folder containing audio recordings.
-4. Review discovered recordings in the **New** tab and choose **Transcribe all**.
+4. Review discovered recordings in the **New** tab and choose **Transcribe all**, or
+   use the startup-processing policy when the app opens.
 5. The application processes new recordings sequentially in foreground work and
    appends one entry per successful file containing its filename, recording
    time, and recognized text.
@@ -17,6 +18,20 @@ File selection remains disabled until the model is installed and loaded. The
 application preserves existing text and separates each new entry with one blank
 line. Folder scanning runs when the application starts and when **Refresh** is
 selected. It scans direct children only and does not traverse nested folders.
+
+## Automatic Processing
+
+Android Settings provides two independent automation options:
+
+- **Startup processing** runs after the app opens, restores its selections, and
+  finishes scanning the audio folder. It defaults to asking before processing;
+  it can instead transcribe automatically or leave files queued.
+- **Nightly transcription** uses Android background work around the selected
+  time. Android may delay this work to save battery, so exact timing is not
+  guaranteed.
+
+Both options reuse the same batch transcription worker and exclude failed files,
+which remain available through their individual **Retry** actions.
 
 ## Incremental Catalog
 
@@ -83,15 +98,30 @@ Requirements:
 The Gradle build extracts ONNX Runtime, builds the Rust JNI library for
 `arm64-v8a`, and packages the required native libraries.
 
-## iOS Shell
+## iOS Application
 
-The repository includes a minimal SwiftUI iOS shell at
-`iosApp/VoiceInbox.xcodeproj`. It is a KMP wiring milestone: the app launches to
-a simple screen and imports the generated `Shared` Kotlin Multiplatform
-framework to display speech-model metadata from shared core. The shell also
-includes a Settings screen that persists scheduled transcription preferences in
-iOS `UserDefaults` and normalizes them through shared scheduling rules; iOS
-scheduled execution itself remains future work.
+The repository includes a SwiftUI iOS application at
+`iosApp/VoiceInbox.xcodeproj`. It uses the generated `Shared` Kotlin
+Multiplatform framework for the shared catalog, transcription rules, and speech
+model metadata, and links the Rust transcription engine through the native iOS
+bridge.
+
+The current iOS application supports:
+
+- selecting and scanning an audio inbox folder
+- importing individual audio files and receiving files through the share
+  extension
+- selecting an existing transcript output file
+- downloading or manually installing the pinned speech model
+- previewing audio and transcribing or retrying individual files
+- processing queued files when the application starts, with **Ask**, **Yes**, and
+  **No** startup policies
+- viewing processed transcripts and persisting catalog state
+- changing storage and startup-processing preferences from Settings
+
+Both applications provide configurable startup processing. Unlike Android, iOS
+does not currently schedule nightly background transcription. Its automatic
+processing is evaluated when the application starts or becomes active.
 
 Open the project from `notes_recognition`:
 
@@ -122,9 +152,9 @@ Xcode SDK/configuration. The lower-level shared compile checks remain:
 ./gradlew :shared:compileKotlinIosSimulatorArm64 :shared:compileKotlinIosX64 :shared:compileKotlinIosArm64
 ```
 
-This shell intentionally does not implement document picking, folder scanning,
-audio playback, catalog persistence, transcription execution, settings,
-scheduling, output-file writing, or Rust/iOS native bridging.
+The iOS and Android applications share workflow rules and catalog behavior, but
+their platform integrations remain native: SwiftUI and Apple document pickers on
+iOS, and Android views, the Storage Access Framework, and WorkManager on Android.
 
 ## GitHub Actions
 

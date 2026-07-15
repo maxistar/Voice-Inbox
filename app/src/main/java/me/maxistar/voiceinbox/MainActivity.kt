@@ -27,7 +27,7 @@ import androidx.work.WorkManager
 import java.util.concurrent.Executors
 import java.util.UUID
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listener {
     private lateinit var statusTitle: TextView
     private lateinit var statusDetail: TextView
     private lateinit var statusProgress: ProgressBar
@@ -48,6 +48,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var folderScanner: AudioFolderScanner
     private lateinit var catalog: SqlDelightAudioCatalogRepository
     private lateinit var modelReadiness: SpeechModelReadinessManager
+    private lateinit var startupPolicyStore: StartupProcessingPolicyStore
+    private lateinit var startupCoordinator: StartupProcessingCoordinator
     private val folderExecutor = Executors.newSingleThreadExecutor()
 
     private var modelReady = false
@@ -82,6 +84,7 @@ class MainActivity : AppCompatActivity() {
     private var previewEntryId: Long? = null
     private var previewState = PreviewPlaybackState.IDLE
     private var activityDestroyed = false
+    private var scanGeneration = 0L
 
     private val outputPicker = registerForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -114,6 +117,12 @@ class MainActivity : AppCompatActivity() {
         folderScanner = AudioFolderScanner(contentResolver)
         catalog = AndroidSqlDelightAudioCatalogFactory(this).create()
         modelReadiness = getSharedModelReadiness(SpeechModelRepository(noBackupFilesDir.resolve("models")))
+        startupPolicyStore = StartupProcessingPolicyStore(
+            getSharedPreferences(StartupProcessingPolicyStore.PREFERENCES_NAME, MODE_PRIVATE),
+        )
+        startupCoordinator = StartupProcessingCoordinator.restore(
+            savedInstanceState?.getString(STATE_STARTUP_PROCESSING_STAGE),
+        )
         ScheduledTranscriptionScheduler.sync(
             this,
             ScheduledTranscriptionSettingsStore(
@@ -138,6 +147,11 @@ class MainActivity : AppCompatActivity() {
         observeTranscription()
         restoreSelections()
         refreshModel()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString(STATE_STARTUP_PROCESSING_STAGE, startupCoordinator.savedStage())
+        super.onSaveInstanceState(outState)
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -200,11 +214,18 @@ class MainActivity : AppCompatActivity() {
                     runOnUiThread {
                         if (activityDestroyed) return@runOnUiThread
                         outputUri = stored
+                        startupCoordinator.setOutputReady(true)
                         updateOutputSummary(metadata.displayName)
                         updateControls()
+                        evaluateStartupProcessing()
                     }
                 }.onFailure {
                     selectionStore.clearOutputUri()
+                    runOnUiThread {
+                        if (activityDestroyed) return@runOnUiThread
+                        startupCoordinator.setOutputReady(false)
+                        evaluateStartupProcessing()
+                    }
                 }
             }
         }
@@ -224,16 +245,19 @@ class MainActivity : AppCompatActivity() {
                         if (activityDestroyed) return@runOnUiThread
                         folderChecking = false
                         folderUri = stored
+                        startupCoordinator.setFolderReady(true)
                         updateFolderSummary(name)
                         updateControls()
                         refreshCatalog()
-                        scanFolder()
+                        scanFolder(FolderScanOrigin.STARTUP)
                     }
                 }.onFailure {
                     selectionStore.clearFolderUri()
                     runOnUiThread {
                         if (activityDestroyed) return@runOnUiThread
                         folderChecking = false
+                        startupCoordinator.setFolderReady(false)
+                        evaluateStartupProcessing()
                     }
                     showError(it.message ?: "Audio folder is not readable")
                 }
@@ -257,12 +281,21 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     if (activityDestroyed) return@runOnUiThread
                     outputUri = uri
+                    startupCoordinator.setOutputReady(true)
                     updateOutputSummary(metadata.displayName)
                     statusError = null
                     renderStatusBlock()
                     updateControls()
+                    evaluateStartupProcessing()
                 }
-            }.onFailure { showError(it.message ?: "Output file is not writable") }
+            }.onFailure {
+                runOnUiThread {
+                    if (activityDestroyed) return@runOnUiThread
+                    startupCoordinator.setOutputReady(false)
+                    evaluateStartupProcessing()
+                }
+                showError(it.message ?: "Output file is not writable")
+            }
         }
     }
 
@@ -286,6 +319,7 @@ class MainActivity : AppCompatActivity() {
                     if (activityDestroyed) return@runOnUiThread
                     folderChecking = false
                     folderUri = uri
+                    startupCoordinator.setFolderReady(true)
                     updateFolderSummary(name)
                     statusError = null
                     renderStatusBlock()
@@ -297,15 +331,21 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     if (activityDestroyed) return@runOnUiThread
                     folderChecking = false
+                    startupCoordinator.setFolderReady(false)
+                    evaluateStartupProcessing()
                 }
                 showError(it.message ?: "Audio folder is not readable")
             }
         }
     }
 
-    private fun scanFolder() {
+    private fun scanFolder(origin: FolderScanOrigin = FolderScanOrigin.USER) {
         val folder = folderUri ?: return
         if (folderChecking || folderScanQueued || scanning || transcriptionActive()) return
+        val generation = ++scanGeneration
+        val startupGeneration = generation.takeIf {
+            origin == FolderScanOrigin.STARTUP && startupCoordinator.beginStartupScan(generation)
+        }
         folderScanQueued = true
         transcriptionFinished = false
         transcriptionPhase = null
@@ -338,20 +378,22 @@ class MainActivity : AppCompatActivity() {
                     folderScanQueued = false
                     scanning = false
                     scanMessage = "Scan complete: $count audio files"
-                    refreshCatalog()
+                    refreshCatalog(startupGeneration)
                 }
             }.onFailure { error ->
                 runOnUiThread {
                     if (activityDestroyed) return@runOnUiThread
                     folderScanQueued = false
                     scanning = false
+                    startupGeneration?.let(startupCoordinator::onStartupScanFailed)
+                    evaluateStartupProcessing()
                     showError(error.message ?: "Folder scan failed")
                 }
             }
         }
     }
 
-    private fun refreshCatalog() {
+    private fun refreshCatalog(startupGeneration: Long? = null) {
         if (activityDestroyed) return
         val folder = folderUri?.toString()
         if (folder == null) {
@@ -371,9 +413,20 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 if (activityDestroyed) return@runOnUiThread
                 pendingCount = newEntries.count { it.state == AudioFileState.PENDING }
+                val catalogFailedCount = newEntries.count { it.state == AudioFileState.FAILED }
                 renderEntries(entries)
                 renderStatusBlock()
                 updateControls()
+                if (startupGeneration != null) {
+                    startupCoordinator.onStartupCatalogReady(
+                        startupGeneration,
+                        pendingCount,
+                        catalogFailedCount,
+                    )
+                } else {
+                    startupCoordinator.onCatalogRefreshed(pendingCount, catalogFailedCount)
+                }
+                evaluateStartupProcessing()
             }
         }
     }
@@ -566,6 +619,8 @@ class MainActivity : AppCompatActivity() {
                 setModelUi(state.message, loading = false, canDownload = true)
             }
         }
+        startupCoordinator.setModelReady(modelReady)
+        evaluateStartupProcessing()
     }
 
     private fun setModelUi(message: String, loading: Boolean, canDownload: Boolean) {
@@ -587,6 +642,7 @@ class MainActivity : AppCompatActivity() {
                     WorkInfo.State.RUNNING,
                     -> {
                         modelReady = false
+                        startupCoordinator.setModelReady(false)
                         val bytes = info.progress.getLong(SpeechModelDownloadWorker.KEY_BYTES_DOWNLOADED, 0)
                         val total = info.progress.getLong(
                             SpeechModelDownloadWorker.KEY_TOTAL_BYTES,
@@ -600,6 +656,7 @@ class MainActivity : AppCompatActivity() {
                         modelDownloadProgress = ((bytes * 100) / total.coerceAtLeast(1)).toInt()
                         renderStatusBlock()
                         updateControls()
+                        evaluateStartupProcessing()
                     }
                     WorkInfo.State.SUCCEEDED -> {
                         if (shouldHandleModelInstallSuccess(info.id.toString())) {
@@ -609,6 +666,7 @@ class MainActivity : AppCompatActivity() {
                     }
                     WorkInfo.State.FAILED -> {
                         modelReady = false
+                        startupCoordinator.setModelReady(false)
                         setModelUi(
                             info.outputData.getString(SpeechModelDownloadWorker.KEY_ERROR)
                                 ?: "Speech model download failed",
@@ -616,6 +674,7 @@ class MainActivity : AppCompatActivity() {
                             true,
                         )
                         updateControls()
+                        evaluateStartupProcessing()
                     }
                     else -> Unit
                 }
@@ -627,6 +686,11 @@ class MainActivity : AppCompatActivity() {
             .getWorkInfosForUniqueWorkLiveData(TranscriptionWorker.UNIQUE_WORK_NAME)
             .observe(this) { infos ->
                 transcriptionState = classifyTranscriptionState(infos)
+                startupCoordinator.setTranscriptionState(
+                    known = true,
+                    active = transcriptionActive(),
+                )
+                evaluateStartupProcessing()
                 if (infos.isEmpty()) {
                     transcriptionFinished = false
                     renderStatusBlock()
@@ -709,6 +773,40 @@ class MainActivity : AppCompatActivity() {
         val output = outputUri ?: return
         stopPreviewPlayback(render = true)
         currentSessionTranscriptionWorkId = TranscriptionWorker.enqueueAll(this, folder, output)
+    }
+
+    private fun evaluateStartupProcessing() {
+        when (val decision = startupCoordinator.evaluate(startupPolicyStore.load())) {
+            is StartupProcessingDecision.Prompt -> {
+                if (
+                    !supportFragmentManager.isStateSaved &&
+                    supportFragmentManager.findFragmentByTag(StartupProcessingDialogFragment.TAG) == null
+                ) {
+                    StartupProcessingDialogFragment.newInstance(decision.pendingCount)
+                        .show(supportFragmentManager, StartupProcessingDialogFragment.TAG)
+                }
+            }
+            is StartupProcessingDecision.Start -> startBatchTranscription()
+            is StartupProcessingDecision.Finish,
+            StartupProcessingDecision.Wait,
+            -> Unit
+        }
+    }
+
+    override fun onStartupProcessingConfirmed(remember: Boolean) {
+        if (!startupCoordinator.confirmPrompt()) return
+        if (remember) {
+            startupPolicyStore.save(StartupProcessingPolicy.AUTOMATIC)
+        }
+        evaluateStartupProcessing()
+    }
+
+    override fun onStartupProcessingDeclined(remember: Boolean) {
+        if (!startupCoordinator.declinePrompt()) return
+        if (remember) {
+            startupPolicyStore.save(StartupProcessingPolicy.LEAVE_QUEUED)
+        }
+        updateControls()
     }
 
     private fun transcriptionActive(): Boolean = transcriptionState == TranscriptionObservationState.ACTIVE
@@ -942,10 +1040,16 @@ class MainActivity : AppCompatActivity() {
     private data class PreviewButtonTag(val entryId: Long)
     private data class RetryButtonTag(val entryId: Long)
 
+    private enum class FolderScanOrigin {
+        STARTUP,
+        USER,
+    }
+
     private companion object {
         const val MENU_ENTRY_PLAY = 1
         const val MENU_ENTRY_RETRY = 2
         const val MENU_ENTRY_SHOW_TEXT = 3
+        const val STATE_STARTUP_PROCESSING_STAGE = "startup-processing-stage"
         val ACTIVE_WORK_STATES = setOf(
             WorkInfo.State.ENQUEUED,
             WorkInfo.State.BLOCKED,

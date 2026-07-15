@@ -80,6 +80,54 @@
                     android:text="@string/output_not_selected" />
             </LinearLayout>
 
+            <TextView
+                android:id="@+id/startupProcessingTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="@string/settings_startup_processing_title"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/startupProcessingSubtitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/settings_startup_processing_subtitle" />
+
+            <RadioGroup
+                android:id="@+id/startupProcessingPolicy"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="vertical">
+
+                <RadioButton
+                    android:id="@+id/startupProcessingAsk"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_startup_processing_ask" />
+
+                <RadioButton
+                    android:id="@+id/startupProcessingAutomatic"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_startup_processing_automatic" />
+
+                <RadioButton
+                    android:id="@+id/startupProcessingLeaveQueued"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_startup_processing_leave_queued" />
+            </RadioGroup>
+
+            <TextView
+                android:id="@+id/startupProcessingNote"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/settings_startup_processing_note" />
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
