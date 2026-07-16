@@ -69,6 +69,7 @@ class BatchTranscriptionUseCaseTest {
 
         assertEquals(AudioFileState.FAILED, catalog.entry(1).state)
         assertEquals("decode failed", catalog.entry(1).lastError)
+        assertEquals(1234, catalog.entry(1).processedAtMillis)
         assertEquals(AudioFileState.PROCESSED, catalog.entry(2).state)
         assertEquals(BatchTranscriptionResult(2, 2, 1, "Completed 2 of 2, 1 failed", 100, false), result)
         assertEquals("Completed 1 of 2, 1 failed", progress.first { it.filename == null }.phase)
@@ -103,6 +104,7 @@ class BatchTranscriptionUseCaseTest {
         assertEquals(
             BatchTranscriptionProgress(
                 phase = "Transcribing",
+                activeEntryId = 1,
                 filename = "one.wav",
                 completed = 0,
                 total = 1,
@@ -113,6 +115,8 @@ class BatchTranscriptionUseCaseTest {
             ),
             progress.first(),
         )
+        assertEquals(1L, progress.first().activeEntryId)
+        assertNull(progress.last().activeEntryId)
     }
 
     private fun useCase(
@@ -180,6 +184,11 @@ class BatchTranscriptionUseCaseTest {
                     transcriptText = null,
                 )
             }
+        }
+
+        override fun markFailedAt(id: Long, message: String, processedAtMillis: Long) {
+            markFailed(id, message)
+            update(id) { it.copy(processedAtMillis = processedAtMillis) }
         }
 
         override fun markPending(id: Long) {

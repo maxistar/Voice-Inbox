@@ -74,6 +74,8 @@ struct IosSingleFileTranscriptionState {
 @MainActor
 final class IosSingleFileTranscriptionController: ObservableObject {
     @Published private(set) var state = IosSingleFileTranscriptionState.idle
+    @Published private(set) var preparationOwnerFileId: Int64?
+    @Published private(set) var prerequisiteError: String?
     @Published var message: String?
 
     private var task: Task<Void, Never>?
@@ -101,6 +103,8 @@ final class IosSingleFileTranscriptionController: ObservableObject {
         onSuccess: ((String) -> Void)? = nil
     ) {
         task?.cancel()
+        preparationOwnerFileId = file.id
+        prerequisiteError = nil
         state = IosSingleFileTranscriptionState(
             active: true,
             fileId: file.id,
@@ -122,7 +126,9 @@ final class IosSingleFileTranscriptionController: ObservableObject {
                 claim: { store.markProcessing(fileId: file.id) }
             )
             guard prepared else {
-                message = modelStore.message ?? "Speech model preparation failed."
+                let error = modelStore.message ?? "Speech model preparation failed."
+                prerequisiteError = error
+                message = error
                 state = .idle
                 return
             }
@@ -139,6 +145,7 @@ final class IosSingleFileTranscriptionController: ObservableObject {
                     modelPrepared: true
                 ) { progress in
                     Task { @MainActor in
+                        self.preparationOwnerFileId = nil
                         self.state = IosSingleFileTranscriptionState(
                             active: true,
                             fileId: file.id,
@@ -175,6 +182,8 @@ final class IosSingleFileTranscriptionController: ObservableObject {
                 store.markFailed(fileId: file.id, error: error)
                 message = error
             }
+            preparationOwnerFileId = nil
+            prerequisiteError = nil
             state = .idle
         }
     }
@@ -188,6 +197,14 @@ final class IosSingleFileTranscriptionController: ObservableObject {
     ) {
         guard !state.active else { return }
         task?.cancel()
+        preparationOwnerFileId = store.files
+            .filter { $0.status == .pending }
+            .sorted {
+                if $0.importedAt != $1.importedAt { return $0.importedAt < $1.importedAt }
+                return $0.id < $1.id
+            }
+            .first?.id
+        prerequisiteError = nil
         state = IosSingleFileTranscriptionState(
             active: true,
             fileId: nil,
@@ -205,7 +222,9 @@ final class IosSingleFileTranscriptionController: ObservableObject {
 
         task = Task {
             guard await modelStore.prepareForTranscription() != nil else {
-                message = modelStore.message ?? "Speech model preparation failed."
+                let error = modelStore.message ?? "Speech model preparation failed."
+                prerequisiteError = error
+                message = error
                 state = .idle
                 return
             }
@@ -219,9 +238,10 @@ final class IosSingleFileTranscriptionController: ObservableObject {
                     outputDocument: outputDocument
                 ) { progress in
                     Task { @MainActor in
+                        self.preparationOwnerFileId = nil
                         self.state = IosSingleFileTranscriptionState(
                             active: true,
-                            fileId: nil,
+                            fileId: progress.activeEntryId?.int64Value,
                             fileName: progress.filename,
                             phase: progress.phase,
                             processedUs: progress.processedUs?.int64Value ?? 0,
@@ -243,6 +263,8 @@ final class IosSingleFileTranscriptionController: ObservableObject {
             }
 
             message = outcome.summary
+            preparationOwnerFileId = nil
+            prerequisiteError = nil
             state = IosSingleFileTranscriptionState(
                 active: false,
                 fileId: nil,

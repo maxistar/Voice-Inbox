@@ -145,6 +145,10 @@ final class IosSpeechModelStore: ObservableObject {
         isInstalling || downloadTask != nil
     }
 
+    var canCancelDownload: Bool {
+        downloadTask != nil
+    }
+
     func reload() {
         status = inspectInstallation(installationDirectory)
     }

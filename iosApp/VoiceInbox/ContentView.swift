@@ -25,117 +25,90 @@ struct ContentView: View {
         let transcriptionBackendConfigured = transcriber.backendConfigured
         let speechModelReady = speechModelStore.isReady
         let outputReady = outputStore.isReady
-        let storageSetupComplete = outputReady && !importStore.inboxFolderStatus.needsSelection
         let transcriptionReady = transcriptionBackendConfigured && speechModelReady && !speechModelStore.isBusy && outputReady
-        let modelStatusMessage = iOSModelStatusMessage(
-            transcriptionBackendConfigured: transcriptionBackendConfigured,
-            speechModelReady: speechModelReady
-        )
         let modelDownloadAvailable = !speechModelReady && !speechModelStore.isBusy
-        let modelSetupVisible = !transcriptionBackendConfigured || !speechModelReady || speechModelStore.isBusy
         let screen = shellState.screen(
             selection: selectedTab,
             importedFiles: importStore.files,
-            runtimeReady: transcriptionBackendConfigured,
-            modelReady: speechModelReady,
+            modelStatus: speechModelStore.status,
+            modelMessage: speechModelStore.message,
             modelInstalling: speechModelStore.isInstalling,
             modelDownloadAvailable: modelDownloadAvailable,
             modelDownloadProgress: speechModelStore.downloadProgress?.percent,
-            modelMessage: modelStatusMessage,
-            outputReady: outputReady,
+            modelCanCancel: speechModelStore.canCancelDownload,
+            outputStatus: outputStore.status,
+            folderStatus: importStore.inboxFolderStatus,
+            folderScanning: importStore.isScanningFolder,
             activePreviewEntryId: previewPlayer.playingFileId,
             previewState: previewPlayer.playingFileId == nil ? PreviewPlaybackState.idle : PreviewPlaybackState.playing,
-            transcription: transcriber.state
+            transcription: transcriber.state,
+            preparationOwnerEntryId: transcriber.preparationOwnerFileId,
+            prerequisiteError: transcriber.prerequisiteError,
+            actionsEnabled: transcriptionReady && !transcriber.isActive && !importStore.isScanningFolder
         )
 
         NavigationStack {
             List {
-
-                Section("Status") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(screen.state.status.title)
-                            .font(.headline)
-                        if let detail = screen.state.status.detail {
-                            Text(detail)
-                                .foregroundStyle(.secondary)
-                        }
-                        if let meta = screen.state.status.meta {
-                            Text(meta)
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
+                Section {
                     Picker("Catalog", selection: $selectedTab) {
                         ForEach(IosShellCatalogSelection.allCases) { tab in
                             Text(tab.title).tag(tab)
                         }
                     }
                     .pickerStyle(.segmented)
+                    .accessibilityIdentifier("task-list-filter")
+                }
 
-                    if screen.state.list.transcribeAllVisible {
-                        Button {
-                            guard let outputDocument = outputStore.currentDocument() else {
-                                outputStore.refreshAccess()
-                                return
-                            }
-                            previewPlayer.stop()
-                            transcriber.transcribeAll(
-                                modelDirectory: speechModelStore.modelDirectory,
-                                modelStore: speechModelStore,
-                                outputDocument: outputDocument,
-                                store: importStore,
-                                onFinished: {
-                                    selectedTab = .processed
+                Section {
+                    if let emptyMessage = screen.state.emptyMessage {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(emptyMessage)
+                                .foregroundStyle(.secondary)
+                            ForEach(Array(screen.state.emptyActions.enumerated()), id: \.offset) { _, action in
+                                Button(action.label) {
+                                    perform(action: action, task: nil, screen: screen)
                                 }
-                            )
-                        } label: {
-                            Label("Transcribe All", systemImage: "text.badge.checkmark")
+                                .disabled(!action.enabled)
+                            }
                         }
-                            .disabled(!screen.state.list.transcribeAllEnabled)
-                    }
+                    } else {
+                        ForEach(screen.state.tasks.filter { $0 is SetupTaskPresentation }, id: \.stableId) { task in
+                            TaskListRow(task: task) { action in
+                                perform(action: action, task: task, screen: screen)
+                            }
+                            .id(task.stableId)
+                            .accessibilityIdentifier("task-row-\(task.stableId)")
+                        }
 
+                        if screen.state.batchAction.visible {
+                            Button {
+                                transcribeAll()
+                            } label: {
+                                Label(
+                                    "Transcribe All (\(screen.state.batchAction.eligibleCount))",
+                                    systemImage: "text.badge.checkmark"
+                                )
+                            }
+                            .disabled(!screen.state.batchAction.enabled)
+                            .accessibilityIdentifier("transcribe-all")
+                        }
+
+                        ForEach(screen.state.tasks.filter { $0 is AudioTaskPresentation }, id: \.stableId) { task in
+                            TaskListRow(task: task) { action in
+                                perform(action: action, task: task, screen: screen)
+                            }
+                            .id(task.stableId)
+                            .accessibilityIdentifier("task-row-\(task.stableId)")
+                        }
+                    }
+                }
+
+                Section {
                     Button {
                         showingImporter = true
                     } label: {
                         Label("Import Audio Files", systemImage: "square.and.arrow.down")
                     }
-
-                    if !outputReady {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(outputStore.status.title)
-                                .font(.headline)
-                            Text(outputStore.status.message)
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Button {
-                            showingOutputPicker = true
-                        } label: {
-                            Label("Select Output File", systemImage: "doc.badge.plus")
-                        }
-                    }
-
-                    if importStore.inboxFolderStatus.needsSelection {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(importStore.inboxFolderStatus.title)
-                                .font(.headline)
-                            if let message = importStore.inboxFolderStatus.message {
-                                Text(message)
-                                    .font(.footnote)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-
-                        Button {
-                            showingInboxFolderPicker = true
-                        } label: {
-                            Label("Select Audio Folder", systemImage: "folder")
-                        }
-                        .disabled(importStore.isScanningFolder)
-                    }
-
                     if !importStore.inboxFolderStatus.needsSelection {
                         Button {
                             importStore.refreshInboxFolder()
@@ -145,209 +118,7 @@ struct ContentView: View {
                         }
                         .disabled(importStore.isScanningFolder)
                     }
-
-                    if importStore.isScanningFolder {
-                        ProgressView()
-                    }
                 }
-
-                Section {
-                    if screen.state.list.emptyVisible {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(screen.state.list.emptyMessage)
-                                .foregroundStyle(.secondary)
-                            Button {
-                                showingInboxFolderPicker = true
-                            } label: {
-                                Label("Select Audio Folder", systemImage: "folder")
-                            }
-                            Button {
-                                showingImporter = true
-                            } label: {
-                                Label("Import Audio Files", systemImage: "square.and.arrow.down")
-                            }
-                        }
-                    } else {
-                        ForEach(screen.rows) { row in
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack(alignment: .top) {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(row.title)
-                                            .font(.headline)
-                                        Text(row.subtitle)
-                                            .font(.subheadline)
-                                            .foregroundStyle(.secondary)
-                                    }
-
-                                    Spacer()
-
-                                    Text(row.badge)
-                                        .font(.caption)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(.thinMaterial)
-                                        .clipShape(Capsule())
-                                }
-
-                                HStack {
-                                    if let importedFile = importedFile(for: row) {
-                                        Button {
-                                            previewPlayer.toggle(
-                                                fileId: importedFile.id,
-                                                url: importStore.localURL(for: importedFile)
-                                            )
-                                        } label: {
-                                            Label(
-                                                previewPlayer.playingFileId == importedFile.id ? "Stop" : row.state.preview.label,
-                                                systemImage: previewPlayer.playingFileId == importedFile.id ? "stop.fill" : "play.fill"
-                                            )
-                                        }
-                                        .disabled(
-                                            transcriber.isActive ||
-                                                !row.state.preview.enabled
-                                        )
-
-                                        if importedFile.status == .pending {
-                                            Button {
-                                                guard let outputDocument = outputStore.currentDocument() else {
-                                                    outputStore.refreshAccess()
-                                                    return
-                                                }
-                                                transcriber.transcribe(
-                                                    file: importedFile,
-                                                    localURL: importStore.localURL(for: importedFile),
-                                                    modelDirectory: speechModelStore.modelDirectory,
-                                                    modelStore: speechModelStore,
-                                                    outputDocument: outputDocument,
-                                                    store: importStore,
-                                                    onSuccess: { transcript in
-                                                        shownTranscript = transcript
-                                                        selectedTab = .processed
-                                                    }
-                                                )
-                                            } label: {
-                                                Label("Transcribe", systemImage: "text.badge.checkmark")
-                                            }
-                                            .disabled(
-                                                transcriber.isActive ||
-                                                    !transcriptionReady
-                                            )
-                                        }
-
-                                        if importedFile.status == .failed {
-                                            Button {
-                                                guard let outputDocument = outputStore.currentDocument() else {
-                                                    outputStore.refreshAccess()
-                                                    return
-                                                }
-                                                transcriber.retry(
-                                                    file: importedFile,
-                                                    localURL: importStore.localURL(for: importedFile),
-                                                    modelDirectory: speechModelStore.modelDirectory,
-                                                    modelStore: speechModelStore,
-                                                    outputDocument: outputDocument,
-                                                    store: importStore,
-                                                    onSuccess: { transcript in
-                                                        shownTranscript = transcript
-                                                        selectedTab = .processed
-                                                    }
-                                                )
-                                            } label: {
-                                                Label("Retry", systemImage: "arrow.clockwise")
-                                            }
-                                            .disabled(
-                                                transcriber.isActive ||
-                                                    !transcriptionReady
-                                            )
-                                        }
-                                    }
-
-                                    if row.state.showTextVisible {
-                                        Button("Show Text") {
-                                            shownTranscript = row.transcriptText
-                                        }
-                                    }
-                                }
-                                .buttonStyle(.bordered)
-                                .font(.caption)
-                            }
-                            .padding(.vertical, 4)
-                        }
-                    }
-                } header: {
-                    if !storageSetupComplete {
-                        Text(selectedTab.title)
-                    }
-                }
-
-                if let importMessage = importStore.importMessage {
-                    Section("Import result") {
-                        Text(importMessage)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                if let playbackError = previewPlayer.errorMessage {
-                    Section("Playback") {
-                        Text(playbackError)
-                            .foregroundStyle(.secondary)
-                        Button("Dismiss") {
-                            previewPlayer.clearError()
-                        }
-                    }
-                }
-
-                if modelSetupVisible {
-                    Section("Transcription Setup") {
-                        if !transcriptionBackendConfigured {
-                            Text(IosSingleFileTranscriptionController.backendUnavailableMessage)
-                                .foregroundStyle(.secondary)
-                        }
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(speechModelStore.status.summary)
-                            if speechModelStore.isInstalling {
-                                if let progress = speechModelStore.downloadProgress {
-                                    ProgressView(value: Double(progress.percent), total: 100)
-                                    Text("\(progress.percent)% • \(formatBytes(progress.bytesDownloaded)) of \(formatBytes(progress.totalBytes))")
-                                        .font(.footnote)
-                                        .foregroundStyle(.secondary)
-                                } else {
-                                    ProgressView()
-                                }
-                            }
-                            if let detail = speechModelStore.status.detail {
-                                Text(detail)
-                                    .font(.footnote)
-                                    .foregroundStyle(.secondary)
-                            }
-                            if let modelMessage = speechModelStore.message {
-                                Text(modelMessage)
-                                    .font(.footnote)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-
-                        if modelDownloadAvailable {
-                            Button {
-                                speechModelStore.downloadModel()
-                            } label: {
-                                Label("Download Speech Model", systemImage: "arrow.down.circle")
-                            }
-                            .buttonStyle(.borderedProminent)
-                        }
-
-                        if !speechModelReady {
-                            Button {
-                                showingModelImporter = true
-                            } label: {
-                                Label("Install Speech Model Manually", systemImage: "square.and.arrow.down")
-                            }
-                            .disabled(speechModelStore.isBusy)
-                        }
-
-                    }
-                }
-
             }
             .navigationTitle("Voice Inbox")
             .toolbar {
@@ -443,6 +214,13 @@ struct ContentView: View {
                     }
                 )
             }
+            .alert(item: globalMessageBinding) { message in
+                Alert(
+                    title: Text(message.title),
+                    message: Text(message.text),
+                    dismissButton: .default(Text("OK"))
+                )
+            }
         }
     }
 
@@ -457,9 +235,111 @@ struct ContentView: View {
         )
     }
 
-    private func importedFile(for row: IosShellAudioRow) -> IosImportedAudioFile? {
-        guard row.imported else { return nil }
-        return importStore.files.first { $0.id == row.id }
+    private var globalMessageBinding: Binding<IosGlobalMessage?> {
+        Binding(
+            get: {
+                if let error = previewPlayer.errorMessage {
+                    return IosGlobalMessage(title: "Playback", text: error)
+                }
+                if let message = importStore.importMessage {
+                    return IosGlobalMessage(title: "Voice Inbox", text: message)
+                }
+                return nil
+            },
+            set: { value in
+                guard value == nil else { return }
+                previewPlayer.clearError()
+                importStore.importMessage = nil
+            }
+        )
+    }
+
+    private func perform(
+        action: TaskActionPresentation,
+        task: TaskPresentation?,
+        screen: IosTaskListScreen
+    ) {
+        guard action.enabled, let route = IosTaskActionRouter.route(action.kind) else { return }
+        switch route {
+        case .modelDownload:
+            speechModelStore.downloadModel()
+        case .modelImport:
+            showingModelImporter = true
+        case .modelCancel:
+            speechModelStore.cancelDownload()
+        case .outputSelection:
+            showingOutputPicker = true
+        case .folderSelection:
+            showingInboxFolderPicker = true
+        case .folderRefresh:
+            importStore.refreshInboxFolder()
+            selectedTab = .new
+        case .audioImport:
+            showingImporter = true
+        case .transcribe, .retry, .play, .stop, .showText:
+            guard let audioTask = task as? AudioTaskPresentation,
+                  let file = screen.filesById[audioTask.entryId] else { return }
+            performAudio(action: action.kind, file: file)
+        }
+    }
+
+    private func performAudio(action: TaskActionKind, file: IosImportedAudioFile) {
+        switch action {
+        case .play:
+            previewPlayer.toggle(fileId: file.id, url: importStore.localURL(for: file))
+        case .stop:
+            previewPlayer.stop()
+        case .showText:
+            shownTranscript = file.transcriptText
+        case .transcribe, .retryTranscription:
+            guard let outputDocument = outputStore.currentDocument() else {
+                outputStore.refreshAccess()
+                return
+            }
+            previewPlayer.stop()
+            let onSuccess: (String) -> Void = { transcript in
+                shownTranscript = transcript
+                selectedTab = .processed
+            }
+            if action == .retryTranscription {
+                transcriber.retry(
+                    file: file,
+                    localURL: importStore.localURL(for: file),
+                    modelDirectory: speechModelStore.modelDirectory,
+                    modelStore: speechModelStore,
+                    outputDocument: outputDocument,
+                    store: importStore,
+                    onSuccess: onSuccess
+                )
+            } else {
+                transcriber.transcribe(
+                    file: file,
+                    localURL: importStore.localURL(for: file),
+                    modelDirectory: speechModelStore.modelDirectory,
+                    modelStore: speechModelStore,
+                    outputDocument: outputDocument,
+                    store: importStore,
+                    onSuccess: onSuccess
+                )
+            }
+        default:
+            break
+        }
+    }
+
+    private func transcribeAll() {
+        guard let outputDocument = outputStore.currentDocument() else {
+            outputStore.refreshAccess()
+            return
+        }
+        previewPlayer.stop()
+        transcriber.transcribeAll(
+            modelDirectory: speechModelStore.modelDirectory,
+            modelStore: speechModelStore,
+            outputDocument: outputDocument,
+            store: importStore,
+            onFinished: { selectedTab = .processed }
+        )
     }
 
     private func refreshStartupSources() {
@@ -530,31 +410,87 @@ struct ContentView: View {
         )
     }
 
-    private func iOSModelStatusMessage(
-        transcriptionBackendConfigured: Bool,
-        speechModelReady: Bool
-    ) -> String {
-        if !transcriptionBackendConfigured {
-            return IosSingleFileTranscriptionController.backendUnavailableMessage
+}
+
+private struct TaskListRow: View {
+    let task: TaskPresentation
+    let onAction: (TaskActionPresentation) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(task.title)
+                        .font(.headline)
+                    if let detail = task.detail, !detail.isEmpty {
+                        Text(detail)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+                Text(task.badge)
+                    .font(.caption)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.thinMaterial)
+                    .clipShape(Capsule())
+            }
+
+            if let error = task.errorMessage, !error.isEmpty {
+                Text(error)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
+
+            if let progress = task.progress {
+                VStack(alignment: .leading, spacing: 4) {
+                    if let percent = progress.percent?.int32Value {
+                        ProgressView(value: Double(percent), total: 100)
+                        .accessibilityIdentifier("task-progress-\(task.stableId)")
+                    } else {
+                        ProgressView()
+                            .accessibilityIdentifier("task-progress-\(task.stableId)")
+                    }
+                    Text(progressLabel(progress))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if !task.actions.isEmpty {
+                HStack {
+                    ForEach(Array(task.actions.enumerated()), id: \.offset) { _, action in
+                        Button(action.label) { onAction(action) }
+                            .disabled(!action.enabled)
+                            .accessibilityIdentifier("task-action-\(task.stableId)-\(action.kind.name.lowercased())")
+                    }
+                }
+                .buttonStyle(.bordered)
+                .font(.caption)
+            }
         }
-        if let progress = speechModelStore.downloadProgress {
-            return progress.message
-        }
-        if speechModelStore.isInstalling {
-            return "Installing speech model..."
-        }
-        if !speechModelReady {
-            return speechModelStore.status.summary
-        }
-        return "Ready"
+        .padding(.vertical, 4)
     }
 
-    private func formatBytes(_ bytes: Int64) -> String {
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useMB, .useGB]
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: bytes)
+    private func progressLabel(_ progress: TaskProgressPresentation) -> String {
+        var parts = [progress.phase]
+        if let completed = progress.completedFiles?.int32Value,
+           let total = progress.totalFiles?.int32Value,
+           total > 0 {
+            parts.append("\(completed) / \(total) files")
+        }
+        if let failed = progress.failedFiles?.int32Value, failed > 0 {
+            parts.append("\(failed) failed")
+        }
+        return parts.joined(separator: " • ")
     }
+}
+
+private struct IosGlobalMessage: Identifiable {
+    let id = UUID()
+    let title: String
+    let text: String
 }
 
 private struct IosDisplayedTranscript: Identifiable {

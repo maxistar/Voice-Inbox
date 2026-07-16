@@ -64,6 +64,7 @@ struct IosImportedAudioFile: Codable, Identifiable, Equatable {
     var transcriptText: String?
     var durationUs: Int64?
     var lastError: String?
+    var processedAt: Date?
 
     init(
         id: Int64,
@@ -74,7 +75,8 @@ struct IosImportedAudioFile: Codable, Identifiable, Equatable {
         status: IosImportedAudioStatus = .pending,
         transcriptText: String? = nil,
         durationUs: Int64? = nil,
-        lastError: String? = nil
+        lastError: String? = nil,
+        processedAt: Date? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -85,6 +87,7 @@ struct IosImportedAudioFile: Codable, Identifiable, Equatable {
         self.transcriptText = transcriptText
         self.durationUs = durationUs
         self.lastError = lastError
+        self.processedAt = processedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -98,6 +101,7 @@ struct IosImportedAudioFile: Codable, Identifiable, Equatable {
         transcriptText = try container.decodeIfPresent(String.self, forKey: .transcriptText)
         durationUs = try container.decodeIfPresent(Int64.self, forKey: .durationUs)
         lastError = try container.decodeIfPresent(String.self, forKey: .lastError)
+        processedAt = try container.decodeIfPresent(Date.self, forKey: .processedAt)
     }
 
     var formattedSize: String {
@@ -128,12 +132,33 @@ struct IosAudioImportSummary {
         if failed > 0 { parts.append("\(failed) failed") }
         return parts.isEmpty ? "No files imported" : parts.joined(separator: ", ")
     }
+
+    var alertMessage: String? {
+        failed > 0 ? message : nil
+    }
 }
 
 struct IosInboxFolderStatus {
     let displayName: String?
     let message: String?
     let needsSelection: Bool
+    let hasError: Bool
+
+    init(displayName: String?, message: String?, needsSelection: Bool) {
+        self.init(
+            displayName: displayName,
+            message: message,
+            needsSelection: needsSelection,
+            hasError: false
+        )
+    }
+
+    init(displayName: String?, message: String?, needsSelection: Bool, hasError: Bool) {
+        self.displayName = displayName
+        self.message = message
+        self.needsSelection = needsSelection
+        self.hasError = hasError
+    }
 
     var title: String {
         displayName ?? "No audio folder selected"
@@ -171,7 +196,7 @@ final class IosAudioImportStore: ObservableObject {
     func importFiles(from urls: [URL]) {
         let summary = copySupportedFiles(from: urls)
         load()
-        importMessage = summary.message
+        importMessage = summary.alertMessage
     }
 
     @discardableResult
@@ -190,7 +215,7 @@ final class IosAudioImportStore: ObservableObject {
 
         let summary = copySupportedSharedFiles(from: stagedFiles)
         load()
-        importMessage = summary.message
+        importMessage = summary.alertMessage
         return summary
     }
 
@@ -235,10 +260,13 @@ final class IosAudioImportStore: ObservableObject {
         isScanningFolder = false
         inboxFolderStatus = IosInboxFolderStatus(
             displayName: folder.url.lastPathComponent,
-            message: summary.message,
-            needsSelection: false
+            message: summary.failed > 0
+                ? "Audio folder scan failed. Check folder access and try again."
+                : summary.message,
+            needsSelection: false,
+            hasError: summary.failed > 0
         )
-        importMessage = summary.message
+        importMessage = nil
     }
 
     func localURL(for file: IosImportedAudioFile) -> URL {
@@ -273,7 +301,7 @@ final class IosAudioImportStore: ObservableObject {
     }
 
     func markFailed(fileId: Int64, error: String) {
-        catalog.markFailed(id: fileId, message: error)
+        catalog.markFailedAt(id: fileId, message: error, processedAtMillis: currentTimeMillis())
         load()
     }
 
@@ -577,7 +605,10 @@ final class IosAudioImportStore: ObservableObject {
             status: IosImportedAudioStatus(sharedState: file.state),
             transcriptText: file.transcriptText,
             durationUs: file.durationUs?.int64Value,
-            lastError: file.lastError
+            lastError: file.lastError,
+            processedAt: file.processedAtMillis.map {
+                Date(timeIntervalSince1970: Double($0.int64Value) / 1000)
+            }
         )
     }
 

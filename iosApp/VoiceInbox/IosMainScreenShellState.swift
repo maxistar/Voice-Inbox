@@ -4,225 +4,204 @@ import Shared
 enum IosShellCatalogSelection: String, CaseIterable, Identifiable {
     case new
     case processed
+    case all
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .new:
-            "New"
-        case .processed:
-            "Processed"
+        case .new: "New"
+        case .processed: "Processed"
+        case .all: "All"
         }
     }
 
-    var sharedTab: MainScreenCatalogTab {
+    var sharedFilter: TaskListFilter {
         switch self {
-        case .new:
-            MainScreenCatalogTab.theNew
-        case .processed:
-            MainScreenCatalogTab.processed
+        case .new: .theNew
+        case .processed: .processed
+        case .all: .all
         }
     }
 }
 
-struct IosShellMainScreen {
-    let state: MainScreenState
-    let rows: [IosShellAudioRow]
+struct IosTaskListScreen {
+    let state: TaskListState
+    let filesById: [Int64: IosImportedAudioFile]
 }
 
-struct IosShellAudioRow: Identifiable {
-    let id: Int64
-    let title: String
-    let subtitle: String
-    let badge: String
-    let imported: Bool
-    let status: IosImportedAudioStatus?
-    let transcriptText: String?
-    let lastError: String?
-    let state: MainScreenRowState
+enum IosTaskActionRoute: Equatable {
+    case modelDownload
+    case modelImport
+    case modelCancel
+    case outputSelection
+    case folderSelection
+    case folderRefresh
+    case transcribe
+    case retry
+    case play
+    case stop
+    case showText
+    case audioImport
+}
+
+enum IosTaskActionRouter {
+    static func route(_ kind: TaskActionKind) -> IosTaskActionRoute? {
+        switch kind {
+        case .downloadModel, .retryModelDownload: .modelDownload
+        case .importModel: .modelImport
+        case .cancelModelDownload: .modelCancel
+        case .selectOutput: .outputSelection
+        case .selectFolder: .folderSelection
+        case .refreshFolder: .folderRefresh
+        case .transcribe: .transcribe
+        case .retryTranscription: .retry
+        case .play: .play
+        case .stop: .stop
+        case .showText: .showText
+        case .importAudio: .audioImport
+        default: nil
+        }
+    }
 }
 
 final class IosMainScreenShellState {
     func screen(
         selection: IosShellCatalogSelection,
         importedFiles: [IosImportedAudioFile],
-        runtimeReady: Bool,
-        modelReady: Bool,
+        modelStatus: IosSpeechModelStatus,
+        modelMessage: String?,
         modelInstalling: Bool,
         modelDownloadAvailable: Bool,
         modelDownloadProgress: Int?,
-        modelMessage: String,
-        outputReady: Bool,
+        modelCanCancel: Bool,
+        outputStatus: IosOutputDocumentStatus,
+        folderStatus: IosInboxFolderStatus,
+        folderScanning: Bool,
         activePreviewEntryId: Int64?,
         previewState: PreviewPlaybackState,
-        transcription: IosSingleFileTranscriptionState? = nil
-    ) -> IosShellMainScreen {
-        let rowsForSelection = displayRows(for: selection, importedFiles: importedFiles)
-        let rows = rowsForSelection.map { $0.input }
-        let pendingCount = importedFiles.count { $0.status == .pending }
-        let state = MainScreenStateController.shared.state(
-            input: input(
-                selectedTab: selection.sharedTab,
-                pendingCount: pendingCount,
-                displayedRowCount: Int32(rows.count),
-                runtimeReady: runtimeReady,
-                modelReady: modelReady,
-                modelInstalling: modelInstalling,
-                modelDownloadAvailable: modelDownloadAvailable,
-                modelDownloadProgress: modelDownloadProgress,
-                modelMessage: modelMessage,
-                outputReady: outputReady,
-                activePreviewEntryId: activePreviewEntryId,
-                previewState: previewState,
-                transcription: transcription,
-                rows: rows
+        transcription: IosSingleFileTranscriptionState,
+        preparationOwnerEntryId: Int64?,
+        prerequisiteError: String?,
+        actionsEnabled: Bool
+    ) -> IosTaskListScreen {
+        let input = TaskListInput(
+            filter: selection.sharedFilter,
+            model: modelSnapshot(
+                status: modelStatus,
+                message: modelMessage,
+                installing: modelInstalling,
+                downloadAvailable: modelDownloadAvailable,
+                progress: modelDownloadProgress,
+                canCancel: modelCanCancel
+            ),
+            output: outputSnapshot(outputStatus),
+            folder: folderSnapshot(folderStatus, scanning: folderScanning),
+            audio: importedFiles.map { file in
+                AudioTaskSnapshot(
+                    entryId: file.id,
+                    title: file.displayName,
+                    detail: subtitle(for: file),
+                    state: file.status.sharedState,
+                    importedAtMillis: Int64(file.importedAt.timeIntervalSince1970 * 1000),
+                    terminalAtMillis: file.processedAt.map {
+                        KotlinLong(longLong: Int64($0.timeIntervalSince1970 * 1000))
+                    },
+                    lastError: file.lastError,
+                    hasTranscriptText: file.transcriptText?.isEmpty == false,
+                    noSpeech: Self.isNoSpeech(file.lastError),
+                    eligibleForTranscription: actionsEnabled
+                )
+            },
+            preview: PreviewTaskSnapshot(
+                activeEntryId: activePreviewEntryId.map(KotlinLong.init(longLong:)),
+                state: previewState
+            ),
+            transcription: TranscriptionTaskSnapshot(
+                active: transcription.active,
+                activeEntryId: transcription.fileId.map(KotlinLong.init(longLong:)),
+                preparationOwnerEntryId: preparationOwnerEntryId.map(KotlinLong.init(longLong:)),
+                phase: transcription.phase,
+                percent: transcription.progressPercent.map { KotlinInt(int: Int32($0)) },
+                processedUs: transcription.processedUs > 0 ? KotlinLong(longLong: transcription.processedUs) : nil,
+                durationUs: transcription.durationUs > 0 ? KotlinLong(longLong: transcription.durationUs) : nil,
+                completedFiles: transcription.totalFiles > 0 ? KotlinInt(int: transcription.completedFiles) : nil,
+                totalFiles: transcription.totalFiles > 0 ? KotlinInt(int: transcription.totalFiles) : nil,
+                failedFiles: transcription.failedFiles > 0 ? KotlinInt(int: transcription.failedFiles) : nil,
+                prerequisiteError: prerequisiteError
             )
         )
-        let sharedRowsById = Dictionary(uniqueKeysWithValues: state.rows.map { ($0.entryId, $0) })
-        let displayRows = rowsForSelection.compactMap { row -> IosShellAudioRow? in
-            guard let rowState = sharedRowsById[row.input.entryId] else { return nil }
-            return IosShellAudioRow(
-                id: row.input.entryId,
-                title: row.title,
-                subtitle: row.subtitle,
-                badge: row.badge,
-                imported: row.imported,
-                status: row.status,
-                transcriptText: row.transcriptText,
-                lastError: row.lastError,
-                state: rowState
-            )
-        }
-        return IosShellMainScreen(
-            state: state,
-            rows: displayRows
+        return IosTaskListScreen(
+            state: TaskListPresentationController.shared.state(input: input),
+            filesById: Dictionary(uniqueKeysWithValues: importedFiles.map { ($0.id, $0) })
         )
     }
 
-    private func displayRows(for selection: IosShellCatalogSelection, importedFiles: [IosImportedAudioFile]) -> [DisplayRow] {
-        switch selection {
-        case .new:
-            importedFiles.filter { $0.status == .pending || $0.status == .processing }.map { file in
-                DisplayRow(
-                    input: MainScreenRowInput(
-                        entryId: file.id,
-                        state: file.status.sharedState,
-                        hasTranscriptText: file.transcriptText?.isEmpty == false
-                    ),
-                    title: file.displayName,
-                    subtitle: subtitle(for: file),
-                    badge: file.status.badge,
-                    imported: true,
-                    status: file.status,
-                    transcriptText: file.transcriptText,
-                    lastError: file.lastError
-                )
-            }
-        case .processed:
-            importedFiles.filter { $0.status == .processed || $0.status == .failed }.map { file in
-                DisplayRow(
-                    input: MainScreenRowInput(
-                        entryId: file.id,
-                        state: file.status.sharedState,
-                        hasTranscriptText: file.transcriptText?.isEmpty == false
-                    ),
-                    title: file.displayName,
-                    subtitle: subtitle(for: file),
-                    badge: file.status.badge,
-                    imported: true,
-                    status: file.status,
-                    transcriptText: file.transcriptText,
-                    lastError: file.lastError
-                )
-            }
+    private func modelSnapshot(
+        status: IosSpeechModelStatus,
+        message: String?,
+        installing: Bool,
+        downloadAvailable: Bool,
+        progress: Int?,
+        canCancel: Bool
+    ) -> ModelSetupSnapshot {
+        let state: ModelSetupSnapshotState
+        if installing {
+            state = .installing
+        } else if status.isReady {
+            state = .ready
+        } else if status.installationState == .invalid {
+            state = .invalid
+        } else {
+            state = .required
         }
+        return ModelSetupSnapshot(
+            state: state,
+            detail: status.detail ?? message,
+            progressPercent: progress.map { KotlinInt(int: Int32($0)) },
+            downloadAvailable: downloadAvailable,
+            canCancel: canCancel
+        )
+    }
+
+    private func outputSnapshot(_ status: IosOutputDocumentStatus) -> OutputSetupSnapshot {
+        let state: OutputSetupSnapshotState = status.ready
+            ? .ready
+            : (status.displayName == nil ? .required : .invalid)
+        return OutputSetupSnapshot(state: state, detail: status.message)
+    }
+
+    private func folderSnapshot(
+        _ status: IosInboxFolderStatus,
+        scanning: Bool
+    ) -> FolderSetupSnapshot {
+        let state: FolderSetupSnapshotState
+        if scanning {
+            state = .scanning
+        } else if status.hasError {
+            state = .error
+        } else if status.needsSelection, status.displayName != nil {
+            state = .error
+        } else if status.needsSelection {
+            state = .unselected
+        } else {
+            state = .ready
+        }
+        return FolderSetupSnapshot(state: state, detail: status.message)
     }
 
     private func subtitle(for file: IosImportedAudioFile) -> String {
         var parts = ["Imported", file.formattedSize]
-        if let lastError = file.lastError, !lastError.isEmpty {
-            parts.append(lastError)
-        } else if let durationUs = file.durationUs, durationUs > 0 {
-            parts.append(formatDuration(microseconds: durationUs))
+        if let durationUs = file.durationUs, durationUs > 0 {
+            let totalSeconds = durationUs / 1_000_000
+            parts.append("\(totalSeconds / 60):\(String(format: "%02d", totalSeconds % 60))")
         }
         return parts.joined(separator: " • ")
     }
 
-    private func formatDuration(microseconds: Int64) -> String {
-        let totalSeconds = microseconds / 1_000_000
-        let minutes = totalSeconds / 60
-        let seconds = String(format: "%02d", totalSeconds % 60)
-        return "\(minutes):\(seconds)"
-    }
-
-    private func input(
-        selectedTab: MainScreenCatalogTab,
-        pendingCount: Int,
-        displayedRowCount: Int32,
-        runtimeReady: Bool,
-        modelReady: Bool,
-        modelInstalling: Bool,
-        modelDownloadAvailable: Bool,
-        modelDownloadProgress: Int?,
-        modelMessage: String,
-        outputReady: Bool,
-        activePreviewEntryId: Int64?,
-        previewState: PreviewPlaybackState,
-        transcription: IosSingleFileTranscriptionState?,
-        rows: [MainScreenRowInput]
-    ) -> MainScreenInput {
-        let active = transcription?.active == true
-        let processedUs = transcription?.processedUs ?? 0
-        let durationUs = transcription?.durationUs ?? 0
-        let installationState: SpeechModelInstallationState = modelInstalling
-            ? .installing
-            : (modelReady && runtimeReady ? .installed : .notInstalled)
-        let runtimeState: SpeechModelRuntimeState = transcription?.active == true &&
-            transcription?.phase?.localizedCaseInsensitiveContains("model") == true
-            ? .loading
-            : .unloaded
-        return MainScreenInput(
-            modelMessage: modelMessage,
-            modelInstallationState: installationState,
-            modelRuntimeState: runtimeState,
-            modelDownloadAvailable: modelDownloadAvailable,
-            modelDownloadProgress: modelDownloadProgress.map { KotlinInt(int: Int32($0)) },
-
-            outputSelected: outputReady,
-            folderSelected: true,
-            pendingCount: Int32(pendingCount),
-            folderChecking: false,
-            folderScanQueued: false,
-            scanning: false,
-            scanMessage: nil,
-            transcriptionState: active ? TranscriptionObservationState.active : TranscriptionObservationState.idle,
-            transcriptionPhase: transcription?.phase,
-            transcriptionFilename: transcription?.fileName,
-            transcriptionIndeterminate: active && transcription?.progressPercent == nil,
-            transcriptionProgress: Int32(transcription?.progressPercent ?? 0),
-            processedUs: processedUs,
-            durationUs: durationUs,
-            completedFiles: transcription?.completedFiles ?? 0,
-            totalFiles: transcription?.totalFiles ?? 0,
-            failedFiles: transcription?.failedFiles ?? 0,
-            errorMessage: nil,
-            selectedTab: selectedTab,
-            displayedRowCount: displayedRowCount,
-            activePreviewEntryId: activePreviewEntryId.map { KotlinLong(longLong: $0) },
-            previewState: previewState,
-            rows: rows
-        )
-    }
-
-    private struct DisplayRow {
-        let input: MainScreenRowInput
-        let title: String
-        let subtitle: String
-        let badge: String
-        let imported: Bool
-        let status: IosImportedAudioStatus?
-        let transcriptText: String?
-        let lastError: String?
+    static func isNoSpeech(_ message: String?) -> Bool {
+        guard let message else { return false }
+        return message.localizedCaseInsensitiveContains("no text") ||
+            message.localizedCaseInsensitiveContains("no speech")
     }
 }

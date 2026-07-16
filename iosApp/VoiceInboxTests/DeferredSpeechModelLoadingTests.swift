@@ -128,6 +128,119 @@ final class DeferredSpeechModelLoadingTests: XCTestCase {
         XCTAssertEqual(prepares.value, 1)
         XCTAssertEqual(claims.value, 0)
     }
+
+    @MainActor
+    func testTaskListAdapterSupportsAllAndKeepsOptionalUnselectedFolderOutOfTasks() {
+        let modelStatus = IosSpeechModelStatus(
+            directory: FileManager.default.temporaryDirectory,
+            installationState: .installedVerified,
+            missingFiles: []
+        )
+        let files = [
+            IosImportedAudioFile(
+                id: 1,
+                displayName: "new.m4a",
+                localFileName: "new.m4a",
+                sizeBytes: 10,
+                importedAt: Date(timeIntervalSince1970: 100),
+                status: .pending
+            ),
+            IosImportedAudioFile(
+                id: 2,
+                displayName: "failed.m4a",
+                localFileName: "failed.m4a",
+                sizeBytes: 20,
+                importedAt: Date(timeIntervalSince1970: 200),
+                status: .failed,
+                lastError: "decode failed",
+                processedAt: Date(timeIntervalSince1970: 300)
+            ),
+        ]
+
+        let screen = IosMainScreenShellState().screen(
+            selection: .all,
+            importedFiles: files,
+            modelStatus: modelStatus,
+            modelMessage: nil,
+            modelInstalling: false,
+            modelDownloadAvailable: false,
+            modelDownloadProgress: nil,
+            modelCanCancel: false,
+            outputStatus: IosOutputDocumentStatus(displayName: "notes.md", message: "Ready", ready: true),
+            folderStatus: IosInboxFolderStatus(displayName: nil, message: nil, needsSelection: true),
+            folderScanning: false,
+            activePreviewEntryId: nil,
+            previewState: .idle,
+            transcription: .idle,
+            preparationOwnerEntryId: nil,
+            prerequisiteError: nil,
+            actionsEnabled: true
+        )
+
+        XCTAssertEqual(screen.state.tasks.map(\.stableId), ["audio:2", "audio:1"])
+        XCTAssertFalse(screen.state.tasks.contains { $0.stableId == "setup:model" })
+        XCTAssertFalse(screen.state.tasks.contains { $0.stableId == "setup:folder" })
+        XCTAssertEqual(screen.filesById.count, 2)
+    }
+
+    @MainActor
+    func testTaskListAdapterAttachesPreparationFailureToPendingOwner() {
+        let file = IosImportedAudioFile(
+            id: 9,
+            displayName: "voice.m4a",
+            localFileName: "voice.m4a",
+            sizeBytes: 10,
+            importedAt: Date(),
+            status: .pending
+        )
+        let screen = IosMainScreenShellState().screen(
+            selection: .new,
+            importedFiles: [file],
+            modelStatus: IosSpeechModelStatus(
+                directory: FileManager.default.temporaryDirectory,
+                installationState: .installedVerified,
+                missingFiles: []
+            ),
+            modelMessage: nil,
+            modelInstalling: false,
+            modelDownloadAvailable: false,
+            modelDownloadProgress: nil,
+            modelCanCancel: false,
+            outputStatus: IosOutputDocumentStatus(displayName: "notes.md", message: "Ready", ready: true),
+            folderStatus: IosInboxFolderStatus(displayName: nil, message: nil, needsSelection: true),
+            folderScanning: false,
+            activePreviewEntryId: nil,
+            previewState: .idle,
+            transcription: .idle,
+            preparationOwnerEntryId: 9,
+            prerequisiteError: "Model could not be loaded",
+            actionsEnabled: true
+        )
+
+        guard let task = screen.state.tasks.first as? AudioTaskPresentation else {
+            return XCTFail("Expected an audio task")
+        }
+        XCTAssertEqual(task.state, .pending)
+        XCTAssertEqual(task.errorMessage, "Model could not be loaded")
+    }
+
+    func testTypedActionsHaveExplicitIosRoutes() {
+        XCTAssertEqual(IosTaskActionRouter.route(.downloadModel), .modelDownload)
+        XCTAssertEqual(IosTaskActionRouter.route(.selectOutput), .outputSelection)
+        XCTAssertEqual(IosTaskActionRouter.route(.selectFolder), .folderSelection)
+        XCTAssertEqual(IosTaskActionRouter.route(.transcribe), .transcribe)
+        XCTAssertEqual(IosTaskActionRouter.route(.retryTranscription), .retry)
+        XCTAssertEqual(IosTaskActionRouter.route(.showText), .showText)
+    }
+
+    func testRoutineImportAndScanSummariesDoNotRequestAnAlert() {
+        XCTAssertNil(IosAudioImportSummary(imported: 2, skipped: 0, failed: 0).alertMessage)
+        XCTAssertNil(IosAudioImportSummary(imported: 0, skipped: 4, failed: 0).alertMessage)
+        XCTAssertEqual(
+            IosAudioImportSummary(imported: 1, skipped: 0, failed: 1).alertMessage,
+            "1 imported, 1 failed"
+        )
+    }
 }
 
 private final class LockedCounter: @unchecked Sendable {

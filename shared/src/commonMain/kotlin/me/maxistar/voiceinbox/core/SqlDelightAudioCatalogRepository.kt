@@ -183,7 +183,11 @@ class SqlDelightAudioCatalogRepository(
     }
 
     override fun markFailed(id: Long, message: String) {
-        queries.markFailed(last_error = message, id = id)
+        queries.markFailed(last_error = message, processed_at = null, id = id)
+    }
+
+    override fun markFailedAt(id: Long, message: String, processedAtMillis: Long) {
+        queries.markFailed(last_error = message, processed_at = processedAtMillis, id = id)
     }
 
     override fun markPending(id: Long) {

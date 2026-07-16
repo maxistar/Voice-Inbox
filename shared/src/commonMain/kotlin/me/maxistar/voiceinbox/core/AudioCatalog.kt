@@ -48,6 +48,10 @@ interface AudioCatalogQueuePort {
 
     fun markFailed(id: Long, message: String)
 
+    fun markFailedAt(id: Long, message: String, processedAtMillis: Long) {
+        markFailed(id, message)
+    }
+
     fun markPending(id: Long)
 }
 

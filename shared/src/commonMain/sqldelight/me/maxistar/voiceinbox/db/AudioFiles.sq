@@ -215,7 +215,7 @@ markFailed:
 UPDATE audio_files
 SET state = 'FAILED',
     last_error = ?,
-    processed_at = NULL,
+    processed_at = ?,
     transcript_text = NULL,
     duration_us = NULL
 WHERE id = ?;
