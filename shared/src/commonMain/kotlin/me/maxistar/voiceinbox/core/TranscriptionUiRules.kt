@@ -12,10 +12,10 @@ data class CatalogControlState(
 
 data class StatusProgressInput(
     val modelMessage: String,
-    val modelLoading: Boolean,
+    val modelInstallationState: SpeechModelInstallationState,
+    val modelRuntimeState: SpeechModelRuntimeState,
     val modelDownloadAvailable: Boolean,
     val modelDownloadProgress: Int?,
-    val modelReady: Boolean,
     val outputSelected: Boolean,
     val folderSelected: Boolean,
     val pendingCount: Int,
@@ -77,7 +77,7 @@ object TranscriptionUiRules {
         }
 
     fun catalogControls(
-        modelReady: Boolean,
+        modelInstallationState: SpeechModelInstallationState,
         outputSelected: Boolean,
         folderSelected: Boolean,
         pendingCount: Int,
@@ -87,13 +87,14 @@ object TranscriptionUiRules {
         val workReady = transcriptionState == TranscriptionObservationState.IDLE ||
             transcriptionState == TranscriptionObservationState.FINISHED
         val idle = workReady && !scanning
-        val prerequisites = modelReady && outputSelected && folderSelected && idle
+        val modelAvailable = modelInstallationState.isAvailable
+        val prerequisites = modelAvailable && outputSelected && folderSelected && idle
         return CatalogControlState(
-            outputEnabled = modelReady && idle,
-            folderEnabled = modelReady && idle,
+            outputEnabled = modelAvailable && idle,
+            folderEnabled = modelAvailable && idle,
             outputSetupVisible = !outputSelected,
             folderSetupVisible = !folderSelected,
-            refreshEnabled = modelReady && folderSelected && idle,
+            refreshEnabled = modelAvailable && folderSelected && idle,
             transcribeAllEnabled = prerequisites && pendingCount > 0,
             retryEnabled = prerequisites,
         )
@@ -126,7 +127,7 @@ object TranscriptionUiRules {
     fun statusProgressBlock(input: StatusProgressInput): StatusProgressBlockState =
         when {
             input.transcriptionState == TranscriptionObservationState.ACTIVE -> activeTranscription(input)
-            input.modelLoading -> StatusProgressBlockState(
+            input.modelInstallationState == SpeechModelInstallationState.INSTALLING -> StatusProgressBlockState(
                 title = input.modelMessage,
                 progressVisible = true,
                 progressIndeterminate = input.modelDownloadProgress == null,
@@ -142,7 +143,7 @@ object TranscriptionUiRules {
                 progressVisible = true,
                 progressIndeterminate = true,
             )
-            !input.modelReady -> StatusProgressBlockState(
+            !input.modelInstallationState.isAvailable -> StatusProgressBlockState(
                 title = input.modelMessage,
                 downloadVisible = input.modelDownloadAvailable,
             )

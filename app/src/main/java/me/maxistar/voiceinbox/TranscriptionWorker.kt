@@ -34,14 +34,13 @@ class TranscriptionWorker(
 
         try {
             setForeground(foreground("Preparing transcription", 0, true))
-            val model = SpeechModelRepository(
+            val modelRepository = SpeechModelRepository(
                 applicationContext.noBackupFilesDir.resolve("models"),
-            ).inspect() as? InstalledSpeechModelState.Ready
-                ?: return@withContext failure("Speech model is not installed")
-            publish("Loading model", null, 0, 0, null, null)
-            if (!NativeTranscriptionBridge.initialize(model.directory.absolutePath)) {
-                return@withContext failure("Speech model failed to load")
-            }
+            )
+            publish("Preparing speech model", null, 0, 0, null, null)
+            SpeechModelPreparation.prepare(modelRepository) { directory ->
+                NativeTranscriptionBridge.initialize(directory.absolutePath)
+            }.getOrElse { return@withContext failure(it.message ?: "Speech model preparation failed") }
 
             val batch = BatchTranscriptionUseCase(
                 catalog = catalog,

@@ -175,13 +175,20 @@ final class IosMainScreenShellState {
         let active = transcription?.active == true
         let processedUs = transcription?.processedUs ?? 0
         let durationUs = transcription?.durationUs ?? 0
-        let ready = runtimeReady && modelReady && !modelInstalling
+        let installationState: SpeechModelInstallationState = modelInstalling
+            ? .installing
+            : (modelReady && runtimeReady ? .installed : .notInstalled)
+        let runtimeState: SpeechModelRuntimeState = transcription?.active == true &&
+            transcription?.phase?.localizedCaseInsensitiveContains("model") == true
+            ? .loading
+            : .unloaded
         return MainScreenInput(
             modelMessage: modelMessage,
-            modelLoading: modelInstalling,
+            modelInstallationState: installationState,
+            modelRuntimeState: runtimeState,
             modelDownloadAvailable: modelDownloadAvailable,
             modelDownloadProgress: modelDownloadProgress.map { KotlinInt(int: Int32($0)) },
-            modelReady: ready,
+
             outputSelected: outputReady,
             folderSelected: true,
             pendingCount: Int32(pendingCount),

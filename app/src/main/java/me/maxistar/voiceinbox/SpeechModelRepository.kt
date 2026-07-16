@@ -10,7 +10,15 @@ import java.nio.file.StandardCopyOption
 import java.util.UUID
 
 sealed interface InstalledSpeechModelState {
-    data class Ready(val directory: File) : InstalledSpeechModelState
+    data class Ready(
+        val directory: File,
+        val verification: Verification = Verification.VERIFIED,
+    ) : InstalledSpeechModelState {
+        enum class Verification {
+            VERIFIED,
+            LEGACY_UNVERIFIED,
+        }
+    }
     data object Missing : InstalledSpeechModelState
     data class Invalid(val reason: String) : InstalledSpeechModelState
 }
@@ -23,6 +31,7 @@ class SpeechModelRepository(
     private val stagingRoot = File(root, "staging")
     private val installedRoot = File(root, "installed")
     private val activeVersionFile = File(root, "active-model")
+    private val invalidModelFile = File(root, "invalid-model")
 
     val stagingDirectory: File
         get() = File(stagingRoot, manifest.version)
@@ -30,18 +39,39 @@ class SpeechModelRepository(
     val installedDirectory: File
         get() = File(installedRoot, manifest.version)
 
+    fun inspectLightweight(): InstalledSpeechModelState {
+        invalidModelFile.takeIf(File::isFile)?.readText()?.trim()?.takeIf(String::isNotEmpty)?.let {
+            return InstalledSpeechModelState.Invalid(it)
+        }
+        if (!installedDirectory.isDirectory) return InstalledSpeechModelState.Missing
+        val missing = manifest.files.firstOrNull { !File(installedDirectory, it.name).isFile }
+        return if (missing == null) {
+            InstalledSpeechModelState.Ready(
+                directory = installedDirectory,
+                verification = if (activeVersionFile.takeIf(File::isFile)?.readText()?.trim() == manifest.version) {
+                    InstalledSpeechModelState.Ready.Verification.VERIFIED
+                } else {
+                    InstalledSpeechModelState.Ready.Verification.LEGACY_UNVERIFIED
+                },
+            )
+        } else {
+            InstalledSpeechModelState.Invalid("${missing.name} is missing")
+        }
+    }
+
     fun inspect(): InstalledSpeechModelState {
         val activeVersion = activeVersionFile.takeIf(File::isFile)?.readText()?.trim()
         if (activeVersion == manifest.version) {
-            return validateDirectory(installedDirectory)
+            return recordValidation(validateDirectory(installedDirectory))
         }
 
         return when (val installed = validateDirectory(installedDirectory)) {
             is InstalledSpeechModelState.Ready -> {
                 writeActiveVersion(manifest.version)
+                invalidModelFile.delete()
                 installed
             }
-            is InstalledSpeechModelState.Invalid -> installed
+            is InstalledSpeechModelState.Invalid -> installed.also { writeInvalidReason(it.reason) }
             InstalledSpeechModelState.Missing -> InstalledSpeechModelState.Missing
         }
     }
@@ -99,6 +129,7 @@ class SpeechModelRepository(
             "Failed to activate downloaded model"
         }
         writeActiveVersion(manifest.version)
+        invalidModelFile.delete()
 
         installedRoot.listFiles()
             ?.filter { it.name != manifest.version }
@@ -134,7 +165,10 @@ class SpeechModelRepository(
                 )
             }
         }
-        return InstalledSpeechModelState.Ready(directory)
+        return InstalledSpeechModelState.Ready(
+            directory = directory,
+            verification = InstalledSpeechModelState.Ready.Verification.VERIFIED,
+        )
     }
 
     private fun isValidFile(file: File, entry: SpeechModelFile): Boolean =
@@ -155,6 +189,20 @@ class SpeechModelRepository(
             temporary.delete()
             throw IllegalStateException("Failed to update active model metadata", it)
         }
+    }
+
+    private fun recordValidation(state: InstalledSpeechModelState): InstalledSpeechModelState {
+        when (state) {
+            is InstalledSpeechModelState.Ready -> invalidModelFile.delete()
+            is InstalledSpeechModelState.Invalid -> writeInvalidReason(state.reason)
+            InstalledSpeechModelState.Missing -> Unit
+        }
+        return state
+    }
+
+    private fun writeInvalidReason(reason: String) {
+        root.mkdirs()
+        invalidModelFile.writeText(reason)
     }
 
     private fun cleanupTemporaryFiles(directory: File) {

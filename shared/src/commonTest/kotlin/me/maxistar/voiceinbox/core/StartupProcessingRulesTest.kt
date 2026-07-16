@@ -36,7 +36,7 @@ class StartupProcessingRulesTest {
             ready.copy(catalogReady = false),
             ready.copy(folderReady = false),
             ready.copy(outputReady = false),
-            ready.copy(modelReady = false),
+            ready.copy(modelInstallationState = SpeechModelInstallationState.NOT_INSTALLED),
             ready.copy(transcriptionStateKnown = false),
         )
 
@@ -102,7 +102,7 @@ class StartupProcessingRulesTest {
             failedCount = failedCount,
             folderReady = true,
             outputReady = true,
-            modelReady = true,
+            modelInstallationState = SpeechModelInstallationState.INSTALLED,
             transcriptionStateKnown = true,
             transcriptionActive = transcriptionActive,
         )

@@ -659,8 +659,9 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                         evaluateStartupProcessing()
                     }
                     WorkInfo.State.SUCCEEDED -> {
-                        if (shouldHandleModelInstallSuccess(info.id.toString())) {
-                            modelReadiness.invalidate()
+                    if (shouldHandleModelInstallSuccess(info.id.toString())) {
+                        modelReadiness.invalidate()
+                        SpeechModelPreparation.invalidate(NativeTranscriptionBridge::reset)
                         }
                         refreshModel()
                     }
@@ -736,6 +737,10 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                 completedFiles = data.getInt(TranscriptionWorker.KEY_COMPLETED_FILES, 0)
                 totalFiles = data.getInt(TranscriptionWorker.KEY_TOTAL_FILES, 0)
                 failedFiles = data.getInt(TranscriptionWorker.KEY_FAILED_FILES, 0)
+                if (info.state == WorkInfo.State.FAILED && shouldRefreshModelAfterFailure(info.id.toString())) {
+                    modelReadiness.invalidate()
+                    refreshModel()
+                }
                 if (transcriptionActive() || transcriptionFinished) {
                     scanMessage = null
                     statusError = null
@@ -1000,10 +1005,18 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         MainScreenStateController.state(
             MainScreenInput(
                 modelMessage = modelMessage,
-                modelLoading = modelLoading,
+                modelInstallationState = when {
+                    modelLoading -> SpeechModelInstallationState.INSTALLING
+                    modelReady -> SpeechModelInstallationState.INSTALLED
+                    modelDownloadAvailable -> SpeechModelInstallationState.NOT_INSTALLED
+                    else -> SpeechModelInstallationState.INVALID
+                },
+                modelRuntimeState = if (
+                    transcriptionState == TranscriptionObservationState.ACTIVE &&
+                    transcriptionPhase?.contains("model", ignoreCase = true) == true
+                ) SpeechModelRuntimeState.LOADING else SpeechModelRuntimeState.UNLOADED,
                 modelDownloadAvailable = modelDownloadAvailable,
                 modelDownloadProgress = modelDownloadProgress,
-                modelReady = modelReady,
                 outputSelected = outputUri != null,
                 folderSelected = folderUri != null,
                 pendingCount = pendingCount,
@@ -1059,19 +1072,20 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         @Volatile
         private var sharedModelReadiness: SpeechModelReadinessManager? = null
         private val handledModelInstallSuccessIds = mutableSetOf<String>()
+        private val handledTranscriptionFailureIds = mutableSetOf<String>()
 
         fun getSharedModelReadiness(repository: SpeechModelRepository): SpeechModelReadinessManager =
             sharedModelReadiness ?: synchronized(this) {
                 sharedModelReadiness ?: SpeechModelReadinessManager(
                     repository = repository,
-                    initializeModel = { directory ->
-                        NativeTranscriptionBridge.initialize(directory.absolutePath)
-                    },
                     executor = Executors.newSingleThreadExecutor(),
                 ).also { sharedModelReadiness = it }
             }
 
         fun shouldHandleModelInstallSuccess(id: String): Boolean =
             synchronized(this) { handledModelInstallSuccessIds.add(id) }
+
+        fun shouldRefreshModelAfterFailure(id: String): Boolean =
+            synchronized(this) { handledTranscriptionFailureIds.add(id) }
     }
 }

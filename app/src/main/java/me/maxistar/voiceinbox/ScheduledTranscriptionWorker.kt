@@ -51,10 +51,9 @@ class ScheduledTranscriptionWorker(
         documentAccess.requireAppendable(output)
         folderScanner.requireReadable(folder)
 
-        val model = SpeechModelRepository(
+        if (SpeechModelRepository(
             applicationContext.noBackupFilesDir.resolve("models"),
-        ).inspect() as? InstalledSpeechModelState.Ready ?: return
-        if (!NativeTranscriptionBridge.initialize(model.directory.absolutePath)) return
+        ).inspectLightweight() !is InstalledSpeechModelState.Ready) return
 
         val catalog = AndroidSqlDelightAudioCatalogFactory(applicationContext).create()
         val files = folderScanner.scan(folder)

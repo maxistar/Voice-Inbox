@@ -85,6 +85,7 @@ class SpeechModelDownloadWorker(
         val installedDirectory = repository.activate().getOrElse {
             return failure(it.message ?: "Failed to activate speech model")
         }
+        SpeechModelPreparation.invalidate(NativeTranscriptionBridge::reset)
         return Result.success(workDataOf(KEY_MODEL_PATH to installedDirectory.absolutePath))
     }
 

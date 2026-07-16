@@ -19,13 +19,8 @@ class SpeechModelReadinessManagerTest {
     fun duplicateRefreshesAreCoalescedWhileCheckIsRunning() {
         val executor = QueueingExecutor()
         val repository = readyRepository()
-        var initializations = 0
         val manager = SpeechModelReadinessManager(
             repository = repository,
-            initializeModel = {
-                initializations += 1
-                true
-            },
             executor = executor,
         )
         val firstStates = mutableListOf<SpeechModelReadinessState>()
@@ -40,7 +35,6 @@ class SpeechModelReadinessManagerTest {
 
         executor.runNext()
 
-        assertEquals(1, initializations)
         assertTrue(firstStates.last() is SpeechModelReadinessState.Ready)
         assertTrue(secondStates.last() is SpeechModelReadinessState.Ready)
     }
@@ -49,13 +43,8 @@ class SpeechModelReadinessManagerTest {
     fun readyStateIsCachedForLaterRefreshes() {
         val executor = QueueingExecutor()
         val repository = readyRepository()
-        var initializations = 0
         val manager = SpeechModelReadinessManager(
             repository = repository,
-            initializeModel = {
-                initializations += 1
-                true
-            },
             executor = executor,
         )
         val firstStates = mutableListOf<SpeechModelReadinessState>()
@@ -65,7 +54,6 @@ class SpeechModelReadinessManagerTest {
         executor.runNext()
         manager.refresh { cachedStates += it }
 
-        assertEquals(1, initializations)
         assertEquals(0, executor.pendingCount)
         assertTrue(firstStates.last() is SpeechModelReadinessState.Ready)
         assertEquals(1, cachedStates.size)

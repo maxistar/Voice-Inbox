@@ -49,6 +49,29 @@ class MainScreenStateControllerTest {
     }
 
     @Test
+    fun installedModelDoesNotRequireLoadedRuntimeForActions() {
+        val unloaded = state(
+            input(
+                outputSelected = true,
+                folderSelected = true,
+                pendingCount = 1,
+                modelRuntimeState = SpeechModelRuntimeState.UNLOADED,
+            ),
+        )
+        val retryableFailure = state(
+            input(
+                outputSelected = true,
+                folderSelected = true,
+                pendingCount = 1,
+                modelRuntimeState = SpeechModelRuntimeState.FAILED,
+            ),
+        )
+
+        assertTrue(unloaded.controls.transcribeAllEnabled)
+        assertTrue(retryableFailure.controls.transcribeAllEnabled)
+    }
+
+    @Test
     fun controlsAreDisabledDuringActiveWorkOrQueuedScan() {
         assertFalse(
             state(
@@ -256,6 +279,7 @@ class MainScreenStateControllerTest {
         modelDownloadAvailable: Boolean = false,
         modelDownloadProgress: Int? = null,
         modelReady: Boolean = true,
+        modelRuntimeState: SpeechModelRuntimeState = SpeechModelRuntimeState.UNLOADED,
         outputSelected: Boolean = false,
         folderSelected: Boolean = false,
         pendingCount: Int = 0,
@@ -281,10 +305,14 @@ class MainScreenStateControllerTest {
         rows: List<MainScreenRowInput> = emptyList(),
     ) = MainScreenInput(
         modelMessage = modelMessage,
-        modelLoading = modelLoading,
+        modelInstallationState = when {
+            modelLoading -> SpeechModelInstallationState.INSTALLING
+            modelReady -> SpeechModelInstallationState.INSTALLED
+            else -> SpeechModelInstallationState.NOT_INSTALLED
+        },
+        modelRuntimeState = modelRuntimeState,
         modelDownloadAvailable = modelDownloadAvailable,
         modelDownloadProgress = modelDownloadProgress,
-        modelReady = modelReady,
         outputSelected = outputSelected,
         folderSelected = folderSelected,
         pendingCount = pendingCount,

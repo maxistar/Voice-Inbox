@@ -16,7 +16,7 @@ data class StartupProcessingInput(
     val failedCount: Int = 0,
     val folderReady: Boolean = false,
     val outputReady: Boolean = false,
-    val modelReady: Boolean = false,
+    val modelInstallationState: SpeechModelInstallationState = SpeechModelInstallationState.NOT_INSTALLED,
     val transcriptionStateKnown: Boolean = false,
     val transcriptionActive: Boolean = false,
 )
@@ -55,7 +55,7 @@ object StartupProcessingRules {
         if (input.policy == StartupProcessingPolicy.LEAVE_QUEUED) {
             return StartupProcessingDecision.Finish(StartupProcessingFinishReason.LEAVE_QUEUED)
         }
-        if (!input.folderReady || !input.outputReady || !input.modelReady || input.transcriptionActive) {
+        if (!input.folderReady || !input.outputReady || !input.modelInstallationState.isAvailable || input.transcriptionActive) {
             return StartupProcessingDecision.Wait
         }
         return when (input.policy) {

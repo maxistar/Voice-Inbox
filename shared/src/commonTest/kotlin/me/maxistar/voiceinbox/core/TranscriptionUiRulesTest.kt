@@ -44,7 +44,7 @@ class TranscriptionUiRulesTest {
         assertEquals(
             CatalogControlState(false, false, false, false, false, false, false),
             TranscriptionUiRules.catalogControls(
-                modelReady = true,
+                modelInstallationState = SpeechModelInstallationState.INSTALLED,
                 outputSelected = true,
                 folderSelected = true,
                 pendingCount = 2,
@@ -55,7 +55,7 @@ class TranscriptionUiRulesTest {
         assertEquals(
             CatalogControlState(false, false, false, false, false, false, false),
             TranscriptionUiRules.catalogControls(
-                modelReady = true,
+                modelInstallationState = SpeechModelInstallationState.INSTALLED,
                 outputSelected = true,
                 folderSelected = true,
                 pendingCount = 2,
@@ -70,7 +70,7 @@ class TranscriptionUiRulesTest {
         assertEquals(
             CatalogControlState(false, false, false, false, false, false, false),
             TranscriptionUiRules.catalogControls(
-                modelReady = true,
+                modelInstallationState = SpeechModelInstallationState.INSTALLED,
                 outputSelected = true,
                 folderSelected = true,
                 pendingCount = 2,
@@ -432,7 +432,7 @@ class TranscriptionUiRulesTest {
         pending: Int = 0,
         active: Boolean = false,
     ) = TranscriptionUiRules.catalogControls(
-        modelReady,
+        if (modelReady) SpeechModelInstallationState.INSTALLED else SpeechModelInstallationState.NOT_INSTALLED,
         output,
         folder,
         pending,
@@ -466,10 +466,14 @@ class TranscriptionUiRulesTest {
     ) = TranscriptionUiRules.statusProgressBlock(
         StatusProgressInput(
             modelMessage = modelMessage,
-            modelLoading = modelLoading,
+            modelInstallationState = when {
+                modelLoading -> SpeechModelInstallationState.INSTALLING
+                modelReady -> SpeechModelInstallationState.INSTALLED
+                else -> SpeechModelInstallationState.NOT_INSTALLED
+            },
+            modelRuntimeState = SpeechModelRuntimeState.UNLOADED,
             modelDownloadAvailable = modelDownloadAvailable,
             modelDownloadProgress = modelDownloadProgress,
-            modelReady = modelReady,
             outputSelected = output,
             folderSelected = folder,
             pendingCount = pending,

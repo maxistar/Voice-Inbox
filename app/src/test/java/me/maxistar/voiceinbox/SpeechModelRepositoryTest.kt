@@ -38,6 +38,38 @@ class SpeechModelRepositoryTest {
     }
 
     @Test
+    fun lightweightInspectionDoesNotHashInstalledPayloads() {
+        val repository = repository()
+        repository.prepareForInstall().getOrThrow()
+        writeValidStaging(repository)
+        val installed = repository.activate().getOrThrow()
+        installed.resolve("model.bin").writeText("other")
+
+        val lightweight = repository.inspectLightweight() as InstalledSpeechModelState.Ready
+        assertEquals(InstalledSpeechModelState.Ready.Verification.VERIFIED, lightweight.verification)
+        assertTrue(repository.inspect() is InstalledSpeechModelState.Invalid)
+        assertTrue(repository.inspectLightweight() is InstalledSpeechModelState.Invalid)
+    }
+
+    @Test
+    fun legacyInstallationWithoutReceiptIsAvailableLightweight() {
+        val repository = repository()
+        repository.prepareForInstall().getOrThrow()
+        writeValidStaging(repository)
+        repository.activate().getOrThrow()
+        File(temporaryFolder.root, "models/active-model").delete()
+
+        val legacy = repository.inspectLightweight() as InstalledSpeechModelState.Ready
+        assertEquals(InstalledSpeechModelState.Ready.Verification.LEGACY_UNVERIFIED, legacy.verification)
+        assertTrue(repository.inspect() is InstalledSpeechModelState.Ready)
+        assertEquals(
+            InstalledSpeechModelState.Ready.Verification.VERIFIED,
+            (repository.inspectLightweight() as InstalledSpeechModelState.Ready).verification,
+        )
+        assertTrue(File(temporaryFolder.root, "models/active-model").isFile)
+    }
+
+    @Test
     fun corruptAndIncompleteModelsAreRejected() {
         val repository = repository()
         repository.prepareForInstall().getOrThrow()

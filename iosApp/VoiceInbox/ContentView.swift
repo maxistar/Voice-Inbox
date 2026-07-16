@@ -82,6 +82,7 @@ struct ContentView: View {
                             previewPlayer.stop()
                             transcriber.transcribeAll(
                                 modelDirectory: speechModelStore.modelDirectory,
+                                modelStore: speechModelStore,
                                 outputDocument: outputDocument,
                                 store: importStore,
                                 onFinished: {
@@ -216,6 +217,7 @@ struct ContentView: View {
                                                     file: importedFile,
                                                     localURL: importStore.localURL(for: importedFile),
                                                     modelDirectory: speechModelStore.modelDirectory,
+                                                    modelStore: speechModelStore,
                                                     outputDocument: outputDocument,
                                                     store: importStore,
                                                     onSuccess: { transcript in
@@ -242,6 +244,7 @@ struct ContentView: View {
                                                     file: importedFile,
                                                     localURL: importStore.localURL(for: importedFile),
                                                     modelDirectory: speechModelStore.modelDirectory,
+                                                    modelStore: speechModelStore,
                                                     outputDocument: outputDocument,
                                                     store: importStore,
                                                     onSuccess: { transcript in
@@ -518,6 +521,7 @@ struct ContentView: View {
         selectedTab = .new
         transcriber.transcribeAll(
             modelDirectory: speechModelStore.modelDirectory,
+            modelStore: speechModelStore,
             outputDocument: outputDocument,
             store: importStore,
             onFinished: {

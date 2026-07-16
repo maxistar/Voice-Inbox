@@ -4,6 +4,7 @@ import me.maxistar.voiceinbox.core.StartupProcessingDecision
 import me.maxistar.voiceinbox.core.StartupProcessingInput
 import me.maxistar.voiceinbox.core.StartupProcessingPolicy
 import me.maxistar.voiceinbox.core.StartupProcessingRules
+import me.maxistar.voiceinbox.core.SpeechModelInstallationState
 
 class StartupProcessingCoordinator private constructor(
     private var stage: Stage,
@@ -94,7 +95,11 @@ class StartupProcessingCoordinator private constructor(
                 failedCount = failedCount,
                 folderReady = folderReady,
                 outputReady = outputReady,
-                modelReady = modelReady,
+                modelInstallationState = if (modelReady) {
+                    SpeechModelInstallationState.INSTALLED
+                } else {
+                    SpeechModelInstallationState.NOT_INSTALLED
+                },
                 transcriptionStateKnown = transcriptionStateKnown,
                 transcriptionActive = transcriptionActive,
             ),

@@ -13,10 +13,10 @@ data class MainScreenRowInput(
 
 data class MainScreenInput(
     val modelMessage: String,
-    val modelLoading: Boolean,
+    val modelInstallationState: SpeechModelInstallationState,
+    val modelRuntimeState: SpeechModelRuntimeState,
     val modelDownloadAvailable: Boolean,
     val modelDownloadProgress: Int?,
-    val modelReady: Boolean,
     val outputSelected: Boolean,
     val folderSelected: Boolean,
     val pendingCount: Int,
@@ -77,7 +77,7 @@ object MainScreenStateController {
     fun state(input: MainScreenInput): MainScreenState {
         val busy = input.folderChecking || input.folderScanQueued || input.scanning
         val controls = TranscriptionUiRules.catalogControls(
-            modelReady = input.modelReady,
+            modelInstallationState = input.modelInstallationState,
             outputSelected = input.outputSelected,
             folderSelected = input.folderSelected,
             pendingCount = input.pendingCount,
@@ -132,10 +132,10 @@ object MainScreenStateController {
     private fun MainScreenInput.toStatusInput(): StatusProgressInput =
         StatusProgressInput(
             modelMessage = modelMessage,
-            modelLoading = modelLoading,
+            modelInstallationState = modelInstallationState,
+            modelRuntimeState = modelRuntimeState,
             modelDownloadAvailable = modelDownloadAvailable,
             modelDownloadProgress = modelDownloadProgress,
-            modelReady = modelReady,
             outputSelected = outputSelected,
             folderSelected = folderSelected,
             pendingCount = pendingCount,

@@ -2,6 +2,18 @@ import AVFoundation
 import Foundation
 import Shared
 
+enum IosTranscriptionPreparationGate {
+    @MainActor
+    static func prepareAndClaim(
+        prepare: () async -> Bool,
+        claim: () -> Void
+    ) async -> Bool {
+        guard await prepare() else { return false }
+        claim()
+        return true
+    }
+}
+
 @_silgen_name("voiceinbox_transcription_initialize")
 private func voiceinbox_transcription_initialize(_ modelDirectory: UnsafePointer<CChar>) -> Bool
 
@@ -19,6 +31,9 @@ private func voiceinbox_transcription_string_free(_ value: UnsafeMutablePointer<
 
 @_silgen_name("voiceinbox_transcription_backend_configured")
 private func voiceinbox_transcription_backend_configured() -> Bool
+
+@_silgen_name("voiceinbox_transcription_reset")
+private func voiceinbox_transcription_reset()
 
 struct IosSingleFileTranscriptionState {
     let active: Bool
@@ -80,17 +95,17 @@ final class IosSingleFileTranscriptionController: ObservableObject {
         file: IosImportedAudioFile,
         localURL: URL,
         modelDirectory: URL,
+        modelStore: IosSpeechModelStore,
         outputDocument: IosSelectedOutputDocument,
         store: IosAudioImportStore,
         onSuccess: ((String) -> Void)? = nil
     ) {
         task?.cancel()
-        store.markProcessing(fileId: file.id)
         state = IosSingleFileTranscriptionState(
             active: true,
             fileId: file.id,
             fileName: file.displayName,
-            phase: SingleFileTranscriptionUseCase.companion.PHASE_DECODING_AUDIO,
+            phase: "Preparing speech model",
             processedUs: 0,
             durationUs: 0,
             completedFiles: 0,
@@ -102,12 +117,26 @@ final class IosSingleFileTranscriptionController: ObservableObject {
         message = nil
 
         task = Task {
+            let prepared = await IosTranscriptionPreparationGate.prepareAndClaim(
+                prepare: { await modelStore.prepareForTranscription() != nil },
+                claim: { store.markProcessing(fileId: file.id) }
+            )
+            guard prepared else {
+                message = modelStore.message ?? "Speech model preparation failed."
+                state = .idle
+                return
+            }
+            guard !Task.isCancelled else {
+                state = .idle
+                return
+            }
             let outcome = await Task.detached(priority: .userInitiated) {
                 Self.runSharedTranscription(
                     file: file,
                     localURL: localURL,
                     modelDirectory: modelDirectory.path,
-                    outputDocument: outputDocument
+                    outputDocument: outputDocument,
+                    modelPrepared: true
                 ) { progress in
                     Task { @MainActor in
                         self.state = IosSingleFileTranscriptionState(
@@ -152,6 +181,7 @@ final class IosSingleFileTranscriptionController: ObservableObject {
 
     func transcribeAll(
         modelDirectory: URL,
+        modelStore: IosSpeechModelStore,
         outputDocument: IosSelectedOutputDocument,
         store: IosAudioImportStore,
         onFinished: (() -> Void)? = nil
@@ -162,7 +192,7 @@ final class IosSingleFileTranscriptionController: ObservableObject {
             active: true,
             fileId: nil,
             fileName: nil,
-            phase: "Preparing transcription",
+            phase: "Preparing speech model",
             processedUs: 0,
             durationUs: 0,
             completedFiles: 0,
@@ -174,6 +204,15 @@ final class IosSingleFileTranscriptionController: ObservableObject {
         message = nil
 
         task = Task {
+            guard await modelStore.prepareForTranscription() != nil else {
+                message = modelStore.message ?? "Speech model preparation failed."
+                state = .idle
+                return
+            }
+            guard !Task.isCancelled else {
+                state = .idle
+                return
+            }
             let outcome = await Task.detached(priority: .userInitiated) {
                 Self.runSharedBatchTranscription(
                     modelDirectory: modelDirectory.path,
@@ -225,6 +264,7 @@ final class IosSingleFileTranscriptionController: ObservableObject {
         file: IosImportedAudioFile,
         localURL: URL,
         modelDirectory: URL,
+        modelStore: IosSpeechModelStore,
         outputDocument: IosSelectedOutputDocument,
         store: IosAudioImportStore,
         onSuccess: ((String) -> Void)? = nil
@@ -234,6 +274,7 @@ final class IosSingleFileTranscriptionController: ObservableObject {
             file: file,
             localURL: localURL,
             modelDirectory: modelDirectory,
+            modelStore: modelStore,
             outputDocument: outputDocument,
             store: store,
             onSuccess: onSuccess
@@ -245,11 +286,12 @@ final class IosSingleFileTranscriptionController: ObservableObject {
         localURL: URL,
         modelDirectory: String,
         outputDocument: IosSelectedOutputDocument,
+        modelPrepared: Bool = false,
         onProgress: @escaping (SingleFileTranscriptionProgress) -> Void
     ) -> SingleFileTranscriptionOutcome {
         let decoder = IosPlatformAudioDecoder(localURL: localURL)
         let transcriber = IosNativeTranscriber(modelDirectory: modelDirectory)
-        guard transcriber.initialize(modelDirectory: transcriber.modelDirectory) else {
+        guard modelPrepared || transcriber.initialize(modelDirectory: transcriber.modelDirectory) else {
             return SingleFileTranscriptionOutcome(
                 success: false,
                 result: nil,
@@ -345,6 +387,7 @@ private final class IosBatchEntryOutcomeTranscriber: OutcomeBatchEntryTranscribe
             localURL: Self.localURL(documentUri: entry.documentUri),
             modelDirectory: modelDirectory,
             outputDocument: outputDocument,
+            modelPrepared: true,
             onProgress: onProgress
         )
     }
@@ -477,7 +520,7 @@ private final class IosPlatformAudioDecoder: PlatformAudioDecoder {
     }
 }
 
-private final class IosNativeTranscriber: PlatformNativeTranscriber {
+final class IosNativeTranscriber: PlatformNativeTranscriber {
     let modelDirectory: String
     private(set) var lastError: String?
 
@@ -489,12 +532,24 @@ private final class IosNativeTranscriber: PlatformNativeTranscriber {
         voiceinbox_transcription_backend_configured()
     }
 
+    static func prepare(modelDirectory: String) -> Bool {
+        modelDirectory.withCString { voiceinbox_transcription_initialize($0) }
+    }
+
+    static func resetModel() {
+        voiceinbox_transcription_reset()
+    }
+
+    static func consumeLastError() -> String? {
+        guard let pointer = voiceinbox_transcription_last_error() else { return nil }
+        defer { voiceinbox_transcription_string_free(pointer) }
+        return String(cString: pointer)
+    }
+
     func initialize(modelDirectory: String) -> Bool {
-        let ok = modelDirectory.withCString { pointer in
-            voiceinbox_transcription_initialize(pointer)
-        }
+        let ok = Self.prepare(modelDirectory: modelDirectory)
         if !ok {
-            lastError = Self.consumeNativeError()
+            lastError = Self.consumeLastError() ?? "iOS native transcription failed."
         }
         return ok
     }
@@ -510,7 +565,7 @@ private final class IosNativeTranscriber: PlatformNativeTranscriber {
             voiceinbox_transcription_transcribe_chunk_json(pointer.baseAddress, pointer.count)
         }
         guard let result else {
-            lastError = Self.consumeNativeError()
+            lastError = Self.consumeLastError() ?? "iOS native transcription failed."
             return nil
         }
         defer { voiceinbox_transcription_string_free(result) }
@@ -526,13 +581,6 @@ private final class IosNativeTranscriber: PlatformNativeTranscriber {
         return text
     }
 
-    private static func consumeNativeError() -> String {
-        guard let pointer = voiceinbox_transcription_last_error() else {
-            return "iOS native transcription failed."
-        }
-        defer { voiceinbox_transcription_string_free(pointer) }
-        return String(cString: pointer)
-    }
 }
 
 private final class IosTranscriptStaging: PlatformTranscriptStaging {
