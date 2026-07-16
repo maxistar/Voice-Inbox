@@ -66,7 +66,7 @@ class TaskListDisplayItemsTest {
 
         assertEquals("No new tasks", item.message)
         assertEquals(
-            listOf(TaskActionKind.IMPORT_AUDIO, TaskActionKind.SELECT_FOLDER),
+            listOf(TaskActionKind.IMPORT_AUDIO),
             item.actions.map { it.kind },
         )
     }

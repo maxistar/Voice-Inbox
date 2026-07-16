@@ -215,10 +215,12 @@ object TaskListPresentationController {
             tasks = tasks,
             emptyMessage = if (tasks.isEmpty()) emptyMessage(input.filter) else null,
             emptyActions = if (tasks.isEmpty() && input.filter != TaskListFilter.PROCESSED) {
-                listOf(
-                    TaskActionPresentation(TaskActionKind.IMPORT_AUDIO, "Import Audio Files"),
-                    TaskActionPresentation(TaskActionKind.SELECT_FOLDER, "Select Audio Folder"),
-                )
+                buildList {
+                    add(TaskActionPresentation(TaskActionKind.IMPORT_AUDIO, "Import Audio Files"))
+                    if (input.folder.state == FolderSetupSnapshotState.UNSELECTED) {
+                        add(TaskActionPresentation(TaskActionKind.SELECT_FOLDER, "Select Audio Folder"))
+                    }
+                }
             } else {
                 emptyList()
             },

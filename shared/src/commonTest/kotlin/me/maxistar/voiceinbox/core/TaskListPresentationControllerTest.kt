@@ -204,12 +204,20 @@ class TaskListPresentationControllerTest {
     }
 
     @Test
-    fun emptyStateIsSpecificToFilterAndOffersImportOnlyForOpenLists() {
+    fun emptyStateOffersFolderSelectionOnlyWhenFolderIsUnselected() {
         val newState = state(TaskListFilter.NEW)
+        val withoutFolder = state(
+            filter = TaskListFilter.NEW,
+            folder = FolderSetupSnapshot(FolderSetupSnapshotState.UNSELECTED),
+        )
         val processed = state(TaskListFilter.PROCESSED)
 
         assertEquals("No new tasks", newState.emptyMessage)
-        assertEquals(listOf(TaskActionKind.IMPORT_AUDIO, TaskActionKind.SELECT_FOLDER), newState.emptyActions.map { it.kind })
+        assertEquals(listOf(TaskActionKind.IMPORT_AUDIO), newState.emptyActions.map { it.kind })
+        assertEquals(
+            listOf(TaskActionKind.IMPORT_AUDIO, TaskActionKind.SELECT_FOLDER),
+            withoutFolder.emptyActions.map { it.kind },
+        )
         assertEquals("No processed audio files", processed.emptyMessage)
         assertTrue(processed.emptyActions.isEmpty())
     }
