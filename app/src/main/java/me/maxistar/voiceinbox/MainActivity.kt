@@ -34,6 +34,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private lateinit var statusProgress: ProgressBar
     private lateinit var statusMeta: TextView
     private lateinit var downloadModel: Button
+    private lateinit var importModel: Button
     private lateinit var transcribeAll: Button
     private lateinit var selectOutput: Button
     private lateinit var selectFolder: Button
@@ -121,6 +122,12 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         if (uris.isNotEmpty()) ingestAudioUris(uris)
     }
 
+    private val modelFolderPicker = registerForActivityResult(
+        ActivityResultContracts.OpenDocumentTree(),
+    ) { uri ->
+        if (uri != null) acceptModelFolder(uri)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -156,6 +163,9 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         )
 
         downloadModel.setOnClickListener { SpeechModelDownloadWorker.enqueue(this) }
+        importModel.setOnClickListener {
+            if (modelDownloadAvailable && !modelLoading) modelFolderPicker.launch(null)
+        }
         transcribeAll.setOnClickListener { startBatchTranscription() }
         importAudio.setOnClickListener {
             if (!ingestionActive) importPicker.launch(arrayOf("audio/*", "application/ogg"))
@@ -240,6 +250,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         statusProgress = findViewById(R.id.statusProgress)
         statusMeta = findViewById(R.id.statusMeta)
         downloadModel = findViewById(R.id.downloadModel)
+        importModel = findViewById(R.id.importModel)
         transcribeAll = findViewById(R.id.transcribeAll)
         selectOutput = findViewById(R.id.selectOutput)
         selectFolder = findViewById(R.id.selectFolder)
@@ -498,6 +509,55 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                     renderStatusBlock()
                     updateControls()
                     evaluateStartupProcessing()
+                }
+            }
+        }
+    }
+
+    private fun acceptModelFolder(uri: Uri) {
+        val alreadyPersisted = contentResolver.persistedUriPermissions.any {
+            it.uri == uri && it.isReadPermission
+        }
+        val permission = runCatching {
+            contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+        }
+        if (permission.isFailure) {
+            setModelUi(
+                "The selected model folder cannot be accessed after the picker closes",
+                loading = false,
+                canDownload = true,
+            )
+            updateControls()
+            return
+        }
+        if (!alreadyPersisted) SpeechModelImportPermission.recordOwned(this, uri)
+        statusError = null
+        setModelUi("Checking local speech model", loading = true, canDownload = false)
+        updateControls()
+        importExecutor.execute {
+            runCatching {
+                SpeechModelDirectoryReader(contentResolver).requiredDocuments(
+                    uri,
+                    EmbeddedSpeechModel.manifest,
+                )
+            }.onSuccess {
+                runOnUiThread {
+                    if (activityDestroyed) return@runOnUiThread
+                    SpeechModelImportWorker.enqueue(this, uri)
+                }
+            }.onFailure { error ->
+                SpeechModelImportPermission.releaseOwnedIfUnused(this)
+                runOnUiThread {
+                    if (activityDestroyed) return@runOnUiThread
+                    setModelUi(
+                        error.message ?: "The selected model folder is not readable",
+                        loading = false,
+                        canDownload = true,
+                    )
+                    updateControls()
                 }
             }
         }
@@ -819,9 +879,13 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
 
     private fun observeModelInstallation() {
         WorkManager.getInstance(this)
-            .getWorkInfosForUniqueWorkLiveData(SpeechModelDownloadWorker.UNIQUE_WORK_NAME)
+            .getWorkInfosForUniqueWorkLiveData(SpeechModelInstallationWork.UNIQUE_WORK_NAME)
             .observe(this) { infos ->
-                val info = infos.firstOrNull() ?: return@observe
+                val info = infos.firstOrNull { it.state in ACTIVE_WORK_STATES } ?: infos.lastOrNull()
+                if (info == null) {
+                    SpeechModelImportPermission.releaseOwnedIfUnused(this)
+                    return@observe
+                }
                 when (info.state) {
                     WorkInfo.State.ENQUEUED,
                     WorkInfo.State.BLOCKED,
@@ -829,14 +893,14 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                     -> {
                         modelReady = false
                         startupCoordinator.setModelReady(false)
-                        val bytes = info.progress.getLong(SpeechModelDownloadWorker.KEY_BYTES_DOWNLOADED, 0)
+                        val bytes = info.progress.getLong(SpeechModelInstallationWork.KEY_BYTES_DOWNLOADED, 0)
                         val total = info.progress.getLong(
-                            SpeechModelDownloadWorker.KEY_TOTAL_BYTES,
+                            SpeechModelInstallationWork.KEY_TOTAL_BYTES,
                             EmbeddedSpeechModel.manifest.totalSizeBytes,
                         )
                         modelMessage =
-                            info.progress.getString(SpeechModelDownloadWorker.KEY_MESSAGE)
-                                ?: "Downloading speech model"
+                            info.progress.getString(SpeechModelInstallationWork.KEY_MESSAGE)
+                                ?: "Installing speech model"
                         modelLoading = true
                         modelDownloadAvailable = false
                         modelDownloadProgress = ((bytes * 100) / total.coerceAtLeast(1)).toInt()
@@ -845,25 +909,31 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                         evaluateStartupProcessing()
                     }
                     WorkInfo.State.SUCCEEDED -> {
-                    if (shouldHandleModelInstallSuccess(info.id.toString())) {
-                        modelReadiness.invalidate()
-                        SpeechModelPreparation.invalidate(NativeTranscriptionBridge::reset)
+                        SpeechModelImportPermission.releaseOwnedIfUnused(this)
+                        if (shouldHandleModelInstallSuccess(info.id.toString())) {
+                            modelReadiness.invalidate()
+                            SpeechModelPreparation.invalidate(NativeTranscriptionBridge::reset)
                         }
                         refreshModel()
                     }
                     WorkInfo.State.FAILED -> {
+                        SpeechModelImportPermission.releaseOwnedIfUnused(this)
                         modelReady = false
                         startupCoordinator.setModelReady(false)
                         setModelUi(
-                            info.outputData.getString(SpeechModelDownloadWorker.KEY_ERROR)
-                                ?: "Speech model download failed",
+                            info.outputData.getString(SpeechModelInstallationWork.KEY_ERROR)
+                                ?: "Speech model installation failed",
                             false,
                             true,
                         )
                         updateControls()
                         evaluateStartupProcessing()
                     }
-                    else -> Unit
+                    WorkInfo.State.CANCELLED -> {
+                        SpeechModelImportPermission.releaseOwnedIfUnused(this)
+                        modelReadiness.invalidate()
+                        refreshModel()
+                    }
                 }
             }
     }
@@ -1152,6 +1222,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         statusProgress.isIndeterminate = state.progressIndeterminate
         statusProgress.progress = state.progress
         downloadModel.visibility = if (state.downloadVisible) View.VISIBLE else View.GONE
+        importModel.visibility = if (state.downloadVisible) View.VISIBLE else View.GONE
+        importModel.isEnabled = modelDownloadAvailable && !modelLoading
     }
 
     private fun setOptionalText(view: TextView, value: String?) {

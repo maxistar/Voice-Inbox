@@ -49,6 +49,7 @@
     <string name="no_shared_audio">No readable audio was shared.</string>
     <string name="checking_speech_model">Checking speech model</string>
     <string name="download_speech_model">Download speech model</string>
+    <string name="install_model_from_folder">Install from folder</string>
     <string name="new_label">New</string>
     <string name="processed">Processed</string>
     <string name="no_new_audio_files">No new audio files</string>

@@ -27,11 +27,16 @@ class SpeechModelRepository(
     private val root: File,
     val manifest: SpeechModelManifest = EmbeddedSpeechModel.manifest,
     private val usableSpace: (File) -> Long = { it.usableSpace },
+    private val moveDirectory: (File, File) -> Boolean = { source, destination ->
+        source.renameTo(destination)
+    },
 ) {
     private val stagingRoot = File(root, "staging")
     private val installedRoot = File(root, "installed")
     private val activeVersionFile = File(root, "active-model")
     private val invalidModelFile = File(root, "invalid-model")
+    private val backupDirectory = File(installedRoot, "${manifest.version}.backup")
+    private val activationMarker = File(root, "activation-model")
 
     val stagingDirectory: File
         get() = File(stagingRoot, manifest.version)
@@ -40,6 +45,7 @@ class SpeechModelRepository(
         get() = File(installedRoot, manifest.version)
 
     fun inspectLightweight(): InstalledSpeechModelState {
+        recoverInterruptedActivation()
         invalidModelFile.takeIf(File::isFile)?.readText()?.trim()?.takeIf(String::isNotEmpty)?.let {
             return InstalledSpeechModelState.Invalid(it)
         }
@@ -60,6 +66,7 @@ class SpeechModelRepository(
     }
 
     fun inspect(): InstalledSpeechModelState {
+        recoverInterruptedActivation()
         val activeVersion = activeVersionFile.takeIf(File::isFile)?.readText()?.trim()
         if (activeVersion == manifest.version) {
             return recordValidation(validateDirectory(installedDirectory))
@@ -96,6 +103,23 @@ class SpeechModelRepository(
         }
     }
 
+    fun prepareFreshImport(): Result<Unit> = runCatching {
+        root.mkdirs()
+        stagingRoot.mkdirs()
+        installedRoot.mkdirs()
+        recoverInterruptedActivation()
+        cleanupTemporaryFiles(root)
+        stagingRoot.listFiles()?.forEach(File::deleteRecursively)
+        check(stagingDirectory.mkdirs() || stagingDirectory.isDirectory) {
+            "Failed to create model import staging directory"
+        }
+        val required = manifest.totalSizeBytes + manifest.safetyMarginBytes
+        val available = usableSpace(root)
+        check(available >= required) {
+            "Not enough storage: ${formatBytes(required)} required, ${formatBytes(available)} available"
+        }
+    }
+
     fun stagingFile(entry: SpeechModelFile): File = File(stagingDirectory, entry.name)
 
     fun temporaryFile(entry: SpeechModelFile): File =
@@ -115,21 +139,53 @@ class SpeechModelRepository(
         }
     }
 
+    fun acceptTemporaryFile(entry: SpeechModelFile): Result<File> = runCatching {
+        val temporary = temporaryFile(entry)
+        verifyFile(temporary, entry).getOrThrow()
+        val destination = stagingFile(entry)
+        destination.delete()
+        check(temporary.renameTo(destination)) { "Failed to accept ${entry.name}" }
+        destination
+    }
+
     fun activate(): Result<File> = runCatching {
+        recoverInterruptedActivation()
         val validation = validateDirectory(stagingDirectory)
         check(validation is InstalledSpeechModelState.Ready) {
             (validation as? InstalledSpeechModelState.Invalid)?.reason ?: "Staged model is incomplete"
         }
 
-        if (installedDirectory.exists()) {
-            installedDirectory.deleteRecursively()
-        }
         installedRoot.mkdirs()
-        check(stagingDirectory.renameTo(installedDirectory)) {
-            "Failed to activate downloaded model"
+        backupDirectory.deleteRecursively()
+        val replacing = installedDirectory.exists()
+        activationMarker.writeText(if (replacing) MARKER_REPLACEMENT else MARKER_FRESH)
+        if (replacing) {
+            check(moveDirectory(installedDirectory, backupDirectory)) {
+                "Failed to back up installed model"
+            }
         }
-        writeActiveVersion(manifest.version)
-        invalidModelFile.delete()
+        try {
+            check(moveDirectory(stagingDirectory, installedDirectory)) {
+                "Failed to activate staged model"
+            }
+            writeActiveVersion(manifest.version)
+            invalidModelFile.delete()
+            activationMarker.delete()
+            backupDirectory.deleteRecursively()
+        } catch (error: Throwable) {
+            installedDirectory.deleteRecursively()
+            if (replacing && backupDirectory.exists()) {
+                check(moveDirectory(backupDirectory, installedDirectory)) {
+                    "Failed to restore previous speech model"
+                }
+                writeActiveVersion(manifest.version)
+                invalidModelFile.delete()
+            } else {
+                activeVersionFile.delete()
+            }
+            activationMarker.delete()
+            throw error
+        }
 
         installedRoot.listFiles()
             ?.filter { it.name != manifest.version }
@@ -147,10 +203,38 @@ class SpeechModelRepository(
 
     fun cleanupStaleState() {
         root.mkdirs()
+        recoverInterruptedActivation()
         cleanupTemporaryFiles(root)
         stagingRoot.listFiles()
             ?.filter { it.name != manifest.version }
             ?.forEach(File::deleteRecursively)
+    }
+
+    internal fun recoverInterruptedActivation() {
+        if (!activationMarker.isFile) {
+            if (backupDirectory.exists()) {
+                if (installedDirectory.exists()) {
+                    backupDirectory.deleteRecursively()
+                } else if (moveDirectory(backupDirectory, installedDirectory)) {
+                    writeActiveVersion(manifest.version)
+                }
+            }
+            return
+        }
+
+        val replacement = activationMarker.readText().trim() == MARKER_REPLACEMENT
+        if (replacement && backupDirectory.exists()) {
+            installedDirectory.deleteRecursively()
+            check(moveDirectory(backupDirectory, installedDirectory)) {
+                "Failed to recover previous speech model"
+            }
+            writeActiveVersion(manifest.version)
+            invalidModelFile.delete()
+        } else if (!replacement) {
+            installedDirectory.deleteRecursively()
+            activeVersionFile.delete()
+        }
+        activationMarker.delete()
     }
 
     private fun validateDirectory(directory: File): InstalledSpeechModelState {
@@ -216,6 +300,8 @@ class SpeechModelRepository(
     }
 
     companion object {
+        private const val MARKER_REPLACEMENT = "replacement"
+        private const val MARKER_FRESH = "fresh"
         fun sha256(file: File): String {
             val digest = MessageDigest.getInstance("SHA-256")
             FileInputStream(file).use { input ->

@@ -88,6 +88,87 @@ class MainActivityInstrumentedTest {
     }
 
     @Test
+    fun missingModelShowsDownloadAndLocalImportActions() {
+        clearActivityState()
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                MainActivity::class.java.getDeclaredField("modelReady")
+                    .apply { isAccessible = true }.setBoolean(activity, false)
+                MainActivity::class.java.getDeclaredField("modelLoading")
+                    .apply { isAccessible = true }.setBoolean(activity, false)
+                MainActivity::class.java.getDeclaredField("modelDownloadAvailable")
+                    .apply { isAccessible = true }.setBoolean(activity, true)
+                MainActivity::class.java.getDeclaredMethod("renderStatusBlock")
+                    .apply { isAccessible = true }.invoke(activity)
+            }
+
+            onView(withId(R.id.downloadModel)).check(matches(isDisplayed()))
+            onView(withId(R.id.importModel)).check(matches(isDisplayed()))
+            onView(withId(R.id.importModel)).check(matches(isEnabled()))
+        }
+    }
+
+    @Test
+    fun activeModelInstallationRemainsVisibleAcrossRecreation() {
+        clearActivityState()
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val request = OneTimeWorkRequestBuilder<SpeechModelImportWorker>()
+            .setInitialDelay(1, TimeUnit.DAYS)
+            .setInputData(
+                androidx.work.workDataOf(
+                    SpeechModelImportWorker.KEY_TREE_URI to "content://model/tree/root",
+                ),
+            )
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            SpeechModelInstallationWork.UNIQUE_WORK_NAME,
+            ExistingWorkPolicy.REPLACE,
+            request,
+        ).result.get(30, TimeUnit.SECONDS)
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            awaitActivity(scenario) { activity ->
+                !activity.findViewById<Button>(R.id.downloadModel).isShown &&
+                    !activity.findViewById<Button>(R.id.importModel).isShown
+            }
+            scenario.recreate()
+            awaitActivity(scenario) { activity ->
+                !activity.findViewById<Button>(R.id.downloadModel).isShown &&
+                    !activity.findViewById<Button>(R.id.importModel).isShown &&
+                    activity.findViewById<android.widget.ProgressBar>(R.id.statusProgress).isShown
+            }
+        }
+    }
+
+    @Test
+    fun downloadAndImportUseOneInstallationWorkSlot() {
+        clearActivityState()
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val importRequest = OneTimeWorkRequestBuilder<SpeechModelImportWorker>()
+            .setInitialDelay(1, TimeUnit.DAYS)
+            .setInputData(
+                androidx.work.workDataOf(
+                    SpeechModelImportWorker.KEY_TREE_URI to "content://model/tree/root",
+                ),
+            )
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            SpeechModelInstallationWork.UNIQUE_WORK_NAME,
+            ExistingWorkPolicy.KEEP,
+            importRequest,
+        ).result.get(30, TimeUnit.SECONDS)
+
+        SpeechModelDownloadWorker.enqueue(context)
+
+        val active = WorkManager.getInstance(context)
+            .getWorkInfosForUniqueWork(SpeechModelInstallationWork.UNIQUE_WORK_NAME)
+            .get(30, TimeUnit.SECONDS)
+            .filter { !it.state.isFinished }
+        assertEquals(1, active.size)
+        assertEquals(importRequest.id, active.single().id)
+    }
+
+    @Test
     fun transcribeAllIsVisibleOnlyOnNewTabWhenPendingWorkExists() {
         clearActivityState()
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -405,6 +486,8 @@ class MainActivityInstrumentedTest {
             .cancelUniqueWork(TranscriptionWorker.UNIQUE_WORK_NAME)
             .result.get(30, TimeUnit.SECONDS)
         WorkManager.getInstance(context).pruneWork().result.get(30, TimeUnit.SECONDS)
+        context.getSharedPreferences("speech_model_import", Context.MODE_PRIVATE)
+            .edit().clear().commit()
         context.getSharedPreferences(DocumentSelectionStore.PREFERENCES_NAME, Context.MODE_PRIVATE)
             .edit()
             .clear()
