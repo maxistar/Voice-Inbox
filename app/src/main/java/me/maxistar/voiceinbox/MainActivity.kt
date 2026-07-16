@@ -16,6 +16,7 @@ import android.widget.LinearLayout
 import android.widget.PopupMenu
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -36,6 +37,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private lateinit var transcribeAll: Button
     private lateinit var selectOutput: Button
     private lateinit var selectFolder: Button
+    private lateinit var importAudio: Button
     private lateinit var outputName: TextView
     private lateinit var folderName: TextView
     private lateinit var newTab: Button
@@ -44,6 +46,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private lateinit var emptyList: TextView
 
     private lateinit var selectionStore: DocumentSelectionStore
+    private lateinit var selectionAccess: PersistedSelectionAccess
     private lateinit var documentAccess: DocumentAccess
     private lateinit var folderScanner: AudioFolderScanner
     private lateinit var catalog: SqlDelightAudioCatalogRepository
@@ -51,17 +54,22 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private lateinit var startupPolicyStore: StartupProcessingPolicyStore
     private lateinit var startupCoordinator: StartupProcessingCoordinator
     private val folderExecutor = Executors.newSingleThreadExecutor()
+    private val importExecutor = Executors.newSingleThreadExecutor()
 
     private var modelReady = false
     private var outputUri: Uri? = null
     private var folderUri: Uri? = null
+    private var outputAccessReady = false
+    private var folderAccessReady = false
+    private var outputAccessError: String? = null
+    private var folderAccessError: String? = null
     private var transcriptionState = TranscriptionObservationState.UNKNOWN
     private var folderChecking = false
     private var folderScanQueued = false
     private var scanning = false
     private var pendingCount = 0
     private var selectedTab = MainScreenCatalogTab.NEW
-    private var lastCatalogWorkState: String? = null
+    private var lastCatalogWorkState: CatalogWorkRefreshKey? = null
     private var currentSessionTranscriptionWorkId: UUID? = null
     private var currentSessionObservedActiveTranscription = false
     private var modelMessage = "Checking speech model"
@@ -85,6 +93,15 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private var previewState = PreviewPlaybackState.IDLE
     private var activityDestroyed = false
     private var scanGeneration = 0L
+    private var outputValidationGeneration = 0L
+    private var folderValidationGeneration = 0L
+    private var catalogRefreshGeneration = 0L
+    private var pendingStartupCatalogGeneration: Long? = null
+    private var pendingFolderScanOrigin: FolderScanOrigin? = null
+    private var hasStarted = false
+    private var ingestionActive = false
+    private var importInboxAvailable = false
+    private val queuedImportUris = mutableListOf<Uri>()
 
     private val outputPicker = registerForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -96,6 +113,12 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         ActivityResultContracts.OpenDocumentTree(),
     ) { uri ->
         if (uri != null) acceptFolder(uri)
+    }
+
+    private val importPicker = registerForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments(),
+    ) { uris ->
+        if (uris.isNotEmpty()) ingestAudioUris(uris)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -113,6 +136,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         selectionStore = DocumentSelectionStore(
             getSharedPreferences(DocumentSelectionStore.PREFERENCES_NAME, MODE_PRIVATE),
         )
+        selectionAccess = PersistedSelectionAccess(contentResolver)
         documentAccess = DocumentAccess(contentResolver)
         folderScanner = AudioFolderScanner(contentResolver)
         catalog = AndroidSqlDelightAudioCatalogFactory(this).create()
@@ -123,6 +147,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         startupCoordinator = StartupProcessingCoordinator.restore(
             savedInstanceState?.getString(STATE_STARTUP_PROCESSING_STAGE),
         )
+        bootstrapSelectionIdentities()
         ScheduledTranscriptionScheduler.sync(
             this,
             ScheduledTranscriptionSettingsStore(
@@ -132,6 +157,9 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
 
         downloadModel.setOnClickListener { SpeechModelDownloadWorker.enqueue(this) }
         transcribeAll.setOnClickListener { startBatchTranscription() }
+        importAudio.setOnClickListener {
+            if (!ingestionActive) importPicker.launch(arrayOf("audio/*", "application/ogg"))
+        }
         selectOutput.setOnClickListener { launchOutputPickerIfEnabled() }
         selectFolder.setOnClickListener { launchFolderPickerIfEnabled() }
         newTab.setOnClickListener {
@@ -145,8 +173,26 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
 
         observeModelInstallation()
         observeTranscription()
-        restoreSelections()
+        restoreSelections(scanFolderOnSuccess = true)
+        refreshCatalog()
+        cleanupImportedAudio()
+        handleShareIntent(intent)
         refreshModel()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (hasStarted) {
+            restoreSelections(scanFolderOnSuccess = false)
+            refreshCatalog()
+        } else {
+            hasStarted = true
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleShareIntent(intent)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -184,6 +230,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         activityDestroyed = true
         stopPreviewPlayback(render = false)
         folderExecutor.shutdown()
+        importExecutor.shutdown()
         super.onDestroy()
     }
 
@@ -196,6 +243,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         transcribeAll = findViewById(R.id.transcribeAll)
         selectOutput = findViewById(R.id.selectOutput)
         selectFolder = findViewById(R.id.selectFolder)
+        importAudio = findViewById(R.id.importAudio)
         outputName = findViewById(R.id.outputName)
         folderName = findViewById(R.id.folderName)
         newTab = findViewById(R.id.newTab)
@@ -204,68 +252,161 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         emptyList = findViewById(R.id.emptyList)
     }
 
-    private fun restoreSelections() {
-        selectionStore.loadOutputUri()?.let(Uri::parse)?.let { stored ->
+    private fun bootstrapSelectionIdentities() {
+        setStoredOutputIdentity(selectionStore.loadOutputUri()?.let(Uri::parse))
+        setStoredFolderIdentity(selectionStore.loadFolderUri()?.let(Uri::parse))
+    }
+
+    private fun setStoredOutputIdentity(stored: Uri?) {
+        outputUri = stored
+        outputAccessReady = false
+        startupCoordinator.setOutputReady(false)
+        outputName.text = getString(
+            if (stored == null) R.string.output_not_selected else R.string.output_restoring,
+        )
+    }
+
+    private fun setStoredFolderIdentity(stored: Uri?) {
+        folderUri = stored
+        folderAccessReady = false
+        startupCoordinator.setFolderReady(false)
+        folderName.text = getString(
+            if (stored == null) R.string.folder_not_selected else R.string.folder_restoring,
+        )
+    }
+
+    private fun restoreSelections(scanFolderOnSuccess: Boolean) {
+        val storedOutput = selectionStore.loadOutputUri()?.let(Uri::parse)
+        if (storedOutput != outputUri) setStoredOutputIdentity(storedOutput)
+        val outputGeneration = ++outputValidationGeneration
+        if (storedOutput == null) {
+            outputAccessError = null
+            outputAccessReady = false
+            startupCoordinator.setOutputReady(false)
+        } else {
+            outputAccessReady = false
+            startupCoordinator.setOutputReady(false)
+            outputName.text = getString(R.string.output_restoring)
             folderExecutor.execute {
-                runCatching {
-                    documentAccess.requireAppendable(stored)
-                    documentAccess.metadata(stored)
-                }.onSuccess { metadata ->
-                    runOnUiThread {
-                        if (activityDestroyed) return@runOnUiThread
-                        outputUri = stored
-                        startupCoordinator.setOutputReady(true)
-                        updateOutputSummary(metadata.displayName)
-                        updateControls()
-                        evaluateStartupProcessing()
+                val result = selectionAccess.validate(
+                    uri = storedOutput,
+                    requiredAccess = RequiredDocumentAccess.WRITE,
+                ) {
+                    documentAccess.requireAppendable(storedOutput)
+                    documentAccess.metadata(storedOutput)
+                }
+                runOnUiThread {
+                    if (
+                        activityDestroyed ||
+                        outputGeneration != outputValidationGeneration ||
+                        outputUri != storedOutput
+                    ) return@runOnUiThread
+                    when (result.state) {
+                        PersistedSelectionAccessState.VALID -> {
+                            outputAccessReady = true
+                            outputAccessError = null
+                            startupCoordinator.setOutputReady(true)
+                            updateOutputSummary(result.value?.displayName)
+                        }
+                        PersistedSelectionAccessState.TEMPORARILY_UNAVAILABLE -> {
+                            outputAccessReady = false
+                            outputAccessError = result.error?.message
+                                ?: "Output file is temporarily unavailable"
+                            startupCoordinator.setOutputReady(false)
+                            outputName.text = getString(R.string.output_temporarily_unavailable)
+                        }
+                        PersistedSelectionAccessState.PERMISSION_REVOKED -> {
+                            selectionStore.clearOutputUri()
+                            setStoredOutputIdentity(null)
+                            outputAccessError = result.error?.message
+                                ?: "Output file access was revoked; select it again"
+                        }
                     }
-                }.onFailure {
-                    selectionStore.clearOutputUri()
-                    runOnUiThread {
-                        if (activityDestroyed) return@runOnUiThread
-                        startupCoordinator.setOutputReady(false)
-                        evaluateStartupProcessing()
-                    }
+                    renderStatusBlock()
+                    updateControls()
+                    evaluateStartupProcessing()
                 }
             }
         }
-        selectionStore.loadFolderUri()?.let(Uri::parse)?.let { stored ->
-            folderExecutor.execute {
-                runOnUiThread {
-                    if (activityDestroyed) return@runOnUiThread
-                    folderChecking = true
-                    renderStatusBlock()
-                    updateControls()
-                }
-                runCatching {
-                    folderScanner.requireReadable(stored)
-                    folderScanner.folderName(stored)
-                }.onSuccess { name ->
-                    runOnUiThread {
-                        if (activityDestroyed) return@runOnUiThread
-                        folderChecking = false
-                        folderUri = stored
+
+        val storedFolder = selectionStore.loadFolderUri()?.let(Uri::parse)
+        if (storedFolder != folderUri) setStoredFolderIdentity(storedFolder)
+        val folderGeneration = ++folderValidationGeneration
+        if (storedFolder == null) {
+            folderAccessError = null
+            folderAccessReady = false
+            folderChecking = false
+            startupCoordinator.setFolderReady(false)
+            refreshCatalog()
+            return
+        }
+        folderAccessReady = false
+        folderChecking = true
+        startupCoordinator.setFolderReady(false)
+        folderName.text = getString(R.string.folder_restoring)
+        renderStatusBlock()
+        updateControls()
+        folderExecutor.execute {
+            val result = selectionAccess.validate(
+                uri = storedFolder,
+                requiredAccess = RequiredDocumentAccess.READ,
+            ) {
+                folderScanner.requireReadable(storedFolder)
+                folderScanner.folderName(storedFolder)
+            }
+            runOnUiThread {
+                if (
+                    activityDestroyed ||
+                    folderGeneration != folderValidationGeneration ||
+                    folderUri != storedFolder
+                ) return@runOnUiThread
+                folderChecking = false
+                when (result.state) {
+                    PersistedSelectionAccessState.VALID -> {
+                        folderAccessReady = true
+                        folderAccessError = null
                         startupCoordinator.setFolderReady(true)
-                        updateFolderSummary(name)
-                        updateControls()
-                        refreshCatalog()
-                        scanFolder(FolderScanOrigin.STARTUP)
+                        updateFolderSummary(result.value)
+                        if (scanFolderOnSuccess) {
+                            pendingFolderScanOrigin = FolderScanOrigin.STARTUP
+                        }
                     }
-                }.onFailure {
-                    selectionStore.clearFolderUri()
-                    runOnUiThread {
-                        if (activityDestroyed) return@runOnUiThread
-                        folderChecking = false
+                    PersistedSelectionAccessState.TEMPORARILY_UNAVAILABLE -> {
+                        folderAccessReady = false
+                        folderAccessError = result.error?.message
+                            ?: "Audio folder is temporarily unavailable"
                         startupCoordinator.setFolderReady(false)
-                        evaluateStartupProcessing()
+                        folderName.text = getString(R.string.folder_temporarily_unavailable)
                     }
-                    showError(it.message ?: "Audio folder is not readable")
+                    PersistedSelectionAccessState.PERMISSION_REVOKED -> {
+                        selectionStore.clearFolderUri()
+                        setStoredFolderIdentity(null)
+                        folderAccessError = result.error?.message
+                            ?: "Audio folder access was revoked; select it again"
+                    }
                 }
+                renderStatusBlock()
+                updateControls()
+                refreshCatalog()
+                maybeStartPendingFolderScan()
+                evaluateStartupProcessing()
             }
         }
     }
 
+    private fun maybeStartPendingFolderScan() {
+        val origin = pendingFolderScanOrigin ?: return
+        if (
+            !folderAccessReady ||
+            transcriptionState == TranscriptionObservationState.UNKNOWN ||
+            transcriptionActive()
+        ) return
+        pendingFolderScanOrigin = null
+        scanFolder(origin)
+    }
+
     private fun acceptOutput(uri: Uri) {
+        val validationGeneration = ++outputValidationGeneration
         runCatching {
             contentResolver.takePersistableUriPermission(
                 uri,
@@ -277,10 +418,15 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                 documentAccess.requireAppendable(uri)
                 documentAccess.metadata(uri)
             }.onSuccess { metadata ->
-                selectionStore.saveOutputUri(uri.toString())
                 runOnUiThread {
-                    if (activityDestroyed) return@runOnUiThread
+                    if (
+                        activityDestroyed ||
+                        validationGeneration != outputValidationGeneration
+                    ) return@runOnUiThread
+                    selectionStore.saveOutputUri(uri.toString())
                     outputUri = uri
+                    outputAccessReady = true
+                    outputAccessError = null
                     startupCoordinator.setOutputReady(true)
                     updateOutputSummary(metadata.displayName)
                     statusError = null
@@ -290,22 +436,30 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                 }
             }.onFailure {
                 runOnUiThread {
-                    if (activityDestroyed) return@runOnUiThread
-                    startupCoordinator.setOutputReady(false)
+                    if (
+                        activityDestroyed ||
+                        validationGeneration != outputValidationGeneration
+                    ) return@runOnUiThread
+                    statusError = it.message ?: "Output file is not writable"
+                    renderStatusBlock()
+                    updateControls()
                     evaluateStartupProcessing()
                 }
-                showError(it.message ?: "Output file is not writable")
             }
         }
     }
 
     private fun acceptFolder(uri: Uri) {
+        val validationGeneration = ++folderValidationGeneration
         runCatching {
             contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         folderExecutor.execute {
             runOnUiThread {
-                if (activityDestroyed) return@runOnUiThread
+                if (
+                    activityDestroyed ||
+                    validationGeneration != folderValidationGeneration
+                ) return@runOnUiThread
                 folderChecking = true
                 renderStatusBlock()
                 updateControls()
@@ -314,34 +468,51 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                 folderScanner.requireReadable(uri)
                 folderScanner.folderName(uri)
             }.onSuccess { name ->
-                selectionStore.saveFolderUri(uri.toString())
                 runOnUiThread {
-                    if (activityDestroyed) return@runOnUiThread
+                    if (
+                        activityDestroyed ||
+                        validationGeneration != folderValidationGeneration
+                    ) return@runOnUiThread
+                    selectionStore.saveFolderUri(uri.toString())
                     folderChecking = false
                     folderUri = uri
+                    folderAccessReady = true
+                    folderAccessError = null
                     startupCoordinator.setFolderReady(true)
                     updateFolderSummary(name)
                     statusError = null
                     renderStatusBlock()
                     updateControls()
                     refreshCatalog()
-                    scanFolder()
+                    pendingFolderScanOrigin = FolderScanOrigin.USER
+                    maybeStartPendingFolderScan()
                 }
             }.onFailure {
                 runOnUiThread {
-                    if (activityDestroyed) return@runOnUiThread
+                    if (
+                        activityDestroyed ||
+                        validationGeneration != folderValidationGeneration
+                    ) return@runOnUiThread
                     folderChecking = false
-                    startupCoordinator.setFolderReady(false)
+                    statusError = it.message ?: "Audio folder is not readable"
+                    renderStatusBlock()
+                    updateControls()
                     evaluateStartupProcessing()
                 }
-                showError(it.message ?: "Audio folder is not readable")
             }
         }
     }
 
     private fun scanFolder(origin: FolderScanOrigin = FolderScanOrigin.USER) {
         val folder = folderUri ?: return
-        if (folderChecking || folderScanQueued || scanning || transcriptionActive()) return
+        if (
+            !folderAccessReady ||
+            folderChecking ||
+            folderScanQueued ||
+            scanning ||
+            transcriptionState == TranscriptionObservationState.UNKNOWN ||
+            transcriptionActive()
+        ) return
         val generation = ++scanGeneration
         val startupGeneration = generation.takeIf {
             origin == FolderScanOrigin.STARTUP && startupCoordinator.beginStartupScan(generation)
@@ -395,31 +566,47 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
 
     private fun refreshCatalog(startupGeneration: Long? = null) {
         if (activityDestroyed) return
-        val folder = folderUri?.toString()
-        if (folder == null) {
-            pendingCount = 0
-            renderEntries(emptyList())
-            renderStatusBlock()
-            updateControls()
-            return
+        if (startupGeneration != null) {
+            pendingStartupCatalogGeneration = startupGeneration
         }
+        val token = CatalogRefreshToken(
+            generation = ++catalogRefreshGeneration,
+            sourceScope = activeSourceScope(),
+            selectedTab = selectedTab,
+        )
+        val startupGenerationForRequest = pendingStartupCatalogGeneration
         folderExecutor.execute {
-            val newEntries = catalog.newEntries(folder)
-            val entries = if (selectedTab == MainScreenCatalogTab.NEW) {
+            val newEntries = catalog.newEntries(token.sourceScope)
+            val processedEntries = catalog.processedEntries(token.sourceScope)
+            val entries = if (token.selectedTab == MainScreenCatalogTab.NEW) {
                 newEntries
             } else {
-                catalog.processedEntries(folder)
+                processedEntries
             }
             runOnUiThread {
                 if (activityDestroyed) return@runOnUiThread
+                if (
+                    !CatalogRefreshPolicy.isCurrent(
+                        request = token,
+                        currentGeneration = catalogRefreshGeneration,
+                        currentSourceScope = activeSourceScope(),
+                        currentTab = selectedTab,
+                    )
+                ) return@runOnUiThread
                 pendingCount = newEntries.count { it.state == AudioFileState.PENDING }
-                val catalogFailedCount = newEntries.count { it.state == AudioFileState.FAILED }
+                importInboxAvailable = (newEntries + processedEntries).any {
+                    it.folderUri == AndroidAudioImportConstants.SOURCE_ID
+                }
+                val catalogFailedCount = processedEntries.count { it.state == AudioFileState.FAILED }
                 renderEntries(entries)
                 renderStatusBlock()
                 updateControls()
-                if (startupGeneration != null) {
+                if (startupGenerationForRequest != null) {
+                    if (pendingStartupCatalogGeneration == startupGenerationForRequest) {
+                        pendingStartupCatalogGeneration = null
+                    }
                     startupCoordinator.onStartupCatalogReady(
-                        startupGeneration,
+                        startupGenerationForRequest,
                         pendingCount,
                         catalogFailedCount,
                     )
@@ -552,12 +739,11 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     }
 
     private fun retryEntry(entry: AudioCatalogEntry) {
-        val folder = folderUri ?: return
         val output = outputUri ?: return
         stopPreviewPlayback(render = true)
         currentSessionTranscriptionWorkId = TranscriptionWorker.enqueueRetry(
             this,
-            folder,
+            folderUri,
             output,
             entry.id,
         )
@@ -691,6 +877,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                     known = true,
                     active = transcriptionActive(),
                 )
+                maybeStartPendingFolderScan()
                 evaluateStartupProcessing()
                 if (infos.isEmpty()) {
                     transcriptionFinished = false
@@ -746,8 +933,14 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                     statusError = null
                 }
                 renderStatusBlock()
-                val catalogState = "${info.id}:${info.state}:$completedFiles:$failedFiles"
-                if (catalogState != lastCatalogWorkState) {
+                val catalogState = CatalogWorkRefreshKey(
+                    workId = info.id.toString(),
+                    workState = info.state.name,
+                    filename = transcriptionFilename,
+                    completedFiles = completedFiles,
+                    failedFiles = failedFiles,
+                )
+                if (CatalogRefreshPolicy.shouldRefreshForWork(lastCatalogWorkState, catalogState)) {
                     lastCatalogWorkState = catalogState
                     refreshCatalog()
                 } else {
@@ -774,10 +967,10 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     }
 
     private fun startBatchTranscription() {
-        val folder = folderUri ?: return
         val output = outputUri ?: return
+        if (!outputAccessReady || (folderUri != null && !folderAccessReady)) return
         stopPreviewPlayback(render = true)
-        currentSessionTranscriptionWorkId = TranscriptionWorker.enqueueAll(this, folder, output)
+        currentSessionTranscriptionWorkId = TranscriptionWorker.enqueueAll(this, folderUri, output)
     }
 
     private fun evaluateStartupProcessing() {
@@ -850,6 +1043,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         selectOutput.isEnabled = controls.outputEnabled
         selectFolder.visibility = if (controls.folderSetupVisible) View.VISIBLE else View.GONE
         selectFolder.isEnabled = controls.folderEnabled
+        importAudio.isEnabled = !ingestionActive
+        importAudio.text = getString(if (ingestionActive) R.string.importing_audio else R.string.import_audio)
         transcribeAll.visibility = if (state.list.transcribeAllVisible) View.VISIBLE else View.GONE
         transcribeAll.isEnabled = state.list.transcribeAllEnabled
         for (index in 0 until fileList.childCount) {
@@ -1019,6 +1214,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                 modelDownloadProgress = modelDownloadProgress,
                 outputSelected = outputUri != null,
                 folderSelected = folderUri != null,
+                outputReady = outputAccessReady,
+                folderReady = folderAccessReady,
                 pendingCount = pendingCount,
                 folderChecking = folderChecking,
                 folderScanQueued = folderScanQueued,
@@ -1034,14 +1231,95 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                 completedFiles = completedFiles,
                 totalFiles = totalFiles,
                 failedFiles = failedFiles,
-                errorMessage = statusError,
+                errorMessage = statusError ?: outputAccessError ?: folderAccessError,
                 selectedTab = selectedTab,
                 displayedRowCount = entries.size,
                 activePreviewEntryId = previewEntryId,
                 previewState = previewState,
                 rows = entries.map { it.toMainScreenRowInput() },
+                importInboxAvailable = importInboxAvailable,
             ),
         )
+
+    private fun activeSourceScope(): AudioCatalogSourceScope =
+        AudioCatalogSourceScope.of(
+            listOfNotNull(
+                AndroidAudioImportConstants.SOURCE_ID,
+                folderUri?.toString(),
+            ),
+        )
+
+    private fun cleanupImportedAudio() {
+        importExecutor.execute {
+            val cleanupCatalog = AndroidSqlDelightAudioCatalogFactory(this).create()
+            try {
+                AndroidAudioImportStorage(this).cleanupOrphans(cleanupCatalog)
+            } finally {
+                cleanupCatalog.close()
+            }
+        }
+    }
+
+    private fun handleShareIntent(sharedIntent: Intent) {
+        if (!AudioShareIntentParser.isShareIntent(sharedIntent)) return
+        val uris = AudioShareIntentParser.streamUris(sharedIntent)
+        sharedIntent.action = Intent.ACTION_MAIN
+        sharedIntent.clipData = null
+        sharedIntent.replaceExtras(Bundle())
+        if (uris.isEmpty()) {
+            Toast.makeText(this, R.string.no_shared_audio, Toast.LENGTH_LONG).show()
+            return
+        }
+        ingestAudioUris(uris)
+    }
+
+    private fun ingestAudioUris(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        if (ingestionActive) {
+            queuedImportUris += uris.filter { candidate ->
+                queuedImportUris.none { it.toString() == candidate.toString() }
+            }
+            return
+        }
+        ingestionActive = true
+        updateControls()
+        val sourceIds = uris.map(Uri::toString)
+        importExecutor.execute {
+            val importCatalog = AndroidSqlDelightAudioCatalogFactory(this).create()
+            val summary = try {
+                runCatching {
+                    val storage = AndroidAudioImportStorage(this)
+                    storage.cleanupOrphans(importCatalog)
+                    AudioImportUseCase(
+                        storage = storage,
+                        catalog = SqlDelightAudioImportCatalog(importCatalog),
+                    ).ingest(sourceIds)
+                }.getOrElse { error ->
+                    AudioImportSummary(
+                        listOf(
+                            AudioImportItemOutcome.Rejected(
+                                displayName = "shared audio",
+                                reason = error.message ?: "Audio import failed",
+                            ),
+                        ),
+                    )
+                }
+            } finally {
+                importCatalog.close()
+            }
+            runOnUiThread {
+                if (activityDestroyed) return@runOnUiThread
+                ingestionActive = false
+                Toast.makeText(this, summary.message(), Toast.LENGTH_LONG).show()
+                refreshCatalog()
+                if (queuedImportUris.isNotEmpty()) {
+                    val queued = queuedImportUris.toList()
+                    queuedImportUris.clear()
+                    ingestAudioUris(queued)
+                }
+            }
+        }
+    }
 
     private fun AudioCatalogEntry.toMainScreenRowInput(): MainScreenRowInput =
         MainScreenRowInput(

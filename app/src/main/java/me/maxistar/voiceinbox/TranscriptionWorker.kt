@@ -25,7 +25,6 @@ class TranscriptionWorker(
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val folderUri = inputData.getString(KEY_FOLDER_URI)
-            ?: return@withContext failure("Audio folder is missing")
         val outputUri = inputData.getString(KEY_OUTPUT_URI)?.let(Uri::parse)
             ?: return@withContext failure("Output file is missing")
         val retryId = inputData.getLong(KEY_RETRY_ID, NO_RETRY_ID).takeIf { it != NO_RETRY_ID }
@@ -52,7 +51,9 @@ class TranscriptionWorker(
             )
             val result = batch.transcribe(
                 BatchTranscriptionInput(
-                    folderId = folderUri,
+                    sourceScope = AudioCatalogSourceScope.of(
+                        listOfNotNull(AndroidAudioImportConstants.SOURCE_ID, folderUri),
+                    ),
                     outputId = outputUri.toString(),
                     runId = id.toString(),
                     retryEntryId = retryId,
@@ -251,30 +252,29 @@ class TranscriptionWorker(
         private const val NOTIFICATION_CHANNEL = "audio-transcription"
         private const val NOTIFICATION_ID = 2109
 
-        fun enqueueAll(context: Context, folderUri: Uri, outputUri: Uri): UUID =
+        fun enqueueAll(context: Context, folderUri: Uri?, outputUri: Uri): UUID =
             enqueue(context, folderUri, outputUri, null)
 
         fun enqueueRetry(
             context: Context,
-            folderUri: Uri,
+            folderUri: Uri?,
             outputUri: Uri,
             entryId: Long,
         ): UUID = enqueue(context, folderUri, outputUri, entryId)
 
         private fun enqueue(
             context: Context,
-            folderUri: Uri,
+            folderUri: Uri?,
             outputUri: Uri,
             retryId: Long?,
         ): UUID {
+            val input = androidx.work.Data.Builder()
+                .putString(KEY_OUTPUT_URI, outputUri.toString())
+                .putLong(KEY_RETRY_ID, retryId ?: NO_RETRY_ID)
+                .apply { folderUri?.let { putString(KEY_FOLDER_URI, it.toString()) } }
+                .build()
             val request = OneTimeWorkRequestBuilder<TranscriptionWorker>()
-                .setInputData(
-                    workDataOf(
-                        KEY_FOLDER_URI to folderUri.toString(),
-                        KEY_OUTPUT_URI to outputUri.toString(),
-                        KEY_RETRY_ID to (retryId ?: NO_RETRY_ID),
-                    ),
-                )
+                .setInputData(input)
                 .build()
             WorkManager.getInstance(context).enqueueUniqueWork(
                 UNIQUE_WORK_NAME,

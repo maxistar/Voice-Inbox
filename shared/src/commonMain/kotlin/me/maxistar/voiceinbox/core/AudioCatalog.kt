@@ -35,14 +35,46 @@ data class AudioCatalogEntry(
     val transcriptText: String?,
 )
 
+data class AudioCatalogSourceScope(
+    val sourceIds: List<String>,
+) {
+    init {
+        require(sourceIds.isNotEmpty()) { "At least one audio catalog source is required" }
+        require(sourceIds.none(String::isBlank)) { "Audio catalog source ids must not be blank" }
+        require(sourceIds.distinct().size == sourceIds.size) {
+            "Audio catalog source ids must be unique"
+        }
+    }
+
+    companion object {
+        fun single(sourceId: String): AudioCatalogSourceScope =
+            AudioCatalogSourceScope(listOf(sourceId))
+
+        fun of(sourceIds: Iterable<String>): AudioCatalogSourceScope =
+            AudioCatalogSourceScope(sourceIds.distinct().toList())
+    }
+}
+
 interface AudioCatalogQueuePort {
-    fun pendingCount(folderUri: String): Int
+    fun pendingCount(scope: AudioCatalogSourceScope): Int
+
+    fun pendingCount(sourceId: String): Int =
+        pendingCount(AudioCatalogSourceScope.single(sourceId))
 
     fun recoverInterrupted()
 
-    fun claimPending(folderUri: String, specificId: Long? = null): AudioCatalogEntry?
+    fun claimPending(
+        scope: AudioCatalogSourceScope,
+        specificId: Long? = null,
+    ): AudioCatalogEntry?
 
-    fun claimFailed(folderUri: String, id: Long): AudioCatalogEntry?
+    fun claimPending(sourceId: String, specificId: Long? = null): AudioCatalogEntry? =
+        claimPending(AudioCatalogSourceScope.single(sourceId), specificId)
+
+    fun claimFailed(scope: AudioCatalogSourceScope, id: Long): AudioCatalogEntry?
+
+    fun claimFailed(sourceId: String, id: Long): AudioCatalogEntry? =
+        claimFailed(AudioCatalogSourceScope.single(sourceId), id)
 
     fun markProcessed(id: Long, processedAtMillis: Long, transcriptText: String)
 

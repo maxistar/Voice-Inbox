@@ -3,7 +3,7 @@ package me.maxistar.voiceinbox.core
 import kotlin.coroutines.cancellation.CancellationException
 
 data class BatchTranscriptionInput(
-    val folderId: String,
+    val sourceScope: AudioCatalogSourceScope,
     val outputId: String,
     val runId: String,
     val retryEntryId: Long? = null,
@@ -63,7 +63,7 @@ class BatchTranscriptionUseCase(
     ): BatchTranscriptionResult {
         catalog.recoverInterrupted()
         val total = if (input.retryEntryId == null) {
-            catalog.pendingCount(input.folderId)
+            catalog.pendingCount(input.sourceScope)
         } else {
             1
         }
@@ -143,9 +143,9 @@ class BatchTranscriptionUseCase(
         completed: Int,
     ): AudioCatalogEntry? =
         if (input.retryEntryId == null) {
-            catalog.claimPending(input.folderId)
+            catalog.claimPending(input.sourceScope)
         } else if (completed == 0) {
-            catalog.claimFailed(input.folderId, input.retryEntryId)
+            catalog.claimFailed(input.sourceScope, input.retryEntryId)
         } else {
             null
         }

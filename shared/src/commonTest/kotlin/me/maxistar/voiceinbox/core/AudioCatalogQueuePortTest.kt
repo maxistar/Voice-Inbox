@@ -38,8 +38,10 @@ class AudioCatalogQueuePortTest {
     ) : AudioCatalogQueuePort {
         private val entries = entries.associateBy(AudioCatalogEntry::id).toMutableMap()
 
-        override fun pendingCount(folderUri: String): Int =
-            entries.values.count { it.folderUri == folderUri && it.state == AudioFileState.PENDING }
+        override fun pendingCount(scope: AudioCatalogSourceScope): Int =
+            entries.values.count {
+                it.folderUri in scope.sourceIds && it.state == AudioFileState.PENDING
+            }
 
         override fun recoverInterrupted() {
             entries.keys.toList().forEach { id ->
@@ -56,12 +58,12 @@ class AudioCatalogQueuePortTest {
         }
 
         override fun claimPending(
-            folderUri: String,
+            scope: AudioCatalogSourceScope,
             specificId: Long?,
-        ): AudioCatalogEntry? = claim(folderUri, AudioFileState.PENDING, specificId)
+        ): AudioCatalogEntry? = claim(scope, AudioFileState.PENDING, specificId)
 
-        override fun claimFailed(folderUri: String, id: Long): AudioCatalogEntry? =
-            claim(folderUri, AudioFileState.FAILED, id)
+        override fun claimFailed(scope: AudioCatalogSourceScope, id: Long): AudioCatalogEntry? =
+            claim(scope, AudioFileState.FAILED, id)
 
         override fun markProcessed(
             id: Long,
@@ -105,12 +107,12 @@ class AudioCatalogQueuePortTest {
         }
 
         private fun claim(
-            folderUri: String,
+            scope: AudioCatalogSourceScope,
             state: AudioFileState,
             specificId: Long?,
         ): AudioCatalogEntry? {
             val entry = entries.values
-                .filter { it.folderUri == folderUri && it.state == state }
+                .filter { it.folderUri in scope.sourceIds && it.state == state }
                 .filter { specificId == null || it.id == specificId }
                 .sortedWith(AudioCatalogRules.processingOrder)
                 .firstOrNull()

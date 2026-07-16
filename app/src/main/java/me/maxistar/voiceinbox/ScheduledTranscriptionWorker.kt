@@ -58,7 +58,11 @@ class ScheduledTranscriptionWorker(
         val catalog = AndroidSqlDelightAudioCatalogFactory(applicationContext).create()
         val files = folderScanner.scan(folder)
         catalog.reconcile(folder.toString(), files)
-        val pending = catalog.pendingCount(folder.toString())
+        val pending = catalog.pendingCount(
+            AudioCatalogSourceScope.of(
+                listOf(AndroidAudioImportConstants.SOURCE_ID, folder.toString()),
+            ),
+        )
         if (ScheduledTranscriptionRules.shouldStartTranscription(pending, transcriptionActive())) {
             TranscriptionWorker.enqueueAll(applicationContext, folder, output)
         }

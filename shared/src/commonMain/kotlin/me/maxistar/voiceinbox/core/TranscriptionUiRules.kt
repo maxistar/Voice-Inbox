@@ -83,15 +83,16 @@ object TranscriptionUiRules {
         pendingCount: Int,
         transcriptionState: TranscriptionObservationState,
         scanning: Boolean,
+        audioInputAvailable: Boolean = folderSelected,
     ): CatalogControlState {
         val workReady = transcriptionState == TranscriptionObservationState.IDLE ||
             transcriptionState == TranscriptionObservationState.FINISHED
         val idle = workReady && !scanning
         val modelAvailable = modelInstallationState.isAvailable
-        val prerequisites = modelAvailable && outputSelected && folderSelected && idle
+        val prerequisites = modelAvailable && outputSelected && audioInputAvailable && idle
         return CatalogControlState(
-            outputEnabled = modelAvailable && idle,
-            folderEnabled = modelAvailable && idle,
+            outputEnabled = idle,
+            folderEnabled = idle,
             outputSetupVisible = !outputSelected,
             folderSetupVisible = !folderSelected,
             refreshEnabled = modelAvailable && folderSelected && idle,

@@ -370,7 +370,9 @@ final class IosSingleFileTranscriptionController: ObservableObject {
         )
         return useCase.transcribe(
             input: BatchTranscriptionInput(
-                folderId: IosAudioCatalogConstants.importedFolderUri,
+                sourceScope: AudioCatalogSourceScope(
+                    sourceIds: [IosAudioCatalogConstants.importedFolderUri]
+                ),
                 outputId: outputDocument.id,
                 runId: UUID().uuidString,
                 retryEntryId: nil

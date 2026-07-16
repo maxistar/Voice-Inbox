@@ -7,11 +7,26 @@ import kotlin.test.assertTrue
 
 class MainScreenStateControllerTest {
     @Test
+    fun importInboxEnablesPendingWorkWithoutSelectedFolder() {
+        val state = MainScreenStateController.state(
+            input(
+                outputSelected = true,
+                folderSelected = false,
+                pendingCount = 1,
+                importInboxAvailable = true,
+            ),
+        )
+
+        assertEquals(true, state.controls.transcribeAllEnabled)
+        assertEquals(false, state.controls.refreshEnabled)
+    }
+
+    @Test
     fun setupControlsReflectMissingModelOutputAndFolder() {
         assertEquals(
             CatalogControlState(
-                outputEnabled = false,
-                folderEnabled = false,
+                outputEnabled = true,
+                folderEnabled = true,
                 outputSetupVisible = true,
                 folderSetupVisible = true,
                 refreshEnabled = false,
@@ -49,6 +64,24 @@ class MainScreenStateControllerTest {
     }
 
     @Test
+    fun restoringSelectionsStayConfiguredButDoNotEnableDependentActions() {
+        val state = state(
+            input(
+                outputSelected = true,
+                folderSelected = true,
+                outputReady = false,
+                folderReady = false,
+                pendingCount = 2,
+            ),
+        )
+
+        assertFalse(state.controls.outputSetupVisible)
+        assertFalse(state.controls.folderSetupVisible)
+        assertFalse(state.controls.refreshEnabled)
+        assertFalse(state.controls.transcribeAllEnabled)
+    }
+
+    @Test
     fun installedModelDoesNotRequireLoadedRuntimeForActions() {
         val unloaded = state(
             input(
@@ -73,16 +106,16 @@ class MainScreenStateControllerTest {
 
     @Test
     fun controlsAreDisabledDuringActiveWorkOrQueuedScan() {
-        assertFalse(
-            state(
-                input(
-                    outputSelected = true,
-                    folderSelected = true,
-                    pendingCount = 2,
-                    transcriptionState = TranscriptionObservationState.ACTIVE,
-                ),
-            ).controls.transcribeAllEnabled,
+        val active = state(
+            input(
+                modelReady = false,
+                pendingCount = 2,
+                transcriptionState = TranscriptionObservationState.ACTIVE,
+            ),
         )
+        assertFalse(active.controls.outputEnabled)
+        assertFalse(active.controls.folderEnabled)
+        assertFalse(active.controls.transcribeAllEnabled)
 
         val queued = state(
             input(
@@ -282,6 +315,8 @@ class MainScreenStateControllerTest {
         modelRuntimeState: SpeechModelRuntimeState = SpeechModelRuntimeState.UNLOADED,
         outputSelected: Boolean = false,
         folderSelected: Boolean = false,
+        outputReady: Boolean = outputSelected,
+        folderReady: Boolean = folderSelected,
         pendingCount: Int = 0,
         folderChecking: Boolean = false,
         folderScanQueued: Boolean = false,
@@ -303,6 +338,7 @@ class MainScreenStateControllerTest {
         activePreviewEntryId: Long? = null,
         previewState: PreviewPlaybackState = PreviewPlaybackState.IDLE,
         rows: List<MainScreenRowInput> = emptyList(),
+        importInboxAvailable: Boolean = false,
     ) = MainScreenInput(
         modelMessage = modelMessage,
         modelInstallationState = when {
@@ -315,6 +351,8 @@ class MainScreenStateControllerTest {
         modelDownloadProgress = modelDownloadProgress,
         outputSelected = outputSelected,
         folderSelected = folderSelected,
+        outputReady = outputReady,
+        folderReady = folderReady,
         pendingCount = pendingCount,
         folderChecking = folderChecking,
         folderScanQueued = folderScanQueued,
@@ -336,6 +374,7 @@ class MainScreenStateControllerTest {
         activePreviewEntryId = activePreviewEntryId,
         previewState = previewState,
         rows = rows,
+        importInboxAvailable = importInboxAvailable,
     )
 
     private fun row(

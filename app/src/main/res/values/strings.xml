@@ -36,10 +36,17 @@
     <string name="startup_processing_leave_queued">Leave queued</string>
     <string name="output_not_selected">Output: not selected</string>
     <string name="output_selected">Output: %1$s</string>
+    <string name="output_restoring">Output: restoring selection…</string>
+    <string name="output_temporarily_unavailable">Output: temporarily unavailable</string>
     <string name="select_output_file">Select output file</string>
     <string name="folder_not_selected">Audio folder: not selected</string>
     <string name="folder_selected">Audio folder: %1$s</string>
+    <string name="folder_restoring">Audio folder: restoring selection…</string>
+    <string name="folder_temporarily_unavailable">Audio folder: temporarily unavailable</string>
     <string name="select_audio_folder">Select audio folder</string>
+    <string name="import_audio">Import audio</string>
+    <string name="importing_audio">Importing audio…</string>
+    <string name="no_shared_audio">No readable audio was shared.</string>
     <string name="checking_speech_model">Checking speech model</string>
     <string name="download_speech_model">Download speech model</string>
     <string name="new_label">New</string>

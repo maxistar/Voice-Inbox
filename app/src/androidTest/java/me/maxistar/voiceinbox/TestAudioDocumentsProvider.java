@@ -6,6 +6,12 @@ import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.net.Uri;
 import android.provider.DocumentsContract;
+import android.os.ParcelFileDescriptor;
+
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
 
 public class TestAudioDocumentsProvider extends ContentProvider {
     public static final String AUTHORITY = "me.maxistar.voiceinbox.test.documents";
@@ -13,8 +19,11 @@ public class TestAudioDocumentsProvider extends ContentProvider {
 
     private static final String WAV_ID = "wav";
     private static final String M4A_ID = "m4a";
+    private static final String OGG_ID = "ogg";
+    private static final String OPUS_ID = "opus";
     private static final String HIDDEN_AUDIO_ID = "hidden";
     private static final String TEXT_ID = "text";
+    private static final String OUTPUT_ID = "output";
     private static final String NESTED_ID = "nested";
     private static final String NESTED_AUDIO_ID = "nested/audio";
 
@@ -57,8 +66,14 @@ public class TestAudioDocumentsProvider extends ContentProvider {
             addDocument(cursor, WAV_ID, "recording.wav", "audio/wav", 100L, 10L);
         } else if (M4A_ID.equals(documentId)) {
             addDocument(cursor, M4A_ID, "recording.m4a", "audio/mp4", 200L, 20L);
+        } else if (OGG_ID.equals(documentId)) {
+            addDocument(cursor, OGG_ID, "voice.ogg", "audio/ogg", 210L, 21L);
+        } else if (OPUS_ID.equals(documentId)) {
+            addDocument(cursor, OPUS_ID, "voice.opus", "audio/opus", 220L, 22L);
         } else if (TEXT_ID.equals(documentId)) {
             addDocument(cursor, TEXT_ID, "notes.txt", "text/plain", 20L, 30L);
+        } else if (OUTPUT_ID.equals(documentId)) {
+            addDocument(cursor, OUTPUT_ID, "transcripts.txt", "text/plain", 0L, 31L);
         } else if (NESTED_ID.equals(documentId)) {
             addDocument(cursor, NESTED_ID, "nested", DocumentsContract.Document.MIME_TYPE_DIR, null, null);
         } else if (NESTED_AUDIO_ID.equals(documentId)) {
@@ -116,7 +131,34 @@ public class TestAudioDocumentsProvider extends ContentProvider {
 
     @Override
     public String getType(Uri uri) {
+        String documentId = documentIdAfter(uri, "document");
+        if (WAV_ID.equals(documentId) || NESTED_AUDIO_ID.equals(documentId)) return "audio/wav";
+        if (M4A_ID.equals(documentId)) return "audio/mp4";
+        if (OGG_ID.equals(documentId)) return "audio/ogg";
+        if (OPUS_ID.equals(documentId)) return "audio/opus";
+        if (TEXT_ID.equals(documentId) || OUTPUT_ID.equals(documentId)) return "text/plain";
         return null;
+    }
+
+    @Override
+    public ParcelFileDescriptor openFile(Uri uri, String mode) throws FileNotFoundException {
+        String documentId = documentIdAfter(uri, "document");
+        if (documentId == null || ROOT_ID.equals(documentId) || NESTED_ID.equals(documentId)) {
+            throw new FileNotFoundException(uri.toString());
+        }
+        File file = new File(getContext().getCacheDir(), "shared-" + documentId.replace('/', '-') + ".bin");
+        if (OUTPUT_ID.equals(documentId)) {
+            return ParcelFileDescriptor.open(
+                file,
+                ParcelFileDescriptor.MODE_CREATE | ParcelFileDescriptor.MODE_READ_WRITE
+            );
+        }
+        try (FileOutputStream output = new FileOutputStream(file)) {
+            output.write(("test-audio-" + documentId).getBytes());
+        } catch (IOException error) {
+            throw new FileNotFoundException(error.getMessage());
+        }
+        return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
     }
 
     @Override

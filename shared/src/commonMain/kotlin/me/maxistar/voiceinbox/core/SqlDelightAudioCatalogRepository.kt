@@ -51,10 +51,18 @@ class SqlDelightAudioCatalogRepository(
         queries.selectDisplayRows(folderUri, mapper = ::toCatalogFile).executeAsList()
 
     fun newEntries(folderUri: String): List<AudioCatalogEntry> =
-        queries.selectNewDisplayRows(folderUri, mapper = ::toCatalogEntry).executeAsList()
+        newEntries(AudioCatalogSourceScope.single(folderUri))
+
+    fun newEntries(scope: AudioCatalogSourceScope): List<AudioCatalogEntry> =
+        queries.selectNewDisplayRowsForSources(scope.sourceIds, mapper = ::toCatalogEntry)
+            .executeAsList()
 
     fun processedEntries(folderUri: String): List<AudioCatalogEntry> =
-        queries.selectProcessedDisplayRows(folderUri, mapper = ::toCatalogEntry).executeAsList()
+        processedEntries(AudioCatalogSourceScope.single(folderUri))
+
+    fun processedEntries(scope: AudioCatalogSourceScope): List<AudioCatalogEntry> =
+        queries.selectProcessedDisplayRowsForSources(scope.sourceIds, mapper = ::toCatalogEntry)
+            .executeAsList()
 
     fun missingEntries(folderUri: String): List<AudioCatalogEntry> =
         queries.selectMissingDisplayRows(folderUri, mapper = ::toCatalogEntry).executeAsList()
@@ -64,6 +72,10 @@ class SqlDelightAudioCatalogRepository(
 
     fun catalogFile(id: Long): SqlDelightAudioCatalogFile? =
         queries.selectById(id, mapper = ::toCatalogFile).executeAsOneOrNull()
+
+    fun catalogFile(folderUri: String, documentUri: String): SqlDelightAudioCatalogFile? =
+        queries.selectByFolderDocument(folderUri, documentUri, mapper = ::toCatalogFile)
+            .executeAsOneOrNull()
 
     fun upsertImportedFile(
         folderUri: String,
@@ -141,21 +153,27 @@ class SqlDelightAudioCatalogRepository(
         }
     }
 
-    override fun pendingCount(folderUri: String): Int =
-        queries.pendingCount(folderUri).executeAsOne().toInt()
+    override fun pendingCount(scope: AudioCatalogSourceScope): Int =
+        queries.pendingCountForSources(scope.sourceIds).executeAsOne().toInt()
 
     override fun recoverInterrupted() {
         queries.recoverInterrupted()
     }
 
-    override fun claimPending(folderUri: String, specificId: Long?): AudioCatalogEntry? =
+    override fun claimPending(
+        scope: AudioCatalogSourceScope,
+        specificId: Long?,
+    ): AudioCatalogEntry? =
         queries.transactionWithResult {
             val candidate = if (specificId == null) {
-                queries.selectNextPendingForClaim(folderUri, mapper = ::toCatalogEntry)
+                queries.selectNextPendingForClaimInSources(
+                    scope.sourceIds,
+                    mapper = ::toCatalogEntry,
+                )
                     .executeAsOneOrNull()
             } else {
-                queries.selectSpecificPendingForClaim(
-                    folder_uri = folderUri,
+                queries.selectSpecificPendingForClaimInSources(
+                    folder_uri = scope.sourceIds,
                     id = specificId,
                     mapper = ::toCatalogEntry,
                 ).executeAsOneOrNull()
@@ -163,10 +181,10 @@ class SqlDelightAudioCatalogRepository(
             markClaimed(candidate.id, AudioFileState.PENDING)
         }
 
-    override fun claimFailed(folderUri: String, id: Long): AudioCatalogEntry? =
+    override fun claimFailed(scope: AudioCatalogSourceScope, id: Long): AudioCatalogEntry? =
         queries.transactionWithResult {
-            queries.selectSpecificFailedForClaim(
-                folder_uri = folderUri,
+            queries.selectSpecificFailedForClaimInSources(
+                folder_uri = scope.sourceIds,
                 id = id,
                 mapper = ::toCatalogEntry,
             ).executeAsOneOrNull() ?: return@transactionWithResult null

@@ -19,6 +19,8 @@ data class MainScreenInput(
     val modelDownloadProgress: Int?,
     val outputSelected: Boolean,
     val folderSelected: Boolean,
+    val outputReady: Boolean = outputSelected,
+    val folderReady: Boolean = folderSelected,
     val pendingCount: Int,
     val folderChecking: Boolean,
     val folderScanQueued: Boolean,
@@ -40,6 +42,7 @@ data class MainScreenInput(
     val activePreviewEntryId: Long?,
     val previewState: PreviewPlaybackState,
     val rows: List<MainScreenRowInput> = emptyList(),
+    val importInboxAvailable: Boolean = false,
 )
 
 data class MainScreenState(
@@ -78,11 +81,19 @@ object MainScreenStateController {
         val busy = input.folderChecking || input.folderScanQueued || input.scanning
         val controls = TranscriptionUiRules.catalogControls(
             modelInstallationState = input.modelInstallationState,
-            outputSelected = input.outputSelected,
-            folderSelected = input.folderSelected,
+            outputSelected = input.outputReady,
+            folderSelected = input.folderReady,
             pendingCount = input.pendingCount,
             transcriptionState = input.transcriptionState,
             scanning = busy,
+            audioInputAvailable = if (input.folderSelected) {
+                input.folderReady
+            } else {
+                input.importInboxAvailable
+            },
+        ).copy(
+            outputSetupVisible = !input.outputSelected,
+            folderSetupVisible = !input.folderSelected,
         )
         return MainScreenState(
             status = TranscriptionUiRules.statusProgressBlock(input.toStatusInput()),

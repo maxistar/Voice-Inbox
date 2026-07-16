@@ -53,10 +53,32 @@ ORDER BY
     display_name COLLATE NOCASE ASC,
     document_uri ASC;
 
+selectNewDisplayRowsForSources:
+SELECT *
+FROM audio_files
+WHERE folder_uri IN ?
+  AND state IN ('PENDING', 'PROCESSING')
+ORDER BY
+    CASE WHEN modified_millis IS NULL THEN 1 ELSE 0 END,
+    modified_millis DESC,
+    display_name COLLATE NOCASE ASC,
+    document_uri ASC;
+
 selectProcessedDisplayRows:
 SELECT *
 FROM audio_files
 WHERE folder_uri = ?
+  AND state IN ('PROCESSED', 'FAILED')
+ORDER BY
+    CASE WHEN modified_millis IS NULL THEN 1 ELSE 0 END,
+    modified_millis DESC,
+    display_name COLLATE NOCASE ASC,
+    document_uri ASC;
+
+selectProcessedDisplayRowsForSources:
+SELECT *
+FROM audio_files
+WHERE folder_uri IN ?
   AND state IN ('PROCESSED', 'FAILED')
 ORDER BY
     CASE WHEN modified_millis IS NULL THEN 1 ELSE 0 END,
@@ -86,10 +108,28 @@ FROM audio_files
 WHERE folder_uri = ?
   AND state = 'PENDING';
 
+pendingCountForSources:
+SELECT count(*)
+FROM audio_files
+WHERE folder_uri IN ?
+  AND state = 'PENDING';
+
 selectNextPendingForClaim:
 SELECT *
 FROM audio_files
 WHERE folder_uri = ?
+  AND state = 'PENDING'
+ORDER BY
+    CASE WHEN modified_millis IS NULL THEN 1 ELSE 0 END,
+    modified_millis ASC,
+    display_name COLLATE NOCASE ASC,
+    document_uri ASC
+LIMIT 1;
+
+selectNextPendingForClaimInSources:
+SELECT *
+FROM audio_files
+WHERE folder_uri IN ?
   AND state = 'PENDING'
 ORDER BY
     CASE WHEN modified_millis IS NULL THEN 1 ELSE 0 END,
@@ -105,10 +145,24 @@ WHERE folder_uri = ?
   AND state = 'PENDING'
   AND id = ?;
 
+selectSpecificPendingForClaimInSources:
+SELECT *
+FROM audio_files
+WHERE folder_uri IN ?
+  AND state = 'PENDING'
+  AND id = ?;
+
 selectSpecificFailedForClaim:
 SELECT *
 FROM audio_files
 WHERE folder_uri = ?
+  AND state = 'FAILED'
+  AND id = ?;
+
+selectSpecificFailedForClaimInSources:
+SELECT *
+FROM audio_files
+WHERE folder_uri IN ?
   AND state = 'FAILED'
   AND id = ?;
 
