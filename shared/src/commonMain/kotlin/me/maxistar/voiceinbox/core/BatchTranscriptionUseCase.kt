@@ -146,6 +146,7 @@ class BatchTranscriptionUseCase(
             catalog.claimPending(input.sourceScope)
         } else if (completed == 0) {
             catalog.claimFailed(input.sourceScope, input.retryEntryId)
+                ?: catalog.claimPending(input.sourceScope, input.retryEntryId)
         } else {
             null
         }

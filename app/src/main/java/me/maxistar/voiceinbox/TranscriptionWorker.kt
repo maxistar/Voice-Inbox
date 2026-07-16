@@ -36,7 +36,7 @@ class TranscriptionWorker(
             val modelRepository = SpeechModelRepository(
                 applicationContext.noBackupFilesDir.resolve("models"),
             )
-            publish("Preparing speech model", null, 0, 0, null, null)
+            publish("Preparing speech model", null, null, 0, 0, null, null)
             SpeechModelPreparation.prepare(modelRepository) { directory ->
                 NativeTranscriptionBridge.initialize(directory.absolutePath)
             }.getOrElse { return@withContext failure(it.message ?: "Speech model preparation failed") }
@@ -81,6 +81,7 @@ class TranscriptionWorker(
 
     private suspend fun publish(
         phase: String,
+        activeEntryId: Long?,
         filename: String?,
         completed: Int,
         total: Int,
@@ -90,6 +91,7 @@ class TranscriptionWorker(
         val percent = BatchTranscriptionRules.percent(processedUs, durationUs)
         val data = progressData(
             phase,
+            activeEntryId,
             filename,
             completed,
             total,
@@ -105,6 +107,7 @@ class TranscriptionWorker(
     private fun publishAsync(progress: BatchTranscriptionProgress) {
         publishAsync(
             phase = progress.phase,
+            activeEntryId = progress.activeEntryId,
             filename = progress.filename,
             completed = progress.completed,
             total = progress.total,
@@ -117,6 +120,7 @@ class TranscriptionWorker(
 
     private fun publishAsync(
         phase: String,
+        activeEntryId: Long?,
         filename: String?,
         completed: Int,
         total: Int,
@@ -127,6 +131,7 @@ class TranscriptionWorker(
     ) {
         val data = progressData(
             phase,
+            activeEntryId,
             filename,
             completed,
             total,
@@ -147,6 +152,7 @@ class TranscriptionWorker(
 
     private fun progressData(
         phase: String,
+        activeEntryId: Long?,
         filename: String?,
         completed: Int,
         total: Int,
@@ -156,6 +162,7 @@ class TranscriptionWorker(
         progress: Int?,
     ) = workDataOf(
         KEY_PHASE to phase,
+        KEY_ACTIVE_ENTRY_ID to (activeEntryId ?: NO_ENTRY_ID),
         KEY_FILENAME to filename,
         KEY_COMPLETED_FILES to completed,
         KEY_TOTAL_FILES to total,
@@ -238,6 +245,7 @@ class TranscriptionWorker(
         const val KEY_OUTPUT_URI = "output-uri"
         const val KEY_RETRY_ID = "retry-id"
         const val KEY_PHASE = "phase"
+        const val KEY_ACTIVE_ENTRY_ID = "active-entry-id"
         const val KEY_FILENAME = "filename"
         const val KEY_COMPLETED_FILES = "completed-files"
         const val KEY_TOTAL_FILES = "total-files"
@@ -249,6 +257,7 @@ class TranscriptionWorker(
         const val KEY_ERROR = "error"
 
         private const val NO_RETRY_ID = -1L
+        const val NO_ENTRY_ID = -1L
         private const val NOTIFICATION_CHANNEL = "audio-transcription"
         private const val NOTIFICATION_ID = 2109
 
@@ -256,6 +265,13 @@ class TranscriptionWorker(
             enqueue(context, folderUri, outputUri, null)
 
         fun enqueueRetry(
+            context: Context,
+            folderUri: Uri?,
+            outputUri: Uri,
+            entryId: Long,
+        ): UUID = enqueue(context, folderUri, outputUri, entryId)
+
+        fun enqueueEntry(
             context: Context,
             folderUri: Uri?,
             outputUri: Uri,

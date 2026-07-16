@@ -40,6 +40,7 @@ enum class TaskActionKind {
     SELECT_FOLDER,
     REFRESH_FOLDER,
     TRANSCRIBE,
+    TRANSCRIBE_ALL,
     RETRY_TRANSCRIPTION,
     PLAY,
     STOP,
@@ -110,6 +111,7 @@ enum class ModelSetupSnapshotState {
 data class ModelSetupSnapshot(
     val state: ModelSetupSnapshotState,
     val detail: String? = null,
+    val installationPhase: String? = null,
     val progressPercent: Int? = null,
     val downloadAvailable: Boolean = false,
     val canCancel: Boolean = false,
@@ -149,6 +151,7 @@ data class AudioTaskSnapshot(
     val hasTranscriptText: Boolean = false,
     val noSpeech: Boolean = false,
     val eligibleForTranscription: Boolean = true,
+    val eligibleForPreview: Boolean = true,
 )
 
 data class PreviewTaskSnapshot(
@@ -270,8 +273,15 @@ object TaskListPresentationController {
             },
             title = "Install Speech Model",
             detail = snapshot.detail,
-            badge = if (active) "Downloading" else if (error) "Needs attention" else "Required",
-            progress = if (active) TaskProgressPresentation("Downloading model", snapshot.progressPercent) else null,
+            badge = if (active) "Installing" else if (error) "Needs attention" else "Required",
+            progress = if (active) {
+                TaskProgressPresentation(
+                    snapshot.installationPhase?.takeIf(String::isNotBlank) ?: "Installing model",
+                    snapshot.progressPercent,
+                )
+            } else {
+                null
+            },
             errorMessage = snapshot.detail.takeIf { error },
             actions = actions,
         )
@@ -369,7 +379,7 @@ object TaskListPresentationController {
                 TaskActionPresentation(
                     if (isPreviewing) TaskActionKind.STOP else TaskActionKind.PLAY,
                     if (isPreviewing) "Stop" else "Play",
-                    !input.transcription.active,
+                    isPreviewing || (snapshot.eligibleForPreview && !input.transcription.active),
                 ),
             )
         }

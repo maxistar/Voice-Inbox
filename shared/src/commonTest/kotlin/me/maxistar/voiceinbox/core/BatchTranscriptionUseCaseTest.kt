@@ -52,6 +52,24 @@ class BatchTranscriptionUseCaseTest {
     }
 
     @Test
+    fun singleEntryRequestClaimsOnlyTheRequestedPendingEntry() {
+        val catalog = FakeCatalog(
+            entry(1, "first.wav", AudioFileState.PENDING),
+            entry(2, "selected.wav", AudioFileState.PENDING),
+        )
+        val transcriber = FakeTranscriber(
+            2L to SingleFileTranscriptionResult(10, 5, "selected"),
+        )
+
+        val result = useCase(catalog, transcriber).transcribe(input(retryEntryId = 2)) {}
+
+        assertEquals(listOf(2L), transcriber.transcribedIds)
+        assertEquals(AudioFileState.PENDING, catalog.entry(1).state)
+        assertEquals(AudioFileState.PROCESSED, catalog.entry(2).state)
+        assertEquals(1, result.total)
+    }
+
+    @Test
     fun failedFileIsMarkedAndTranscribeAllContinues() {
         val catalog = FakeCatalog(
             entry(1, "bad.wav", AudioFileState.PENDING),

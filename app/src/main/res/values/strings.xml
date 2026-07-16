@@ -52,6 +52,11 @@
     <string name="install_model_from_folder">Install from folder</string>
     <string name="new_label">New</string>
     <string name="processed">Processed</string>
+    <string name="all_label">All</string>
     <string name="no_new_audio_files">No new audio files</string>
     <string name="transcribe_all">Transcribe all</string>
+    <plurals name="transcribe_all_count">
+        <item quantity="one">Transcribe all (%1$d file)</item>
+        <item quantity="other">Transcribe all (%1$d files)</item>
+    </plurals>
 </resources>

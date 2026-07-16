@@ -72,6 +72,7 @@ final class IosMainScreenShellState {
         modelStatus: IosSpeechModelStatus,
         modelMessage: String?,
         modelInstalling: Bool,
+        modelInstallationPhase: String?,
         modelDownloadAvailable: Bool,
         modelDownloadProgress: Int?,
         modelCanCancel: Bool,
@@ -91,6 +92,7 @@ final class IosMainScreenShellState {
                 status: modelStatus,
                 message: modelMessage,
                 installing: modelInstalling,
+                installationPhase: modelInstallationPhase,
                 downloadAvailable: modelDownloadAvailable,
                 progress: modelDownloadProgress,
                 canCancel: modelCanCancel
@@ -110,7 +112,8 @@ final class IosMainScreenShellState {
                     lastError: file.lastError,
                     hasTranscriptText: file.transcriptText?.isEmpty == false,
                     noSpeech: Self.isNoSpeech(file.lastError),
-                    eligibleForTranscription: actionsEnabled
+                    eligibleForTranscription: actionsEnabled,
+                    eligibleForPreview: actionsEnabled
                 )
             },
             preview: PreviewTaskSnapshot(
@@ -141,6 +144,7 @@ final class IosMainScreenShellState {
         status: IosSpeechModelStatus,
         message: String?,
         installing: Bool,
+        installationPhase: String?,
         downloadAvailable: Bool,
         progress: Int?,
         canCancel: Bool
@@ -158,6 +162,7 @@ final class IosMainScreenShellState {
         return ModelSetupSnapshot(
             state: state,
             detail: status.detail ?? message,
+            installationPhase: installing ? installationPhase : nil,
             progressPercent: progress.map { KotlinInt(int: Int32($0)) },
             downloadAvailable: downloadAvailable,
             canCancel: canCancel

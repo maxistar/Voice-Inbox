@@ -39,6 +39,60 @@ class TaskListPresentationControllerTest {
     }
 
     @Test
+    fun activeModelInstallationUsesSuppliedPhaseAndNeutralFallback() {
+        val download = assertIs<SetupTaskPresentation>(
+            state(
+                model = ModelSetupSnapshot(
+                    state = ModelSetupSnapshotState.INSTALLING,
+                    installationPhase = "Downloading encoder.onnx",
+                    progressPercent = 42,
+                    canCancel = true,
+                ),
+            ).tasks.single(),
+        )
+
+        assertEquals("Installing", download.badge)
+        assertEquals("Downloading encoder.onnx", download.progress?.phase)
+        assertEquals(42, download.progress?.percent)
+        assertEquals(listOf(TaskActionKind.CANCEL_MODEL_DOWNLOAD), download.actions.map { it.kind })
+
+        val localImport = assertIs<SetupTaskPresentation>(
+            state(
+                model = ModelSetupSnapshot(
+                    state = ModelSetupSnapshotState.INSTALLING,
+                    installationPhase = "Verifying local model",
+                    progressPercent = 75,
+                ),
+            ).tasks.single(),
+        )
+        assertEquals("Verifying local model", localImport.progress?.phase)
+        assertTrue(localImport.actions.isEmpty())
+
+        val fallback = assertIs<SetupTaskPresentation>(
+            state(model = ModelSetupSnapshot(ModelSetupSnapshotState.INSTALLING)).tasks.single(),
+        )
+        assertEquals("Installing model", fallback.progress?.phase)
+        assertNull(fallback.progress?.percent)
+    }
+
+    @Test
+    fun invalidModelOffersOnlyCurrentlySupportedRecoveryActions() {
+        val task = assertIs<SetupTaskPresentation>(
+            state(
+                model = ModelSetupSnapshot(
+                    state = ModelSetupSnapshotState.INVALID,
+                    detail = "Verification failed",
+                    downloadAvailable = false,
+                ),
+            ).tasks.single(),
+        )
+
+        assertEquals("Verification failed", task.errorMessage)
+        assertFalse(task.actions.single { it.kind == TaskActionKind.RETRY_MODEL_DOWNLOAD }.enabled)
+        assertTrue(task.actions.single { it.kind == TaskActionKind.IMPORT_MODEL }.enabled)
+    }
+
+    @Test
     fun filtersApplyOpenTerminalAndAllRetentionRules() {
         val audio = listOf(
             audio(1, AudioFileState.PENDING),

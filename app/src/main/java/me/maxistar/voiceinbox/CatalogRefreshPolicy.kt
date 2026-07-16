@@ -1,12 +1,10 @@
 package me.maxistar.voiceinbox
 
 import me.maxistar.voiceinbox.core.AudioCatalogSourceScope
-import me.maxistar.voiceinbox.core.MainScreenCatalogTab
 
 data class CatalogRefreshToken(
     val generation: Long,
     val sourceScope: AudioCatalogSourceScope,
-    val selectedTab: MainScreenCatalogTab,
 )
 
 data class CatalogWorkRefreshKey(
@@ -22,11 +20,9 @@ object CatalogRefreshPolicy {
         request: CatalogRefreshToken,
         currentGeneration: Long,
         currentSourceScope: AudioCatalogSourceScope,
-        currentTab: MainScreenCatalogTab,
     ): Boolean =
         request.generation == currentGeneration &&
-            request.sourceScope == currentSourceScope &&
-            request.selectedTab == currentTab
+            request.sourceScope == currentSourceScope
 
     fun shouldRefreshForWork(
         previous: CatalogWorkRefreshKey?,

@@ -1,156 +1,77 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/main"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical">
+    android:layout_height="match_parent">
 
-    <androidx.appcompat.widget.Toolbar
-        android:id="@+id/toolbar"
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="?attr/actionBarSize" />
+        android:layout_height="match_parent"
+        android:orientation="vertical">
 
-    <ScrollView
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:fillViewport="true">
+        <androidx.appcompat.widget.Toolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize" />
 
-        <LinearLayout
+        <com.google.android.material.button.MaterialButtonToggleGroup
+            android:id="@+id/taskFilters"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="24dp">
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginEnd="16dp"
+            app:checkedButton="@id/newTab"
+            app:selectionRequired="true"
+            app:singleSelection="true">
 
-            <TextView
-                android:id="@+id/statusTitle"
-                android:layout_width="match_parent"
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/newTab"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="0dp"
-                android:text="@string/checking_speech_model"
-                android:textStyle="bold" />
+                android:layout_weight="1"
+                android:text="@string/new_label" />
 
-            <TextView
-                android:id="@+id/statusDetail"
-                android:layout_width="match_parent"
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/processedTab"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:visibility="gone" />
+                android:layout_weight="1"
+                android:text="@string/processed" />
 
-            <ProgressBar
-                android:id="@+id/statusProgress"
-                style="?android:attr/progressBarStyleHorizontal"
-                android:layout_width="match_parent"
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/allTab"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:max="100" />
+                android:layout_weight="1"
+                android:text="@string/all_label" />
+        </com.google.android.material.button.MaterialButtonToggleGroup>
 
-            <TextView
-                android:id="@+id/statusMeta"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:visibility="gone" />
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/taskList"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clipToPadding="false"
+            android:paddingStart="16dp"
+            android:paddingTop="8dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="88dp" />
+    </LinearLayout>
 
-            <Button
-                android:id="@+id/downloadModel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="@string/download_speech_model"
-                android:visibility="gone" />
-
-            <Button
-                android:id="@+id/importModel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="@string/install_model_from_folder"
-                android:visibility="gone" />
-
-            <TextView
-                android:id="@+id/folderName"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="@string/folder_not_selected" />
-
-            <Button
-                android:id="@+id/selectFolder"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="@string/select_audio_folder"
-                android:visibility="gone" />
-
-            <TextView
-                android:id="@+id/outputName"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:text="@string/output_not_selected" />
-
-            <Button
-                android:id="@+id/selectOutput"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="@string/select_output_file"
-                android:visibility="gone" />
-
-            <Button
-                android:id="@+id/importAudio"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:text="@string/import_audio" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/newTab"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="@string/new_label" />
-
-                <Button
-                    android:id="@+id/processedTab"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:layout_weight="1"
-                    android:text="@string/processed" />
-            </LinearLayout>
-
-            <Button
-                android:id="@+id/transcribeAll"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:background="@drawable/transcribe_all_background"
-                android:enabled="false"
-                android:text="@string/transcribe_all"
-                android:textColor="@color/transcribe_all_text"
-                android:visibility="gone" />
-
-            <TextView
-                android:id="@+id/emptyList"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:text="@string/no_new_audio_files" />
-
-            <LinearLayout
-                android:id="@+id/fileList"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical" />
-
-        </LinearLayout>
-    </ScrollView>
-</LinearLayout>
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/importAudio"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="16dp"
+        android:contentDescription="@string/import_audio"
+        app:backgroundTint="?attr/colorPrimary"
+        app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.NotesRecognition.Circular"
+        app:srcCompat="@drawable/ic_add_24"
+        app:tint="?attr/colorOnPrimary" />
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

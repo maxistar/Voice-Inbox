@@ -3,48 +3,43 @@ package me.maxistar.voiceinbox
 import me.maxistar.voiceinbox.core.*
 
 import android.content.Intent
-import android.graphics.Typeface
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Bundle
-import android.view.Gravity
 import android.view.Menu
 import android.view.MenuItem
-import android.view.View
-import android.widget.Button
-import android.widget.LinearLayout
-import android.widget.PopupMenu
-import android.widget.ProgressBar
-import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.button.MaterialButtonToggleGroup
+import com.google.android.material.floatingactionbutton.FloatingActionButton
+import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
 import java.util.UUID
 
 class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listener {
-    private lateinit var statusTitle: TextView
-    private lateinit var statusDetail: TextView
-    private lateinit var statusProgress: ProgressBar
-    private lateinit var statusMeta: TextView
-    private lateinit var downloadModel: Button
-    private lateinit var importModel: Button
-    private lateinit var transcribeAll: Button
-    private lateinit var selectOutput: Button
-    private lateinit var selectFolder: Button
-    private lateinit var importAudio: Button
-    private lateinit var outputName: TextView
-    private lateinit var folderName: TextView
-    private lateinit var newTab: Button
-    private lateinit var processedTab: Button
-    private lateinit var fileList: LinearLayout
-    private lateinit var emptyList: TextView
+    private lateinit var importAudio: FloatingActionButton
+    private lateinit var newTab: MaterialButton
+    private lateinit var processedTab: MaterialButton
+    private lateinit var allTab: MaterialButton
+    private lateinit var taskFilters: MaterialButtonToggleGroup
+    private lateinit var taskList: RecyclerView
+    private lateinit var taskAdapter: TaskListAdapter
+    private lateinit var taskActionRouter: AndroidTaskActionRouter
+    private val taskStateHost: AndroidMainScreenStateHost by viewModels()
 
     private lateinit var selectionStore: DocumentSelectionStore
     private lateinit var selectionAccess: PersistedSelectionAccess
@@ -58,10 +53,13 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private val importExecutor = Executors.newSingleThreadExecutor()
 
     private var modelReady = false
+    private var modelSetupState = ModelSetupSnapshotState.REQUIRED
     private var outputUri: Uri? = null
     private var folderUri: Uri? = null
     private var outputAccessReady = false
     private var folderAccessReady = false
+    private var outputDisplayName: String? = null
+    private var folderDisplayName: String? = null
     private var outputAccessError: String? = null
     private var folderAccessError: String? = null
     private var transcriptionState = TranscriptionObservationState.UNKNOWN
@@ -69,18 +67,18 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private var folderScanQueued = false
     private var scanning = false
     private var pendingCount = 0
-    private var selectedTab = MainScreenCatalogTab.NEW
     private var lastCatalogWorkState: CatalogWorkRefreshKey? = null
     private var currentSessionTranscriptionWorkId: UUID? = null
     private var currentSessionObservedActiveTranscription = false
     private var modelMessage = "Checking speech model"
-    private var modelLoading = true
     private var modelDownloadAvailable = false
     private var modelDownloadProgress: Int? = null
+    private var modelInstallCanCancel = false
     private var scanMessage: String? = null
     private var transcriptionFinished = false
     private var transcriptionPhase: String? = null
     private var transcriptionFilename: String? = null
+    private var transcriptionEntryId: Long? = null
     private var transcriptionIndeterminate = true
     private var transcriptionProgressValue = 0
     private var processedUs = -1L
@@ -88,7 +86,6 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private var completedFiles = 0
     private var totalFiles = 0
     private var failedFiles = 0
-    private var statusError: String? = null
     private var previewPlayer: MediaPlayer? = null
     private var previewEntryId: Long? = null
     private var previewState = PreviewPlaybackState.IDLE
@@ -101,7 +98,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private var pendingFolderScanOrigin: FolderScanOrigin? = null
     private var hasStarted = false
     private var ingestionActive = false
-    private var importInboxAvailable = false
+    private var currentEntries: List<AudioCatalogEntry> = emptyList()
+    private var renderingFilter = false
     private val queuedImportUris = mutableListOf<Uri>()
 
     private val outputPicker = registerForActivityResult(
@@ -154,6 +152,10 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         startupCoordinator = StartupProcessingCoordinator.restore(
             savedInstanceState?.getString(STATE_STARTUP_PROCESSING_STAGE),
         )
+        taskActionRouter = AndroidTaskActionRouter(
+            currentState = { taskStateHost.state.value },
+            gateway = AndroidTaskActionGateway(::performTaskAction),
+        )
         bootstrapSelectionIdentities()
         ScheduledTranscriptionScheduler.sync(
             this,
@@ -162,23 +164,22 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
             ).load(),
         )
 
-        downloadModel.setOnClickListener { SpeechModelDownloadWorker.enqueue(this) }
-        importModel.setOnClickListener {
-            if (modelDownloadAvailable && !modelLoading) modelFolderPicker.launch(null)
-        }
-        transcribeAll.setOnClickListener { startBatchTranscription() }
         importAudio.setOnClickListener {
             if (!ingestionActive) importPicker.launch(arrayOf("audio/*", "application/ogg"))
         }
-        selectOutput.setOnClickListener { launchOutputPickerIfEnabled() }
-        selectFolder.setOnClickListener { launchFolderPickerIfEnabled() }
-        newTab.setOnClickListener {
-            selectedTab = MainScreenCatalogTab.NEW
-            refreshCatalog()
+        taskFilters.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (!isChecked || renderingFilter) return@addOnButtonCheckedListener
+            val filter = when (checkedId) {
+                R.id.processedTab -> TaskListFilter.PROCESSED
+                R.id.allTab -> TaskListFilter.ALL
+                else -> TaskListFilter.NEW
+            }
+            taskStateHost.selectFilter(filter)
         }
-        processedTab.setOnClickListener {
-            selectedTab = MainScreenCatalogTab.PROCESSED
-            refreshCatalog()
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                taskStateHost.state.collect(::renderTaskState)
+            }
         }
 
         observeModelInstallation()
@@ -224,7 +225,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     override fun onOptionsItemSelected(item: MenuItem): Boolean =
         when (item.itemId) {
             R.id.menuRefreshFolder -> {
-                if (currentControls().refreshEnabled) {
+                if (selectionControls().refreshEnabled) {
                     scanFolder()
                 }
                 true
@@ -245,22 +246,15 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     }
 
     private fun bindViews() {
-        statusTitle = findViewById(R.id.statusTitle)
-        statusDetail = findViewById(R.id.statusDetail)
-        statusProgress = findViewById(R.id.statusProgress)
-        statusMeta = findViewById(R.id.statusMeta)
-        downloadModel = findViewById(R.id.downloadModel)
-        importModel = findViewById(R.id.importModel)
-        transcribeAll = findViewById(R.id.transcribeAll)
-        selectOutput = findViewById(R.id.selectOutput)
-        selectFolder = findViewById(R.id.selectFolder)
         importAudio = findViewById(R.id.importAudio)
-        outputName = findViewById(R.id.outputName)
-        folderName = findViewById(R.id.folderName)
         newTab = findViewById(R.id.newTab)
         processedTab = findViewById(R.id.processedTab)
-        fileList = findViewById(R.id.fileList)
-        emptyList = findViewById(R.id.emptyList)
+        allTab = findViewById(R.id.allTab)
+        taskFilters = findViewById(R.id.taskFilters)
+        taskList = findViewById(R.id.taskList)
+        taskAdapter = TaskListAdapter(::handleTaskAction)
+        taskList.layoutManager = LinearLayoutManager(this)
+        taskList.adapter = taskAdapter
     }
 
     private fun bootstrapSelectionIdentities() {
@@ -271,19 +265,17 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private fun setStoredOutputIdentity(stored: Uri?) {
         outputUri = stored
         outputAccessReady = false
+        outputDisplayName = null
         startupCoordinator.setOutputReady(false)
-        outputName.text = getString(
-            if (stored == null) R.string.output_not_selected else R.string.output_restoring,
-        )
+        publishTaskState()
     }
 
     private fun setStoredFolderIdentity(stored: Uri?) {
         folderUri = stored
         folderAccessReady = false
+        folderDisplayName = null
         startupCoordinator.setFolderReady(false)
-        folderName.text = getString(
-            if (stored == null) R.string.folder_not_selected else R.string.folder_restoring,
-        )
+        publishTaskState()
     }
 
     private fun restoreSelections(scanFolderOnSuccess: Boolean) {
@@ -297,7 +289,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         } else {
             outputAccessReady = false
             startupCoordinator.setOutputReady(false)
-            outputName.text = getString(R.string.output_restoring)
+            publishTaskState()
             folderExecutor.execute {
                 val result = selectionAccess.validate(
                     uri = storedOutput,
@@ -324,7 +316,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                             outputAccessError = result.error?.message
                                 ?: "Output file is temporarily unavailable"
                             startupCoordinator.setOutputReady(false)
-                            outputName.text = getString(R.string.output_temporarily_unavailable)
+                            outputDisplayName = null
                         }
                         PersistedSelectionAccessState.PERMISSION_REVOKED -> {
                             selectionStore.clearOutputUri()
@@ -333,7 +325,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                                 ?: "Output file access was revoked; select it again"
                         }
                     }
-                    renderStatusBlock()
+                    publishTaskState()
                     updateControls()
                     evaluateStartupProcessing()
                 }
@@ -354,8 +346,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         folderAccessReady = false
         folderChecking = true
         startupCoordinator.setFolderReady(false)
-        folderName.text = getString(R.string.folder_restoring)
-        renderStatusBlock()
+        folderDisplayName = null
+        publishTaskState()
         updateControls()
         folderExecutor.execute {
             val result = selectionAccess.validate(
@@ -387,7 +379,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                         folderAccessError = result.error?.message
                             ?: "Audio folder is temporarily unavailable"
                         startupCoordinator.setFolderReady(false)
-                        folderName.text = getString(R.string.folder_temporarily_unavailable)
+                        folderDisplayName = null
                     }
                     PersistedSelectionAccessState.PERMISSION_REVOKED -> {
                         selectionStore.clearFolderUri()
@@ -396,7 +388,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                             ?: "Audio folder access was revoked; select it again"
                     }
                 }
-                renderStatusBlock()
+                publishTaskState()
                 updateControls()
                 refreshCatalog()
                 maybeStartPendingFolderScan()
@@ -440,8 +432,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                     outputAccessError = null
                     startupCoordinator.setOutputReady(true)
                     updateOutputSummary(metadata.displayName)
-                    statusError = null
-                    renderStatusBlock()
+                    outputAccessError = null
+                    publishTaskState()
                     updateControls()
                     evaluateStartupProcessing()
                 }
@@ -451,8 +443,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                         activityDestroyed ||
                         validationGeneration != outputValidationGeneration
                     ) return@runOnUiThread
-                    statusError = it.message ?: "Output file is not writable"
-                    renderStatusBlock()
+                    outputAccessError = it.message ?: "Output file is not writable"
+                    publishTaskState()
                     updateControls()
                     evaluateStartupProcessing()
                 }
@@ -472,7 +464,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                     validationGeneration != folderValidationGeneration
                 ) return@runOnUiThread
                 folderChecking = true
-                renderStatusBlock()
+                publishTaskState()
                 updateControls()
             }
             runCatching {
@@ -491,8 +483,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                     folderAccessError = null
                     startupCoordinator.setFolderReady(true)
                     updateFolderSummary(name)
-                    statusError = null
-                    renderStatusBlock()
+                    folderAccessError = null
+                    publishTaskState()
                     updateControls()
                     refreshCatalog()
                     pendingFolderScanOrigin = FolderScanOrigin.USER
@@ -505,8 +497,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                         validationGeneration != folderValidationGeneration
                     ) return@runOnUiThread
                     folderChecking = false
-                    statusError = it.message ?: "Audio folder is not readable"
-                    renderStatusBlock()
+                    folderAccessError = it.message ?: "Audio folder is not readable"
+                    publishTaskState()
                     updateControls()
                     evaluateStartupProcessing()
                 }
@@ -527,15 +519,13 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         if (permission.isFailure) {
             setModelUi(
                 "The selected model folder cannot be accessed after the picker closes",
-                loading = false,
                 canDownload = true,
             )
             updateControls()
             return
         }
         if (!alreadyPersisted) SpeechModelImportPermission.recordOwned(this, uri)
-        statusError = null
-        setModelUi("Checking local speech model", loading = true, canDownload = false)
+        setModelUi("Checking local speech model", canDownload = false)
         updateControls()
         importExecutor.execute {
             runCatching {
@@ -554,7 +544,6 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                     if (activityDestroyed) return@runOnUiThread
                     setModelUi(
                         error.message ?: "The selected model folder is not readable",
-                        loading = false,
                         canDownload = true,
                     )
                     updateControls()
@@ -587,8 +576,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         completedFiles = 0
         totalFiles = 0
         failedFiles = 0
-        statusError = null
-        renderStatusBlock()
+        folderAccessError = null
+        publishTaskState()
         updateControls()
         folderExecutor.execute {
             runOnUiThread {
@@ -596,7 +585,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                 folderScanQueued = false
                 scanning = true
                 scanMessage = "Scanning folder"
-                renderStatusBlock()
+                publishTaskState()
                 updateControls()
             }
             runCatching {
@@ -608,6 +597,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                     if (activityDestroyed) return@runOnUiThread
                     folderScanQueued = false
                     scanning = false
+                    folderAccessError = null
                     scanMessage = "Scan complete: $count audio files"
                     refreshCatalog(startupGeneration)
                 }
@@ -616,9 +606,10 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                     if (activityDestroyed) return@runOnUiThread
                     folderScanQueued = false
                     scanning = false
+                    folderAccessError = error.message ?: "Folder scan failed"
                     startupGeneration?.let(startupCoordinator::onStartupScanFailed)
                     evaluateStartupProcessing()
-                    showError(error.message ?: "Folder scan failed")
+                    updateControls()
                 }
             }
         }
@@ -632,17 +623,12 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         val token = CatalogRefreshToken(
             generation = ++catalogRefreshGeneration,
             sourceScope = activeSourceScope(),
-            selectedTab = selectedTab,
         )
         val startupGenerationForRequest = pendingStartupCatalogGeneration
         folderExecutor.execute {
             val newEntries = catalog.newEntries(token.sourceScope)
             val processedEntries = catalog.processedEntries(token.sourceScope)
-            val entries = if (token.selectedTab == MainScreenCatalogTab.NEW) {
-                newEntries
-            } else {
-                processedEntries
-            }
+            val entries = (newEntries + processedEntries).distinctBy(AudioCatalogEntry::id)
             runOnUiThread {
                 if (activityDestroyed) return@runOnUiThread
                 if (
@@ -650,16 +636,12 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                         request = token,
                         currentGeneration = catalogRefreshGeneration,
                         currentSourceScope = activeSourceScope(),
-                        currentTab = selectedTab,
                     )
                 ) return@runOnUiThread
                 pendingCount = newEntries.count { it.state == AudioFileState.PENDING }
-                importInboxAvailable = (newEntries + processedEntries).any {
-                    it.folderUri == AndroidAudioImportConstants.SOURCE_ID
-                }
                 val catalogFailedCount = processedEntries.count { it.state == AudioFileState.FAILED }
                 renderEntries(entries)
-                renderStatusBlock()
+                publishTaskState()
                 updateControls()
                 if (startupGenerationForRequest != null) {
                     if (pendingStartupCatalogGeneration == startupGenerationForRequest) {
@@ -679,123 +661,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     }
 
     private fun renderEntries(entries: List<AudioCatalogEntry>) {
-        val state = currentMainScreenState(entries)
-        fileList.removeAllViews()
-        emptyList.visibility = if (state.list.emptyVisible) View.VISIBLE else View.GONE
-        emptyList.text = state.list.emptyMessage
-        newTab.isSelected = state.tabs.newSelected
-        processedTab.isSelected = state.tabs.processedSelected
-        newTab.isEnabled = state.tabs.newEnabled
-        processedTab.isEnabled = state.tabs.processedEnabled
-        entries.zip(state.rows).forEach { (entry, rowState) ->
-            fileList.addView(createEntryView(entry, rowState))
-        }
-    }
-
-    private fun createEntryView(entry: AudioCatalogEntry, rowState: MainScreenRowState): View =
-        LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, dp(12), 0, dp(12))
-            contentDescription = entry.displayName
-            isLongClickable = true
-            setOnLongClickListener { anchor ->
-                showEntryContextMenu(anchor, entry)
-            }
-
-            addView(LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                layoutParams = LinearLayout.LayoutParams(
-                    0,
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    1f,
-                )
-                addView(TextView(context).apply {
-                    text = entry.displayName
-                    setTypeface(typeface, Typeface.BOLD)
-                })
-                addView(TextView(context).apply {
-                    text = entryDescription(entry)
-                })
-            })
-            val actions = LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                ).apply {
-                    marginStart = dp(12)
-                }
-            }
-            actions.addView(Button(context).apply {
-                tag = PreviewButtonTag(entry.id)
-                text = rowState.preview.label
-                isEnabled = rowState.preview.enabled
-                setOnClickListener {
-                    if (entry.id == previewEntryId && previewState != PreviewPlaybackState.IDLE) {
-                        stopPreviewPlayback(render = true)
-                    } else {
-                        startPreviewPlayback(entry)
-                    }
-                }
-            })
-            if (entry.state == AudioFileState.FAILED) {
-                actions.addView(Button(context).apply {
-                    tag = RetryButtonTag(entry.id)
-                    text = "Retry"
-                    isEnabled = rowState.retryEnabled
-                    setOnClickListener {
-                        retryEntry(entry)
-                    }
-                })
-            }
-            addView(actions)
-        }
-
-    private fun showEntryContextMenu(anchor: View, entry: AudioCatalogEntry): Boolean {
-        val popup = PopupMenu(this, anchor)
-        val row = MainScreenStateController.rowState(
-            row = entry.toMainScreenRowInput(),
-            activePreviewEntryId = previewEntryId,
-            previewState = previewState,
-            transcriptionState = transcriptionState,
-            busy = folderBusy(),
-            retryEnabled = currentControls().retryEnabled,
-        )
-        if (row.preview.enabled) {
-            popup.menu.add(Menu.NONE, MENU_ENTRY_PLAY, Menu.NONE, row.preview.label)
-        }
-        if (row.retryVisible && row.retryEnabled) {
-            popup.menu.add(Menu.NONE, MENU_ENTRY_RETRY, Menu.NONE, "Retry")
-        }
-        if (row.showTextVisible) {
-            popup.menu.add(Menu.NONE, MENU_ENTRY_SHOW_TEXT, Menu.NONE, "Show text")
-        }
-        if (popup.menu.size() == 0) return false
-        popup.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
-                MENU_ENTRY_PLAY -> {
-                    if (entry.id == previewEntryId && previewState != PreviewPlaybackState.IDLE) {
-                        stopPreviewPlayback(render = true)
-                    } else {
-                        startPreviewPlayback(entry)
-                    }
-                    true
-                }
-                MENU_ENTRY_RETRY -> {
-                    retryEntry(entry)
-                    true
-                }
-                MENU_ENTRY_SHOW_TEXT -> {
-                    showTranscriptText(entry)
-                    true
-                }
-                else -> false
-            }
-        }
-        popup.show()
-        return true
+        currentEntries = entries
+        publishTaskState()
     }
 
     private fun retryEntry(entry: AudioCatalogEntry) {
@@ -818,20 +685,6 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
             .show()
     }
 
-    private fun entryDescription(entry: AudioCatalogEntry): String = buildString {
-        append(
-            when (entry.state) {
-                AudioFileState.PENDING -> "New"
-                AudioFileState.PROCESSING -> "Processing"
-                AudioFileState.PROCESSED -> "Processed"
-                AudioFileState.FAILED -> "Failed"
-                AudioFileState.MISSING -> "Missing"
-            },
-        )
-        entry.fingerprint.sizeBytes?.let { append(" • ${formatSize(it)}") }
-        entry.lastError?.let { append("\n$it") }
-    }
-
     private fun refreshModel() {
         modelReadiness.refresh { state ->
             runOnUiThread {
@@ -846,35 +699,40 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         when (state) {
             SpeechModelReadinessState.Checking -> {
                 modelReady = false
-                setModelUi("Checking speech model", loading = true, canDownload = false)
+                modelSetupState = ModelSetupSnapshotState.INSTALLING
+                setModelUi("Checking speech model", canDownload = false)
             }
             is SpeechModelReadinessState.Ready -> {
                 modelReady = true
-                setModelUi("Speech model ready", loading = false, canDownload = false)
+                modelSetupState = ModelSetupSnapshotState.READY
+                setModelUi("Speech model ready", canDownload = false)
             }
             SpeechModelReadinessState.Missing -> {
                 modelReady = false
-                setModelUi("Speech model is not installed", loading = false, canDownload = true)
+                modelSetupState = ModelSetupSnapshotState.REQUIRED
+                setModelUi("Speech model is not installed", canDownload = true)
             }
             is SpeechModelReadinessState.Invalid -> {
                 modelReady = false
-                setModelUi("Invalid speech model: ${state.reason}", loading = false, canDownload = true)
+                modelSetupState = ModelSetupSnapshotState.INVALID
+                setModelUi("Invalid speech model: ${state.reason}", canDownload = true)
             }
             is SpeechModelReadinessState.Failed -> {
                 modelReady = false
-                setModelUi(state.message, loading = false, canDownload = true)
+                modelSetupState = ModelSetupSnapshotState.INVALID
+                setModelUi(state.message, canDownload = true)
             }
         }
         startupCoordinator.setModelReady(modelReady)
         evaluateStartupProcessing()
     }
 
-    private fun setModelUi(message: String, loading: Boolean, canDownload: Boolean) {
+    private fun setModelUi(message: String, canDownload: Boolean) {
         modelMessage = message
-        modelLoading = loading
         modelDownloadAvailable = canDownload
         modelDownloadProgress = null
-        renderStatusBlock()
+        modelInstallCanCancel = false
+        publishTaskState()
     }
 
     private fun observeModelInstallation() {
@@ -892,6 +750,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                     WorkInfo.State.RUNNING,
                     -> {
                         modelReady = false
+                        modelSetupState = ModelSetupSnapshotState.INSTALLING
                         startupCoordinator.setModelReady(false)
                         val bytes = info.progress.getLong(SpeechModelInstallationWork.KEY_BYTES_DOWNLOADED, 0)
                         val total = info.progress.getLong(
@@ -901,10 +760,12 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                         modelMessage =
                             info.progress.getString(SpeechModelInstallationWork.KEY_MESSAGE)
                                 ?: "Installing speech model"
-                        modelLoading = true
                         modelDownloadAvailable = false
+                        modelInstallCanCancel = info.tags.any { tag ->
+                            tag.endsWith(SpeechModelDownloadWorker::class.java.simpleName)
+                        }
                         modelDownloadProgress = ((bytes * 100) / total.coerceAtLeast(1)).toInt()
-                        renderStatusBlock()
+                        publishTaskState()
                         updateControls()
                         evaluateStartupProcessing()
                     }
@@ -919,12 +780,12 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                     WorkInfo.State.FAILED -> {
                         SpeechModelImportPermission.releaseOwnedIfUnused(this)
                         modelReady = false
+                        modelSetupState = ModelSetupSnapshotState.INVALID
                         startupCoordinator.setModelReady(false)
                         setModelUi(
                             info.outputData.getString(SpeechModelInstallationWork.KEY_ERROR)
                                 ?: "Speech model installation failed",
-                            false,
-                            true,
+                            canDownload = true,
                         )
                         updateControls()
                         evaluateStartupProcessing()
@@ -951,7 +812,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                 evaluateStartupProcessing()
                 if (infos.isEmpty()) {
                     transcriptionFinished = false
-                    renderStatusBlock()
+                    publishTaskState()
                     updateControls()
                     return@observe
                 }
@@ -963,7 +824,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                     null
                 } ?: run {
                     clearTranscriptionProgress()
-                    renderStatusBlock()
+                    publishTaskState()
                     updateControls()
                     return@observe
                 }
@@ -986,6 +847,9 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                         else -> info.state.name
                     }
                 transcriptionFilename = data.getString(TranscriptionWorker.KEY_FILENAME)
+                transcriptionEntryId = data
+                    .getLong(TranscriptionWorker.KEY_ACTIVE_ENTRY_ID, TranscriptionWorker.NO_ENTRY_ID)
+                    .takeIf { it != TranscriptionWorker.NO_ENTRY_ID }
                 transcriptionIndeterminate =
                     transcriptionActive() && data.getBoolean(TranscriptionWorker.KEY_INDETERMINATE, true)
                 transcriptionProgressValue = data.getInt(TranscriptionWorker.KEY_PROGRESS, 0)
@@ -1000,9 +864,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                 }
                 if (transcriptionActive() || transcriptionFinished) {
                     scanMessage = null
-                    statusError = null
                 }
-                renderStatusBlock()
+                publishTaskState()
                 val catalogState = CatalogWorkRefreshKey(
                     workId = info.id.toString(),
                     workState = info.state.name,
@@ -1019,19 +882,33 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
             }
     }
 
-    private fun currentControls(): CatalogControlState =
-        currentMainScreenState().controls
+    private fun selectionControls(): CatalogControlState =
+        TranscriptionUiRules.catalogControls(
+            modelInstallationState = if (modelSetupState == ModelSetupSnapshotState.READY) {
+                SpeechModelInstallationState.INSTALLED
+            } else {
+                SpeechModelInstallationState.NOT_INSTALLED
+            },
+            outputSelected = outputAccessReady,
+            folderSelected = folderAccessReady,
+            pendingCount = pendingCount,
+            transcriptionState = transcriptionState,
+            scanning = folderBusy(),
+            audioInputAvailable = folderUri?.let { folderAccessReady } ?: currentEntries.any {
+                it.folderUri == AndroidAudioImportConstants.SOURCE_ID
+            },
+        )
 
     private fun folderBusy(): Boolean = folderChecking || folderScanQueued || scanning
 
     private fun launchOutputPickerIfEnabled() {
-        if (currentControls().outputEnabled) {
+        if (selectionControls().outputEnabled) {
             outputPicker.launch(FileSelectionRules.outputMimeTypes)
         }
     }
 
     private fun launchFolderPickerIfEnabled() {
-        if (currentControls().folderEnabled) {
+        if (selectionControls().folderEnabled) {
             folderPicker.launch(folderUri)
         }
     }
@@ -1097,6 +974,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         transcriptionFinished = false
         transcriptionPhase = null
         transcriptionFilename = null
+        transcriptionEntryId = null
         transcriptionIndeterminate = true
         transcriptionProgressValue = 0
         processedUs = -1L
@@ -1107,58 +985,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     }
 
     private fun updateControls() {
-        val state = currentMainScreenState()
-        val controls = state.controls
-        selectOutput.visibility = if (controls.outputSetupVisible) View.VISIBLE else View.GONE
-        selectOutput.isEnabled = controls.outputEnabled
-        selectFolder.visibility = if (controls.folderSetupVisible) View.VISIBLE else View.GONE
-        selectFolder.isEnabled = controls.folderEnabled
         importAudio.isEnabled = !ingestionActive
-        importAudio.text = getString(if (ingestionActive) R.string.importing_audio else R.string.import_audio)
-        transcribeAll.visibility = if (state.list.transcribeAllVisible) View.VISIBLE else View.GONE
-        transcribeAll.isEnabled = state.list.transcribeAllEnabled
-        for (index in 0 until fileList.childCount) {
-            val row = fileList.getChildAt(index) as? LinearLayout ?: continue
-            for (childIndex in 0 until row.childCount) {
-                val actions = row.getChildAt(childIndex) as? LinearLayout ?: continue
-                for (buttonIndex in 0 until actions.childCount) {
-                    val button = actions.getChildAt(buttonIndex) as? Button ?: continue
-                    when (val tag = button.tag) {
-                        is RetryButtonTag -> {
-                            val retry = MainScreenStateController.rowState(
-                                row = MainScreenRowInput(
-                                    entryId = tag.entryId,
-                                    state = AudioFileState.FAILED,
-                                    hasTranscriptText = false,
-                                ),
-                                activePreviewEntryId = previewEntryId,
-                                previewState = previewState,
-                                transcriptionState = transcriptionState,
-                                busy = folderBusy(),
-                                retryEnabled = controls.retryEnabled,
-                            )
-                            button.isEnabled = retry.retryEnabled
-                        }
-                        is PreviewButtonTag -> {
-                            val preview = MainScreenStateController.rowState(
-                                row = MainScreenRowInput(
-                                    entryId = tag.entryId,
-                                    state = AudioFileState.PENDING,
-                                    hasTranscriptText = false,
-                                ),
-                                activePreviewEntryId = previewEntryId,
-                                previewState = previewState,
-                                transcriptionState = transcriptionState,
-                                busy = folderBusy(),
-                                retryEnabled = controls.retryEnabled,
-                            ).preview
-                            button.text = preview.label
-                            button.isEnabled = preview.enabled
-                        }
-                    }
-                }
-            }
-        }
+        publishTaskState()
         invalidateOptionsMenu()
     }
 
@@ -1213,105 +1041,154 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         if (render) refreshCatalog()
     }
 
-    private fun renderStatusBlock() {
-        val state = currentMainScreenState().status
-        statusTitle.text = state.title
-        setOptionalText(statusDetail, state.detail)
-        setOptionalText(statusMeta, state.meta)
-        statusProgress.visibility = if (state.progressVisible) View.VISIBLE else View.GONE
-        statusProgress.isIndeterminate = state.progressIndeterminate
-        statusProgress.progress = state.progress
-        downloadModel.visibility = if (state.downloadVisible) View.VISIBLE else View.GONE
-        importModel.visibility = if (state.downloadVisible) View.VISIBLE else View.GONE
-        importModel.isEnabled = modelDownloadAvailable && !modelLoading
+    private fun publishTaskState() {
+        if (!::importAudio.isInitialized) return
+        val folderState = when {
+            folderAccessError != null -> FolderSetupSnapshotState.ERROR
+            folderUri == null -> FolderSetupSnapshotState.UNSELECTED
+            folderChecking || folderScanQueued || scanning -> FolderSetupSnapshotState.SCANNING
+            folderAccessReady -> FolderSetupSnapshotState.READY
+            else -> FolderSetupSnapshotState.SCANNING
+        }
+        val outputState = when {
+            outputAccessReady -> OutputSetupSnapshotState.READY
+            outputAccessError != null -> OutputSetupSnapshotState.INVALID
+            outputUri == null -> OutputSetupSnapshotState.REQUIRED
+            else -> OutputSetupSnapshotState.REQUIRED
+        }
+        val audioInputAvailable = folderUri?.let { folderAccessReady } ?: currentEntries.any {
+            it.folderUri == AndroidAudioImportConstants.SOURCE_ID
+        }
+        val eligible = modelReady &&
+            outputAccessReady &&
+            audioInputAvailable &&
+            !folderBusy() &&
+            !transcriptionActive()
+        val transcription = TranscriptionTaskSnapshot(
+            active = transcriptionActive(),
+            activeEntryId = transcriptionEntryId,
+            preparationOwnerEntryId = null,
+            phase = transcriptionPhase,
+            percent = transcriptionProgressValue.takeUnless { transcriptionIndeterminate },
+            processedUs = processedUs.takeIf { it >= 0 },
+            durationUs = durationUs.takeIf { it > 0 },
+            completedFiles = completedFiles.takeIf { totalFiles > 0 },
+            totalFiles = totalFiles.takeIf { it > 0 },
+            failedFiles = failedFiles.takeIf { it > 0 },
+            prerequisiteError = null,
+        )
+        taskStateHost.update { current ->
+            current.copy(
+                model = ModelSetupSnapshot(
+                    state = modelSetupState,
+                    detail = modelMessage.takeUnless { modelSetupState == ModelSetupSnapshotState.READY },
+                    installationPhase = modelMessage.takeIf {
+                        modelSetupState == ModelSetupSnapshotState.INSTALLING
+                    },
+                    progressPercent = modelDownloadProgress,
+                    downloadAvailable = modelDownloadAvailable,
+                    canCancel = modelInstallCanCancel,
+                ),
+                output = OutputSetupSnapshot(
+                    state = outputState,
+                    detail = outputAccessError ?: outputDisplayName,
+                ),
+                folder = FolderSetupSnapshot(
+                    state = folderState,
+                    detail = folderAccessError ?: scanMessage ?: folderDisplayName,
+                ),
+                entries = currentEntries,
+                preview = PreviewTaskSnapshot(
+                    activeEntryId = previewEntryId,
+                    state = previewState,
+                ),
+                transcription = transcription,
+                transcriptionEligible = eligible,
+                previewEligible = !folderBusy() && !transcriptionActive(),
+                importEnabled = !ingestionActive,
+                refreshFolderVisible = folderUri != null,
+                refreshFolderEnabled = selectionControls().refreshEnabled,
+            )
+        }
     }
 
-    private fun setOptionalText(view: TextView, value: String?) {
-        view.text = value.orEmpty()
-        view.visibility = if (value.isNullOrBlank()) View.GONE else View.VISIBLE
+    private fun renderTaskState(state: AndroidMainScreenState) {
+        renderingFilter = true
+        taskFilters.check(
+            when (state.taskList.filter) {
+                TaskListFilter.NEW -> R.id.newTab
+                TaskListFilter.PROCESSED -> R.id.processedTab
+                TaskListFilter.ALL -> R.id.allTab
+            },
+        )
+        renderingFilter = false
+        importAudio.isEnabled = state.importEnabled
+        taskAdapter.submitList(TaskListDisplayItems.from(state.taskList))
+        invalidateOptionsMenu()
+    }
+
+    private fun handleTaskAction(request: AndroidTaskActionRequest) {
+        taskActionRouter.route(request)
+    }
+
+    private fun performTaskAction(kind: TaskActionKind, entry: AudioCatalogEntry?) {
+        when (kind) {
+            TaskActionKind.DOWNLOAD_MODEL,
+            TaskActionKind.RETRY_MODEL_DOWNLOAD,
+            -> SpeechModelDownloadWorker.enqueue(this)
+            TaskActionKind.IMPORT_MODEL -> modelFolderPicker.launch(null)
+            TaskActionKind.CANCEL_MODEL_DOWNLOAD -> SpeechModelDownloadWorker.cancel(this)
+            TaskActionKind.SELECT_OUTPUT -> launchOutputPickerIfEnabled()
+            TaskActionKind.SELECT_FOLDER -> launchFolderPickerIfEnabled()
+            TaskActionKind.REFRESH_FOLDER -> if (selectionControls().refreshEnabled) scanFolder()
+            TaskActionKind.IMPORT_AUDIO -> if (!ingestionActive) {
+                importPicker.launch(arrayOf("audio/*", "application/ogg"))
+            }
+            TaskActionKind.TRANSCRIBE_ALL -> startBatchTranscription()
+            TaskActionKind.TRANSCRIBE -> entry?.let(::transcribeEntry)
+            TaskActionKind.RETRY_TRANSCRIPTION -> entry?.let(::retryEntry)
+            TaskActionKind.PLAY -> entry?.let(::startPreviewPlayback)
+            TaskActionKind.STOP -> stopPreviewPlayback(render = true)
+            TaskActionKind.SHOW_TEXT -> entry?.let(::showTranscriptText)
+        }
+    }
+
+    private fun transcribeEntry(entry: AudioCatalogEntry) {
+        val output = outputUri ?: return
+        if (entry.state != AudioFileState.PENDING || !outputAccessReady) return
+        stopPreviewPlayback(render = true)
+        currentSessionTranscriptionWorkId = TranscriptionWorker.enqueueEntry(
+            this,
+            folderUri,
+            output,
+            entry.id,
+        )
     }
 
     private fun updateMenu(menu: Menu) {
-        val controls = currentMainScreenState().controls
-        menu.findItem(R.id.menuRefreshFolder)?.isEnabled = controls.refreshEnabled
+        val state = taskStateHost.state.value
+        menu.findItem(R.id.menuRefreshFolder)?.apply {
+            isVisible = state.refreshFolderVisible
+            isEnabled = state.refreshFolderEnabled
+        }
     }
 
     private fun updateOutputSummary(displayName: String?) {
-        outputName.text = if (displayName.isNullOrBlank()) {
-            getString(R.string.output_not_selected)
-        } else {
-            getString(R.string.output_selected, displayName)
-        }
+        outputDisplayName = displayName
+        publishTaskState()
     }
 
     private fun updateFolderSummary(displayName: String?) {
-        folderName.text = if (displayName.isNullOrBlank()) {
-            getString(R.string.folder_not_selected)
-        } else {
-            getString(R.string.folder_selected, displayName)
-        }
+        folderDisplayName = displayName
+        publishTaskState()
     }
 
     private fun showError(message: String) {
         runOnUiThread {
             if (activityDestroyed) return@runOnUiThread
-            statusError = message
-            renderStatusBlock()
-            updateControls()
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
         }
     }
-
-    private fun formatSize(bytes: Long): String =
-        if (bytes < 1024 * 1024) "${bytes / 1024} KiB" else "${bytes / (1024 * 1024)} MiB"
-
-    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
-
-    private fun currentMainScreenState(
-        entries: List<AudioCatalogEntry> = emptyList(),
-    ): MainScreenState =
-        MainScreenStateController.state(
-            MainScreenInput(
-                modelMessage = modelMessage,
-                modelInstallationState = when {
-                    modelLoading -> SpeechModelInstallationState.INSTALLING
-                    modelReady -> SpeechModelInstallationState.INSTALLED
-                    modelDownloadAvailable -> SpeechModelInstallationState.NOT_INSTALLED
-                    else -> SpeechModelInstallationState.INVALID
-                },
-                modelRuntimeState = if (
-                    transcriptionState == TranscriptionObservationState.ACTIVE &&
-                    transcriptionPhase?.contains("model", ignoreCase = true) == true
-                ) SpeechModelRuntimeState.LOADING else SpeechModelRuntimeState.UNLOADED,
-                modelDownloadAvailable = modelDownloadAvailable,
-                modelDownloadProgress = modelDownloadProgress,
-                outputSelected = outputUri != null,
-                folderSelected = folderUri != null,
-                outputReady = outputAccessReady,
-                folderReady = folderAccessReady,
-                pendingCount = pendingCount,
-                folderChecking = folderChecking,
-                folderScanQueued = folderScanQueued,
-                scanning = scanning,
-                scanMessage = scanMessage,
-                transcriptionState = transcriptionState,
-                transcriptionPhase = transcriptionPhase,
-                transcriptionFilename = transcriptionFilename,
-                transcriptionIndeterminate = transcriptionIndeterminate,
-                transcriptionProgress = transcriptionProgressValue,
-                processedUs = processedUs,
-                durationUs = durationUs,
-                completedFiles = completedFiles,
-                totalFiles = totalFiles,
-                failedFiles = failedFiles,
-                errorMessage = statusError ?: outputAccessError ?: folderAccessError,
-                selectedTab = selectedTab,
-                displayedRowCount = entries.size,
-                activePreviewEntryId = previewEntryId,
-                previewState = previewState,
-                rows = entries.map { it.toMainScreenRowInput() },
-                importInboxAvailable = importInboxAvailable,
-            ),
-        )
 
     private fun activeSourceScope(): AudioCatalogSourceScope =
         AudioCatalogSourceScope.of(
@@ -1393,15 +1270,6 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         }
     }
 
-    private fun AudioCatalogEntry.toMainScreenRowInput(): MainScreenRowInput =
-        MainScreenRowInput(
-            entryId = id,
-            state = state,
-            hasTranscriptText = !transcriptText.isNullOrBlank(),
-        )
-
-    private data class PreviewButtonTag(val entryId: Long)
-    private data class RetryButtonTag(val entryId: Long)
 
     private enum class FolderScanOrigin {
         STARTUP,
@@ -1409,9 +1277,6 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     }
 
     private companion object {
-        const val MENU_ENTRY_PLAY = 1
-        const val MENU_ENTRY_RETRY = 2
-        const val MENU_ENTRY_SHOW_TEXT = 3
         const val STATE_STARTUP_PROCESSING_STAGE = "startup-processing-stage"
         val ACTIVE_WORK_STATES = setOf(
             WorkInfo.State.ENQUEUED,

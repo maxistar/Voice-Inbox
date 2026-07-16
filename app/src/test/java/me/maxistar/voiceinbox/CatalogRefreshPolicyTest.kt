@@ -1,7 +1,6 @@
 package me.maxistar.voiceinbox
 
 import me.maxistar.voiceinbox.core.AudioCatalogSourceScope
-import me.maxistar.voiceinbox.core.MainScreenCatalogTab
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -35,26 +34,18 @@ class CatalogRefreshPolicyTest {
     }
 
     @Test
-    fun refreshTokenRejectsOldGenerationScopeAndTab() {
+    fun refreshTokenRejectsOldGenerationAndScope() {
         val scope = AudioCatalogSourceScope.of(listOf("imports", "folder"))
-        val token = CatalogRefreshToken(3, scope, MainScreenCatalogTab.NEW)
+        val token = CatalogRefreshToken(3, scope)
 
-        assertTrue(
-            CatalogRefreshPolicy.isCurrent(token, 3, scope, MainScreenCatalogTab.NEW),
-        )
-        assertFalse(
-            CatalogRefreshPolicy.isCurrent(token, 4, scope, MainScreenCatalogTab.NEW),
-        )
+        assertTrue(CatalogRefreshPolicy.isCurrent(token, 3, scope))
+        assertFalse(CatalogRefreshPolicy.isCurrent(token, 4, scope))
         assertFalse(
             CatalogRefreshPolicy.isCurrent(
                 token,
                 3,
                 AudioCatalogSourceScope.single("imports"),
-                MainScreenCatalogTab.NEW,
             ),
-        )
-        assertFalse(
-            CatalogRefreshPolicy.isCurrent(token, 3, scope, MainScreenCatalogTab.PROCESSED),
         )
     }
 

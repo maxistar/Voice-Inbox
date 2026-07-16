@@ -12,10 +12,7 @@ struct ContentView: View {
     @StateObject private var transcriber = IosSingleFileTranscriptionController()
     @StateObject private var startupPolicyStore = IosStartupProcessingPolicyStore()
     @State private var selectedTab = IosShellCatalogSelection.new
-    @State private var showingImporter = false
-    @State private var showingInboxFolderPicker = false
-    @State private var showingOutputPicker = false
-    @State private var showingModelImporter = false
+    @State private var presentedPicker: IosPresentedPicker?
     @State private var shownTranscript: String?
     @State private var startupProcessingChecked = false
     @State private var startupFolderRefreshChecked = false
@@ -33,6 +30,7 @@ struct ContentView: View {
             modelStatus: speechModelStore.status,
             modelMessage: speechModelStore.message,
             modelInstalling: speechModelStore.isInstalling,
+            modelInstallationPhase: speechModelStore.downloadProgress?.message ?? speechModelStore.message,
             modelDownloadAvailable: modelDownloadAvailable,
             modelDownloadProgress: speechModelStore.downloadProgress?.percent,
             modelCanCancel: speechModelStore.canCancelDownload,
@@ -68,6 +66,7 @@ struct ContentView: View {
                                 Button(action.label) {
                                     perform(action: action, task: nil, screen: screen)
                                 }
+                                .buttonStyle(.borderless)
                                 .disabled(!action.enabled)
                             }
                         }
@@ -105,7 +104,7 @@ struct ContentView: View {
 
                 Section {
                     Button {
-                        showingImporter = true
+                        presentPicker(.audioFiles)
                     } label: {
                         Label("Import Audio Files", systemImage: "square.and.arrow.down")
                     }
@@ -121,6 +120,7 @@ struct ContentView: View {
                 }
             }
             .navigationTitle("Voice Inbox")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     NavigationLink {
@@ -129,10 +129,10 @@ struct ContentView: View {
                             outputStore: outputStore,
                             startupPolicyStore: startupPolicyStore,
                             selectInboxFolder: {
-                                showingInboxFolderPicker = true
+                                presentPicker(.audioFolder)
                             },
                             selectOutputFile: {
-                                showingOutputPicker = true
+                                presentPicker(.outputFile)
                             }
                         )
                     } label: {
@@ -141,30 +141,30 @@ struct ContentView: View {
                     .accessibilityLabel("Settings")
                 }
             }
-            .sheet(isPresented: $showingImporter) {
-                IosAudioDocumentPicker { urls in
-                    importStore.importFiles(from: urls)
-                    showingImporter = false
-                    selectedTab = .new
-                }
-            }
-            .sheet(isPresented: $showingInboxFolderPicker) {
-                IosSpeechModelDirectoryPicker { url in
-                    importStore.selectInboxFolder(url)
-                    showingInboxFolderPicker = false
-                    selectedTab = .new
-                }
-            }
-            .sheet(isPresented: $showingOutputPicker) {
-                IosOutputDocumentPicker { url in
-                    outputStore.selectOutputFile(url)
-                    showingOutputPicker = false
-                }
-            }
-            .sheet(isPresented: $showingModelImporter) {
-                IosSpeechModelDirectoryPicker { url in
-                    speechModelStore.installModel(from: url)
-                    showingModelImporter = false
+            .sheet(item: $presentedPicker) { picker in
+                switch picker {
+                case .audioFiles:
+                    IosAudioDocumentPicker { urls in
+                        importStore.importFiles(from: urls)
+                        presentedPicker = nil
+                        selectedTab = .new
+                    }
+                case .audioFolder:
+                    IosSpeechModelDirectoryPicker { url in
+                        importStore.selectInboxFolder(url)
+                        presentedPicker = nil
+                        selectedTab = .new
+                    }
+                case .outputFile:
+                    IosOutputDocumentPicker { url in
+                        outputStore.selectOutputFile(url)
+                        presentedPicker = nil
+                    }
+                case .speechModelFolder:
+                    IosSpeechModelDirectoryPicker { url in
+                        speechModelStore.installModel(from: url)
+                        presentedPicker = nil
+                    }
                 }
             }
             .onChange(of: importStore.files) { files in
@@ -264,23 +264,28 @@ struct ContentView: View {
         case .modelDownload:
             speechModelStore.downloadModel()
         case .modelImport:
-            showingModelImporter = true
+            presentPicker(.speechModelFolder)
         case .modelCancel:
             speechModelStore.cancelDownload()
         case .outputSelection:
-            showingOutputPicker = true
+            presentPicker(.outputFile)
         case .folderSelection:
-            showingInboxFolderPicker = true
+            presentPicker(.audioFolder)
         case .folderRefresh:
             importStore.refreshInboxFolder()
             selectedTab = .new
         case .audioImport:
-            showingImporter = true
+            presentPicker(.audioFiles)
         case .transcribe, .retry, .play, .stop, .showText:
             guard let audioTask = task as? AudioTaskPresentation,
                   let file = screen.filesById[audioTask.entryId] else { return }
             performAudio(action: action.kind, file: file)
         }
+    }
+
+    private func presentPicker(_ picker: IosPresentedPicker) {
+        guard presentedPicker == nil else { return }
+        presentedPicker = picker
     }
 
     private func performAudio(action: TaskActionKind, file: IosImportedAudioFile) {
@@ -410,6 +415,15 @@ struct ContentView: View {
         )
     }
 
+}
+
+private enum IosPresentedPicker: String, Identifiable {
+    case audioFiles
+    case audioFolder
+    case outputFile
+    case speechModelFolder
+
+    var id: String { rawValue }
 }
 
 private struct TaskListRow: View {
