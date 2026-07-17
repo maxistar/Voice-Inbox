@@ -5,7 +5,8 @@
         android:id="@+id/menuRefreshFolder"
         android:icon="@drawable/ic_refresh_24"
         android:title="@string/menu_refresh_folder"
-        app:showAsAction="ifRoom" />
+        app:actionLayout="@layout/action_refresh_folder"
+        app:showAsAction="always" />
 
     <item
         android:id="@+id/menuSettings"

@@ -32,17 +32,45 @@ data class AndroidMainScreenInput(
     val transcriptionEligible: Boolean = false,
     val previewEligible: Boolean = true,
     val importEnabled: Boolean = true,
-    val refreshFolderVisible: Boolean = false,
-    val refreshFolderEnabled: Boolean = false,
+    val hydration: AndroidMainScreenHydration = AndroidMainScreenHydration(),
+    val folderSync: AndroidFolderSyncPresentation = AndroidFolderSyncPresentation(),
 )
+
+data class AndroidMainScreenHydration(
+    val modelKnown: Boolean = false,
+    val outputKnown: Boolean = false,
+    val folderKnown: Boolean = false,
+    val catalogKnown: Boolean = false,
+)
+
+data class AndroidFolderSyncPresentation(
+    val visible: Boolean = false,
+    val active: Boolean = false,
+    val enabled: Boolean = false,
+    val accessibilityLabel: String = ACCESSIBILITY_REFRESH,
+) {
+    companion object {
+        const val ACCESSIBILITY_REFRESH = "Refresh audio folder"
+        const val ACCESSIBILITY_REFRESHING = "Refreshing audio folder"
+    }
+}
+
+internal fun androidModelTaskDetail(
+    state: ModelSetupSnapshotState,
+    message: String,
+): String? = message.takeUnless {
+    state == ModelSetupSnapshotState.READY || state == ModelSetupSnapshotState.INSTALLING
+}
 
 data class AndroidMainScreenState(
     val taskList: TaskListState,
     val entriesById: Map<Long, AudioCatalogEntry>,
     val importEnabled: Boolean,
-    val refreshFolderVisible: Boolean,
-    val refreshFolderEnabled: Boolean,
-)
+    val folderSync: AndroidFolderSyncPresentation,
+) {
+    val refreshFolderVisible: Boolean get() = folderSync.visible
+    val refreshFolderEnabled: Boolean get() = folderSync.enabled
+}
 
 object AndroidTaskListSnapshotMapper {
     fun state(input: AndroidMainScreenInput): AndroidMainScreenState {
@@ -61,22 +89,31 @@ object AndroidTaskListSnapshotMapper {
                 eligibleForPreview = input.previewEligible,
             )
         }
-        return AndroidMainScreenState(
-            taskList = TaskListPresentationController.state(
+        val taskList = TaskListPresentationController.state(
                 TaskListInput(
                     filter = input.filter,
-                    model = input.model,
-                    output = input.output,
-                    folder = input.folder,
+                    model = input.model.takeIf { input.hydration.modelKnown }
+                        ?: ModelSetupSnapshot(ModelSetupSnapshotState.READY),
+                    output = input.output.takeIf { input.hydration.outputKnown }
+                        ?: OutputSetupSnapshot(OutputSetupSnapshotState.READY),
+                    folder = input.folder.takeIf { input.hydration.folderKnown }
+                        ?: FolderSetupSnapshot(FolderSetupSnapshotState.READY),
                     audio = audio,
                     preview = input.preview,
                     transcription = input.transcription,
                 ),
-            ),
+            ).let { composed ->
+                if (input.hydration.catalogKnown) {
+                    composed
+                } else {
+                    composed.copy(emptyMessage = null, emptyActions = emptyList())
+                }
+            }
+        return AndroidMainScreenState(
+            taskList = taskList,
             entriesById = input.entries.associateBy(AudioCatalogEntry::id),
             importEnabled = input.importEnabled,
-            refreshFolderVisible = input.refreshFolderVisible,
-            refreshFolderEnabled = input.refreshFolderEnabled,
+            folderSync = input.folderSync,
         )
     }
 
@@ -97,6 +134,7 @@ class AndroidMainScreenStateHost(
 ) : ViewModel() {
     private var input = AndroidMainScreenInput(filter = restoredFilter())
     private val mutableState = MutableStateFlow(AndroidTaskListSnapshotMapper.state(input))
+    val folderSyncCoordinator = AndroidFolderSyncCoordinator()
 
     val state: StateFlow<AndroidMainScreenState> = mutableState.asStateFlow()
     val currentInput: AndroidMainScreenInput

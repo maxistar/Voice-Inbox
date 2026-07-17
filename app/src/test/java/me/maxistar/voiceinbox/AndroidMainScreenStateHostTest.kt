@@ -37,6 +37,7 @@ class AndroidMainScreenStateHostTest {
                 ),
                 output = OutputSetupSnapshot(OutputSetupSnapshotState.INVALID, "Output unavailable"),
                 folder = FolderSetupSnapshot(FolderSetupSnapshotState.SCANNING, "Checking recordings"),
+                hydration = hydrated(),
             ),
         )
 
@@ -46,6 +47,30 @@ class AndroidMainScreenStateHostTest {
         assertEquals(63, tasks.first().progress?.percent)
         assertEquals("Output unavailable", tasks[1].errorMessage)
         assertEquals("Scanning audio folder", tasks[2].progress?.phase)
+    }
+
+    @Test
+    fun activeModelPhaseIsNotRepeatedAsTaskDetail() {
+        val message = "Downloading encoder-model.int8.onnx"
+        assertNull(androidModelTaskDetail(ModelSetupSnapshotState.INSTALLING, message))
+        assertEquals(message, androidModelTaskDetail(ModelSetupSnapshotState.REQUIRED, message))
+        assertEquals(message, androidModelTaskDetail(ModelSetupSnapshotState.INVALID, message))
+        val input = readyInput().copy(
+            model = ModelSetupSnapshot(
+                state = ModelSetupSnapshotState.INSTALLING,
+                detail = null,
+                installationPhase = message,
+                progressPercent = 42,
+            ),
+        )
+
+        val task = AndroidTaskListSnapshotMapper.state(input)
+            .taskList.tasks
+            .filterIsInstance<SetupTaskPresentation>()
+            .single { it.stableId == "setup:model" }
+
+        assertNull(task.detail)
+        assertEquals(message, task.progress?.phase)
     }
 
     @Test
@@ -144,6 +169,73 @@ class AndroidMainScreenStateHostTest {
         assertTrue(state.taskList.emptyActions.any { it.kind == TaskActionKind.IMPORT_AUDIO })
     }
 
+    @Test
+    fun pendingHydrationSuppressesFalseSetupAndFinalEmptyState() {
+        val state = AndroidTaskListSnapshotMapper.state(
+            AndroidMainScreenInput(
+                model = ModelSetupSnapshot(ModelSetupSnapshotState.REQUIRED),
+                output = OutputSetupSnapshot(OutputSetupSnapshotState.REQUIRED),
+                folder = FolderSetupSnapshot(FolderSetupSnapshotState.SCANNING),
+                hydration = AndroidMainScreenHydration(),
+            ),
+        )
+
+        assertTrue(state.taskList.tasks.isEmpty())
+        assertNull(state.taskList.emptyMessage)
+        assertTrue(state.taskList.emptyActions.isEmpty())
+    }
+
+    @Test
+    fun knownMissingAndInvalidSetupAppearBeforeCatalogHydration() {
+        val state = AndroidTaskListSnapshotMapper.state(
+            AndroidMainScreenInput(
+                model = ModelSetupSnapshot(ModelSetupSnapshotState.REQUIRED),
+                output = OutputSetupSnapshot(OutputSetupSnapshotState.INVALID, "Permission revoked"),
+                folder = FolderSetupSnapshot(FolderSetupSnapshotState.ERROR, "Folder unavailable"),
+                hydration = AndroidMainScreenHydration(
+                    modelKnown = true,
+                    outputKnown = true,
+                    folderKnown = true,
+                ),
+            ),
+        )
+
+        assertEquals(
+            listOf("setup:model", "setup:output", "setup:folder"),
+            state.taskList.tasks.map { it.stableId },
+        )
+        assertNull(state.taskList.emptyMessage)
+    }
+
+    @Test
+    fun folderSyncPresentationIsRendererIndependentAndCopiedToState() {
+        val sync = AndroidFolderSyncPresentation(
+            visible = true,
+            active = true,
+            enabled = false,
+            accessibilityLabel = AndroidFolderSyncPresentation.ACCESSIBILITY_REFRESHING,
+        )
+        val state = AndroidTaskListSnapshotMapper.state(readyInput().copy(folderSync = sync))
+
+        assertEquals(sync, state.folderSync)
+        assertTrue(state.refreshFolderVisible)
+        assertFalse(state.refreshFolderEnabled)
+    }
+
+    @Test
+    fun hydratedCatalogPublishesEmptyStateAndRetainedEntriesRemainVisibleWhileRevalidating() {
+        val empty = AndroidTaskListSnapshotMapper.state(readyInput())
+        assertEquals("No new tasks", empty.taskList.emptyMessage)
+
+        val retained = AndroidTaskListSnapshotMapper.state(
+            readyInput(entries = listOf(entry(1, AudioFileState.PENDING))).copy(
+                hydration = AndroidMainScreenHydration(catalogKnown = true),
+            ),
+        )
+        assertEquals(listOf("audio:1"), retained.taskList.tasks.map { it.stableId })
+        assertNull(retained.taskList.emptyMessage)
+    }
+
     private fun readyInput(
         filter: TaskListFilter = TaskListFilter.NEW,
         entries: List<AudioCatalogEntry> = emptyList(),
@@ -158,6 +250,14 @@ class AndroidMainScreenStateHostTest {
         preview = preview,
         transcription = transcription,
         transcriptionEligible = true,
+        hydration = hydrated(),
+    )
+
+    private fun hydrated() = AndroidMainScreenHydration(
+        modelKnown = true,
+        outputKnown = true,
+        folderKnown = true,
+        catalogKnown = true,
     )
 
     private fun entry(

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ImageButton xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/refreshFolderAction"
+    android:layout_width="48dp"
+    android:layout_height="48dp"
+    android:background="?attr/selectableItemBackgroundBorderless"
+    android:contentDescription="@string/menu_refresh_folder"
+    android:padding="12dp"
+    android:src="@drawable/ic_refresh_24" />

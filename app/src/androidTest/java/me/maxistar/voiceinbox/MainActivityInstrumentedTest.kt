@@ -27,6 +27,7 @@ import me.maxistar.voiceinbox.core.TaskListFilter
 import me.maxistar.voiceinbox.core.TranscriptionObservationState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -206,6 +207,180 @@ class MainActivityInstrumentedTest {
         assertEquals(importRequest.id, active.single().id)
     }
 
+    @Test
+    fun refreshActionHasStableIdleBusyAndCompletedPresentation() {
+        clearActivityState()
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            awaitActivity(scenario) { activity ->
+                val hydration = stateHost(activity).currentInput.hydration
+                hydration.modelKnown && hydration.outputKnown && hydration.folderKnown && hydration.catalogKnown
+            }
+            scenario.onActivity { activity ->
+                val action = refreshAction(activity)
+                assertEquals(android.view.View.GONE, action.visibility)
+
+                stateHost(activity).update { input ->
+                    input.copy(
+                        folderSync = AndroidFolderSyncPresentation(
+                            visible = true,
+                            enabled = true,
+                        ),
+                    )
+                }
+            }
+            awaitActivity(scenario) { activity ->
+                val action = refreshAction(activity)
+                action.visibility == android.view.View.VISIBLE && action.isEnabled
+            }
+            scenario.onActivity { activity ->
+                val action = refreshAction(activity)
+                assertEquals(android.view.View.VISIBLE, action.visibility)
+                assertTrue(action.isEnabled)
+                assertEquals(
+                    AndroidFolderSyncPresentation.ACCESSIBILITY_REFRESH,
+                    action.contentDescription,
+                )
+            }
+
+            scenario.onActivity { activity ->
+                stateHost(activity).update { input ->
+                    input.copy(folderSync = AndroidFolderSyncPresentation(visible = true))
+                }
+            }
+            awaitActivity(scenario) { activity -> !refreshAction(activity).isEnabled }
+            scenario.onActivity { activity ->
+                assertEquals(
+                    AndroidFolderSyncPresentation.ACCESSIBILITY_REFRESH,
+                    refreshAction(activity).contentDescription,
+                )
+            }
+
+            scenario.onActivity { activity ->
+                stateHost(activity).update { input ->
+                    input.copy(
+                        folderSync = AndroidFolderSyncPresentation(
+                            visible = true,
+                            active = true,
+                            accessibilityLabel = AndroidFolderSyncPresentation.ACCESSIBILITY_REFRESHING,
+                        ),
+                    )
+                }
+                stateHost(activity).update { input ->
+                    input.copy(folderSync = AndroidFolderSyncPresentation(visible = true, enabled = true))
+                }
+            }
+            Thread.sleep(220)
+            scenario.onActivity { activity -> assertEquals(0f, refreshAction(activity).rotation) }
+
+            scenario.onActivity { activity ->
+                stateHost(activity).update { input ->
+                    input.copy(
+                        folderSync = AndroidFolderSyncPresentation(
+                            visible = true,
+                            active = true,
+                            accessibilityLabel = AndroidFolderSyncPresentation.ACCESSIBILITY_REFRESHING,
+                        ),
+                    )
+                }
+            }
+            awaitActivity(scenario) { activity -> !refreshAction(activity).isEnabled }
+            scenario.onActivity { activity ->
+                val action = refreshAction(activity)
+                assertFalse(action.isEnabled)
+                assertEquals(
+                    AndroidFolderSyncPresentation.ACCESSIBILITY_REFRESHING,
+                    action.contentDescription,
+                )
+                val before = stateHost(activity).currentInput.folderSync
+                action.performClick()
+                assertEquals(before, stateHost(activity).currentInput.folderSync)
+                assertFalse(stateHost(activity).folderSyncCoordinator.state.active)
+            }
+            Thread.sleep(250)
+            scenario.onActivity { activity -> assertTrue(refreshAction(activity).rotation != 0f) }
+            scenario.onActivity { activity ->
+                stateHost(activity).update { input ->
+                    input.copy(
+                        folderSync = AndroidFolderSyncPresentation(
+                            visible = true,
+                            enabled = true,
+                        ),
+                    )
+                }
+            }
+            Thread.sleep(500)
+            awaitActivity(scenario) { activity ->
+                val action = refreshAction(activity)
+                action.isEnabled && action.rotation == 0f
+            }
+            scenario.onActivity { activity ->
+                val action = refreshAction(activity)
+                assertEquals(0f, action.rotation)
+                assertTrue(action.isEnabled)
+                stateHost(activity).update { input ->
+                    input.copy(folderSync = AndroidFolderSyncPresentation())
+                }
+            }
+            awaitActivity(scenario) { activity ->
+                refreshAction(activity).visibility == android.view.View.GONE
+            }
+        }
+    }
+
+    @Test
+    fun progressHeavyUpdatesKeepTheSameRowAndActionView() {
+        clearActivityState()
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            awaitActivity(scenario) { activity -> stateHost(activity).currentInput.hydration.modelKnown }
+            scenario.onActivity { activity ->
+                stateHost(activity).replace(
+                    AndroidMainScreenInput(
+                        model = me.maxistar.voiceinbox.core.ModelSetupSnapshot(
+                            state = ModelSetupSnapshotState.INSTALLING,
+                            installationPhase = "Downloading",
+                            progressPercent = 10,
+                            canCancel = true,
+                        ),
+                        output = me.maxistar.voiceinbox.core.OutputSetupSnapshot(
+                            me.maxistar.voiceinbox.core.OutputSetupSnapshotState.READY,
+                        ),
+                        folder = me.maxistar.voiceinbox.core.FolderSetupSnapshot(
+                            me.maxistar.voiceinbox.core.FolderSetupSnapshotState.READY,
+                        ),
+                        hydration = AndroidMainScreenHydration(true, true, true, true),
+                    ),
+                )
+            }
+            awaitActivity(scenario) { activity -> displayItems(activity).singleOrNull()?.stableKey == "setup:model" }
+
+            lateinit var rowBefore: android.view.View
+            lateinit var actionBefore: android.view.View
+            scenario.onActivity { activity ->
+                val list = activity.findViewById<RecyclerView>(R.id.taskList)
+                rowBefore = list.layoutManager!!.findViewByPosition(0)!!
+                actionBefore = rowBefore.findViewById<android.view.ViewGroup>(R.id.taskActions).getChildAt(0)
+            }
+            (20..100 step 10).forEach { percent ->
+                scenario.onActivity { activity ->
+                    stateHost(activity).update { input ->
+                        input.copy(model = input.model.copy(progressPercent = percent))
+                    }
+                }
+                awaitActivity(scenario) { activity ->
+                    val model = displayItems(activity).singleOrNull() as? TaskListDisplayItem.Setup
+                    model?.task?.progress?.percent == percent
+                }
+            }
+            scenario.onActivity { activity ->
+                val rowAfter = activity.findViewById<RecyclerView>(R.id.taskList)
+                    .layoutManager!!.findViewByPosition(0)!!
+                val actionAfter = rowAfter.findViewById<android.view.ViewGroup>(R.id.taskActions).getChildAt(0)
+                assertSame(rowBefore, rowAfter)
+                assertSame(actionBefore, actionAfter)
+            }
+        }
+    }
+
     private fun clearActivityState() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         WorkManager.getInstance(context).cancelUniqueWork(TranscriptionWorker.UNIQUE_WORK_NAME).result.get(30, TimeUnit.SECONDS)
@@ -254,6 +429,10 @@ class MainActivityInstrumentedTest {
 
     private fun selectedFilter(activity: MainActivity): TaskListFilter =
         stateHost(activity).state.value.taskList.filter
+
+    private fun refreshAction(activity: MainActivity): android.view.View =
+        activity.findViewById<androidx.appcompat.widget.Toolbar>(R.id.toolbar)
+            .menu.findItem(R.id.menuRefreshFolder).actionView!!
 
     private fun stateHost(activity: MainActivity): AndroidMainScreenStateHost =
         MainActivity::class.java.getDeclaredMethod("getTaskStateHost")

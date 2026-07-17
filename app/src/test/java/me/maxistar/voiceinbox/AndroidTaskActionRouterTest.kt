@@ -90,6 +90,7 @@ class AndroidTaskActionRouterTest {
             entries = entries,
             transcription = transcription,
             transcriptionEligible = eligible,
+            hydration = AndroidMainScreenHydration(true, true, true, true),
         ),
     )
 

@@ -12,6 +12,7 @@ import me.maxistar.voiceinbox.core.TaskActionKind
 import me.maxistar.voiceinbox.core.TaskListFilter
 import me.maxistar.voiceinbox.core.TaskListInput
 import me.maxistar.voiceinbox.core.TaskListPresentationController
+import me.maxistar.voiceinbox.core.TaskProgressPresentation
 import me.maxistar.voiceinbox.core.TranscriptionTaskSnapshot
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -58,6 +59,35 @@ class TaskListDisplayItemsTest {
         val processed = items(filter = TaskListFilter.PROCESSED, audio = listOf(pending(7)))
         assertTrue(processed.single() is TaskListDisplayItem.Empty)
         assertNotEquals(idle.stableKey, processed.single().stableKey)
+    }
+
+    @Test
+    fun diffUsesTypedPayloadOnlyForProgressOnlyChanges() {
+        val original = items(audio = listOf(pending(7)))
+            .filterIsInstance<TaskListDisplayItem.Audio>()
+            .single()
+        val progress = TaskProgressPresentation(
+            phase = "Transcribing",
+            percent = 35,
+            processedUs = 3_000_000,
+            durationUs = 10_000_000,
+            completedFiles = 1,
+            totalFiles = 3,
+        )
+        val progressUpdate = original.copy(task = original.task.copy(progress = progress))
+        val badgeUpdate = progressUpdate.copy(task = progressUpdate.task.copy(badge = "Changed"))
+        val actionsUpdate = progressUpdate.copy(task = progressUpdate.task.copy(actions = emptyList()))
+
+        assertEquals(
+            TaskListChangePayload.Progress(progress),
+            TaskListDisplayItemDiff.getChangePayload(original, progressUpdate),
+        )
+        assertEquals(null, TaskListDisplayItemDiff.getChangePayload(progressUpdate, badgeUpdate))
+        assertEquals(null, TaskListDisplayItemDiff.getChangePayload(progressUpdate, actionsUpdate))
+        assertEquals(
+            TaskListAdapter.stableLongId(original.stableKey),
+            TaskListAdapter.stableLongId(progressUpdate.stableKey),
+        )
     }
 
     @Test

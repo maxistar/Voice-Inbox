@@ -88,6 +88,28 @@ object TaskListDisplayItemDiff : DiffUtil.ItemCallback<TaskListDisplayItem>() {
 
     override fun areContentsTheSame(oldItem: TaskListDisplayItem, newItem: TaskListDisplayItem): Boolean =
         oldItem == newItem
+
+    override fun getChangePayload(oldItem: TaskListDisplayItem, newItem: TaskListDisplayItem): Any? =
+        progressOnlyPayload(oldItem, newItem)
+
+    fun progressOnlyPayload(
+        oldItem: TaskListDisplayItem,
+        newItem: TaskListDisplayItem,
+    ): TaskListChangePayload.Progress? = when {
+        oldItem is TaskListDisplayItem.Setup && newItem is TaskListDisplayItem.Setup &&
+            oldItem.task.progress != newItem.task.progress &&
+            oldItem.task.copy(progress = null) == newItem.task.copy(progress = null) ->
+            TaskListChangePayload.Progress(newItem.task.progress)
+        oldItem is TaskListDisplayItem.Audio && newItem is TaskListDisplayItem.Audio &&
+            oldItem.task.progress != newItem.task.progress &&
+            oldItem.task.copy(progress = null) == newItem.task.copy(progress = null) ->
+            TaskListChangePayload.Progress(newItem.task.progress)
+        else -> null
+    }
+}
+
+sealed class TaskListChangePayload {
+    data class Progress(val value: TaskProgressPresentation?) : TaskListChangePayload()
 }
 
 class TaskListAdapter(
@@ -132,6 +154,23 @@ class TaskListAdapter(
         }
     }
 
+    override fun onBindViewHolder(
+        holder: RecyclerView.ViewHolder,
+        position: Int,
+        payloads: MutableList<Any>,
+    ) {
+        val progressPayload = payloads.filterIsInstance<TaskListChangePayload.Progress>().lastOrNull()
+        if (progressPayload != null && payloads.all { it is TaskListChangePayload.Progress }) {
+            when (holder) {
+                is SetupTaskViewHolder -> holder.bindProgress(progressPayload.value)
+                is AudioTaskViewHolder -> holder.bindProgress(progressPayload.value)
+                else -> onBindViewHolder(holder, position)
+            }
+        } else {
+            onBindViewHolder(holder, position)
+        }
+    }
+
     private class SetupTaskViewHolder(
         itemView: View,
         onAction: (AndroidTaskActionRequest) -> Unit,
@@ -158,6 +197,8 @@ class TaskListAdapter(
         private val progressMeta: TextView = itemView.findViewById(R.id.taskProgressMeta)
         private val error: TextView = itemView.findViewById(R.id.taskError)
         private val actions: LinearLayout = itemView.findViewById(R.id.taskActions)
+        private var boundActionOwner: Pair<String, Long?>? = null
+        private var boundActions: List<TaskActionPresentation>? = null
 
         protected fun bindTask(task: TaskPresentation, entryId: Long?) {
             itemView.contentDescription = task.title
@@ -169,7 +210,7 @@ class TaskListAdapter(
             bindActions(task, entryId)
         }
 
-        private fun bindProgress(value: TaskProgressPresentation?) {
+        fun bindProgress(value: TaskProgressPresentation?) {
             progressPhase.isVisible = value != null
             progress.isVisible = value != null
             if (value == null) {
@@ -183,6 +224,10 @@ class TaskListAdapter(
         }
 
         private fun bindActions(task: TaskPresentation, entryId: Long?) {
+            val owner = task.stableId to entryId
+            if (boundActionOwner == owner && boundActions == task.actions) return
+            boundActionOwner = owner
+            boundActions = task.actions
             actions.removeAllViews()
             task.actions.forEachIndexed { index, action ->
                 actions.addView(
