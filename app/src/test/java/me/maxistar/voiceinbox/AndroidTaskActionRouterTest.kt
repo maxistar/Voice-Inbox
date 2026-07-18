@@ -75,6 +75,74 @@ class AndroidTaskActionRouterTest {
         assertEquals(processed, routed?.second)
     }
 
+    @Test
+    fun routesOnlyCurrentEnabledOnboardingActionIncludingOptionalFolder() {
+        var state = onboardingState(
+            model = ModelSetupSnapshot(ModelSetupSnapshotState.REQUIRED, downloadAvailable = true),
+        )
+        val calls = mutableListOf<TaskActionKind>()
+        val router = AndroidTaskActionRouter({ state }) { kind, _ -> calls += kind }
+
+        assertTrue(
+            router.route(
+                request(TaskListDisplayItem.OnboardingHint.STABLE_KEY, null, TaskActionKind.DOWNLOAD_MODEL),
+            ),
+        )
+        assertFalse(
+            router.route(
+                request(TaskListDisplayItem.OnboardingHint.STABLE_KEY, null, TaskActionKind.SELECT_OUTPUT),
+            ),
+        )
+
+        state = onboardingState(
+            model = ModelSetupSnapshot(ModelSetupSnapshotState.READY),
+            output = OutputSetupSnapshot(OutputSetupSnapshotState.READY),
+            folder = FolderSetupSnapshot(FolderSetupSnapshotState.UNSELECTED),
+        )
+        assertTrue(state.taskList.tasks.none { it.stableId == "setup:folder" })
+        assertTrue(
+            router.route(
+                request(TaskListDisplayItem.OnboardingHint.STABLE_KEY, null, TaskActionKind.SELECT_FOLDER),
+            ),
+        )
+
+        state = onboardingState(
+            model = ModelSetupSnapshot(ModelSetupSnapshotState.INSTALLING),
+        )
+        assertFalse(
+            router.route(
+                request(TaskListDisplayItem.OnboardingHint.STABLE_KEY, null, TaskActionKind.DOWNLOAD_MODEL),
+            ),
+        )
+        assertEquals(listOf(TaskActionKind.DOWNLOAD_MODEL, TaskActionKind.SELECT_FOLDER), calls)
+    }
+
+    @Test
+    fun terminalOrCompletedOnboardingRejectsStaleClick() {
+        var state = onboardingState(
+            model = ModelSetupSnapshot(ModelSetupSnapshotState.REQUIRED, downloadAvailable = true),
+        )
+        var callCount = 0
+        val router = AndroidTaskActionRouter({ state }) { _, _ -> callCount++ }
+        val stale = request(TaskListDisplayItem.OnboardingHint.STABLE_KEY, null, TaskActionKind.DOWNLOAD_MODEL)
+
+        state = AndroidTaskListSnapshotMapper.state(
+            stateInput(
+                model = ModelSetupSnapshot(ModelSetupSnapshotState.REQUIRED, downloadAvailable = true),
+                lifecycle = AndroidOnboardingHintLifecycle.DISMISSED,
+            ),
+        )
+        assertFalse(router.route(stale))
+
+        state = onboardingState(
+            model = ModelSetupSnapshot(ModelSetupSnapshotState.READY),
+            output = OutputSetupSnapshot(OutputSetupSnapshotState.READY),
+            folder = FolderSetupSnapshot(FolderSetupSnapshotState.READY),
+        )
+        assertFalse(router.route(stale))
+        assertEquals(0, callCount)
+    }
+
     private fun state(
         modelReady: Boolean = true,
         filter: TaskListFilter = TaskListFilter.NEW,
@@ -92,6 +160,25 @@ class AndroidTaskActionRouterTest {
             transcriptionEligible = eligible,
             hydration = AndroidMainScreenHydration(true, true, true, true),
         ),
+    )
+
+    private fun onboardingState(
+        model: ModelSetupSnapshot,
+        output: OutputSetupSnapshot = OutputSetupSnapshot(OutputSetupSnapshotState.REQUIRED),
+        folder: FolderSetupSnapshot = FolderSetupSnapshot(FolderSetupSnapshotState.UNSELECTED),
+    ) = AndroidTaskListSnapshotMapper.state(stateInput(model, output, folder))
+
+    private fun stateInput(
+        model: ModelSetupSnapshot,
+        output: OutputSetupSnapshot = OutputSetupSnapshot(OutputSetupSnapshotState.REQUIRED),
+        folder: FolderSetupSnapshot = FolderSetupSnapshot(FolderSetupSnapshotState.UNSELECTED),
+        lifecycle: AndroidOnboardingHintLifecycle = AndroidOnboardingHintLifecycle.ACTIVE,
+    ) = AndroidMainScreenInput(
+        model = model,
+        output = output,
+        folder = folder,
+        hydration = AndroidMainScreenHydration(true, true, true, true),
+        onboardingLifecycle = lifecycle,
     )
 
     private fun request(stableId: String, entryId: Long?, kind: TaskActionKind) =

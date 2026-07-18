@@ -381,6 +381,137 @@ class MainActivityInstrumentedTest {
         }
     }
 
+    @Test
+    fun inlineOnboardingAdvancesInPlaceAndDismissalSurvivesRecreation() {
+        clearOnboardingActivityState()
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                setField(activity, "onboardingHintLifecycle", AndroidOnboardingHintLifecycle.ACTIVE)
+                stateHost(activity).replace(onboardingInput())
+            }
+            awaitActivity(scenario) { activity ->
+                displayItems(activity).any { it is TaskListDisplayItem.OnboardingHint }
+            }
+            scenario.onActivity { activity ->
+                val items = displayItems(activity)
+                val hintIndex = items.indexOfFirst { it is TaskListDisplayItem.OnboardingHint }
+                assertTrue(items.take(hintIndex).all { it is TaskListDisplayItem.Setup })
+                val hint = items[hintIndex] as TaskListDisplayItem.OnboardingHint
+                assertEquals(TaskActionKind.DOWNLOAD_MODEL, hint.presentation.action?.kind)
+                assertTrue(hint.presentation.downloadDisclosure?.contains("downloads") == true)
+            }
+
+            scenario.onActivity { activity ->
+                stateHost(activity).replace(
+                    onboardingInput(
+                        model = me.maxistar.voiceinbox.core.ModelSetupSnapshot(
+                            state = ModelSetupSnapshotState.INSTALLING,
+                            installationPhase = "Installing local model",
+                            canCancel = true,
+                        ),
+                    ),
+                )
+            }
+            awaitActivity(scenario) { activity ->
+                displayItems(activity).filterIsInstance<TaskListDisplayItem.OnboardingHint>()
+                    .singleOrNull()?.presentation?.action?.enabled == false
+            }
+            scenario.onActivity { activity ->
+                val items = displayItems(activity)
+                val model = items.filterIsInstance<TaskListDisplayItem.Setup>().first()
+                val hint = items.filterIsInstance<TaskListDisplayItem.OnboardingHint>().single()
+                assertTrue(model.task.progress != null)
+                assertTrue(model.task.actions.any { it.kind == TaskActionKind.CANCEL_MODEL_DOWNLOAD })
+                assertEquals("Installing speech model…", hint.presentation.action?.label)
+            }
+
+            scenario.onActivity { activity ->
+                stateHost(activity).replace(
+                    onboardingInput(
+                        model = me.maxistar.voiceinbox.core.ModelSetupSnapshot(ModelSetupSnapshotState.READY),
+                    ),
+                )
+            }
+            awaitActivity(scenario) { activity ->
+                displayItems(activity).filterIsInstance<TaskListDisplayItem.OnboardingHint>()
+                    .singleOrNull()?.presentation?.action?.kind == TaskActionKind.SELECT_OUTPUT
+            }
+            scenario.onActivity { activity ->
+                stateHost(activity).replace(
+                    onboardingInput(
+                        model = me.maxistar.voiceinbox.core.ModelSetupSnapshot(ModelSetupSnapshotState.READY),
+                        output = me.maxistar.voiceinbox.core.OutputSetupSnapshot(
+                            me.maxistar.voiceinbox.core.OutputSetupSnapshotState.READY,
+                        ),
+                    ),
+                )
+            }
+            awaitActivity(scenario) { activity ->
+                displayItems(activity).filterIsInstance<TaskListDisplayItem.OnboardingHint>()
+                    .singleOrNull()?.presentation?.action?.kind == TaskActionKind.SELECT_FOLDER
+            }
+
+            scenario.onActivity { activity ->
+                activity.findViewById<android.view.View>(R.id.onboardingClose).performClick()
+            }
+            awaitActivity(scenario) { activity ->
+                displayItems(activity).none { it is TaskListDisplayItem.OnboardingHint }
+            }
+            val context = InstrumentationRegistry.getInstrumentation().targetContext
+            assertEquals(
+                AndroidOnboardingHintLifecycle.DISMISSED,
+                AndroidOnboardingHintStore(
+                    context.getSharedPreferences(AndroidOnboardingHintStore.PREFERENCES_NAME, Context.MODE_PRIVATE),
+                ).load(),
+            )
+
+            scenario.recreate()
+            awaitActivity(scenario) { activity -> stateHost(activity).currentInput.hydration.modelKnown }
+            scenario.onActivity { activity ->
+                assertTrue(displayItems(activity).none { it is TaskListDisplayItem.OnboardingHint })
+            }
+        }
+    }
+
+    @Test
+    fun inlineOnboardingCompletesOnlyFromHydratedReadySetupAndDoesNotReplay() {
+        clearOnboardingActivityState()
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                setField(activity, "onboardingHintLifecycle", AndroidOnboardingHintLifecycle.ACTIVE)
+                setField(activity, "modelSetupState", ModelSetupSnapshotState.READY)
+                setField(activity, "modelReady", true)
+                setField(activity, "outputUri", Uri.parse("content://test/output"))
+                setField(activity, "outputAccessReady", true)
+                setField(activity, "folderUri", Uri.parse("content://test/folder"))
+                setField(activity, "folderAccessReady", true)
+                setField(activity, "modelPresentationKnown", true)
+                setField(activity, "outputPresentationKnown", true)
+                setField(activity, "folderPresentationKnown", true)
+                invoke(activity, "publishTaskState")
+            }
+            awaitActivity(scenario) { activity ->
+                stateHost(activity).currentInput.onboardingLifecycle == AndroidOnboardingHintLifecycle.COMPLETED
+            }
+            val context = InstrumentationRegistry.getInstrumentation().targetContext
+            assertEquals(
+                AndroidOnboardingHintLifecycle.COMPLETED,
+                AndroidOnboardingHintStore(
+                    context.getSharedPreferences(AndroidOnboardingHintStore.PREFERENCES_NAME, Context.MODE_PRIVATE),
+                ).load(),
+            )
+
+            scenario.onActivity { activity ->
+                setField(activity, "modelSetupState", ModelSetupSnapshotState.REQUIRED)
+                setField(activity, "modelReady", false)
+                invoke(activity, "publishTaskState")
+            }
+            awaitActivity(scenario) { activity ->
+                displayItems(activity).none { it is TaskListDisplayItem.OnboardingHint }
+            }
+        }
+    }
+
     private fun clearActivityState() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         WorkManager.getInstance(context).cancelUniqueWork(TranscriptionWorker.UNIQUE_WORK_NAME).result.get(30, TimeUnit.SECONDS)
@@ -389,9 +520,38 @@ class MainActivityInstrumentedTest {
         context.getSharedPreferences("speech_model_import", Context.MODE_PRIVATE).edit().clear().commit()
         context.getSharedPreferences(DocumentSelectionStore.PREFERENCES_NAME, Context.MODE_PRIVATE).edit().clear().commit()
         context.getSharedPreferences(StartupProcessingPolicyStore.PREFERENCES_NAME, Context.MODE_PRIVATE).edit().clear().commit()
+        context.getSharedPreferences(AndroidOnboardingHintStore.PREFERENCES_NAME, Context.MODE_PRIVATE).edit().clear().commit()
         context.deleteDatabase(AndroidSqlDelightAudioCatalogFactory.DATABASE_NAME)
         java.io.File(context.filesDir, AndroidAudioImportConstants.DIRECTORY_NAME).deleteRecursively()
     }
+
+    private fun clearOnboardingActivityState() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        context.getSharedPreferences("speech_model_import", Context.MODE_PRIVATE).edit().clear().commit()
+        context.getSharedPreferences(DocumentSelectionStore.PREFERENCES_NAME, Context.MODE_PRIVATE).edit().clear().commit()
+        context.getSharedPreferences(StartupProcessingPolicyStore.PREFERENCES_NAME, Context.MODE_PRIVATE).edit().clear().commit()
+        context.getSharedPreferences(AndroidOnboardingHintStore.PREFERENCES_NAME, Context.MODE_PRIVATE).edit().clear().commit()
+        context.deleteDatabase(AndroidSqlDelightAudioCatalogFactory.DATABASE_NAME)
+        java.io.File(context.filesDir, AndroidAudioImportConstants.DIRECTORY_NAME).deleteRecursively()
+    }
+
+    private fun onboardingInput(
+        model: me.maxistar.voiceinbox.core.ModelSetupSnapshot = me.maxistar.voiceinbox.core.ModelSetupSnapshot(
+            ModelSetupSnapshotState.REQUIRED,
+            downloadAvailable = true,
+        ),
+        output: me.maxistar.voiceinbox.core.OutputSetupSnapshot = me.maxistar.voiceinbox.core.OutputSetupSnapshot(
+            me.maxistar.voiceinbox.core.OutputSetupSnapshotState.REQUIRED,
+        ),
+    ) = AndroidMainScreenInput(
+        model = model,
+        output = output,
+        folder = me.maxistar.voiceinbox.core.FolderSetupSnapshot(
+            me.maxistar.voiceinbox.core.FolderSetupSnapshotState.UNSELECTED,
+        ),
+        hydration = AndroidMainScreenHydration(true, true, true, true),
+        onboardingLifecycle = AndroidOnboardingHintLifecycle.ACTIVE,
+    )
 
     private fun seedCatalogEntry(
         source: Uri,

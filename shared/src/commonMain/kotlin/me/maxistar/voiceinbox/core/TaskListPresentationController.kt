@@ -274,7 +274,7 @@ object TaskListPresentationController {
                 else -> SetupTaskState.REQUIRED
             },
             title = "Install Speech Model",
-            detail = snapshot.detail,
+            detail = snapshot.detail.takeUnless { active },
             badge = if (active) "Installing" else if (error) "Needs attention" else "Required",
             progress = if (active) {
                 TaskProgressPresentation(

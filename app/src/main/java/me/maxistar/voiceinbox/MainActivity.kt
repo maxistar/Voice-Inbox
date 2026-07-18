@@ -53,6 +53,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private lateinit var modelReadiness: SpeechModelReadinessManager
     private lateinit var startupPolicyStore: StartupProcessingPolicyStore
     private lateinit var startupCoordinator: StartupProcessingCoordinator
+    private lateinit var onboardingHintStore: AndroidOnboardingHintStore
     private val folderExecutor = Executors.newSingleThreadExecutor()
     private val importExecutor = Executors.newSingleThreadExecutor()
 
@@ -117,6 +118,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private val startRefreshIndicator = Runnable(::startRefreshIndicatorAnimation)
     private val stopRefreshIndicator = Runnable(::stopRefreshIndicatorAnimation)
     private val queuedImportUris = mutableListOf<Uri>()
+    private var onboardingHintLifecycle = AndroidOnboardingHintLifecycle.DISMISSED
 
     private val outputPicker = registerForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -165,6 +167,10 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         startupPolicyStore = StartupProcessingPolicyStore(
             getSharedPreferences(StartupProcessingPolicyStore.PREFERENCES_NAME, MODE_PRIVATE),
         )
+        onboardingHintStore = AndroidOnboardingHintStore(
+            getSharedPreferences(AndroidOnboardingHintStore.PREFERENCES_NAME, MODE_PRIVATE),
+        )
+        onboardingHintLifecycle = onboardingHintStore.load()
         startupCoordinator = StartupProcessingCoordinator.restore(
             savedInstanceState?.getString(STATE_STARTUP_PROCESSING_STAGE),
         )
@@ -277,7 +283,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         allTab = findViewById(R.id.allTab)
         taskFilters = findViewById(R.id.taskFilters)
         taskList = findViewById(R.id.taskList)
-        taskAdapter = TaskListAdapter(::handleTaskAction)
+        taskAdapter = TaskListAdapter(::handleTaskAction, ::dismissOnboardingHint)
         taskList.layoutManager = LinearLayoutManager(this)
         taskList.adapter = taskAdapter
         (taskList.itemAnimator as? SimpleItemAnimator)?.supportsChangeAnimations = false
@@ -1238,26 +1244,47 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         )
         val controls = selectionControls()
         val folderSyncState = taskStateHost.folderSyncCoordinator.state
+        val modelSnapshot = ModelSetupSnapshot(
+            state = modelSetupState,
+            detail = androidModelTaskDetail(modelSetupState, modelMessage),
+            installationPhase = modelMessage.takeIf {
+                modelSetupState == ModelSetupSnapshotState.INSTALLING
+            },
+            progressPercent = modelDownloadProgress,
+            downloadAvailable = modelDownloadAvailable,
+            canCancel = modelInstallCanCancel,
+        )
+        val outputSnapshot = OutputSetupSnapshot(
+            state = outputState,
+            detail = outputAccessError ?: outputDisplayName,
+        )
+        val folderSnapshot = FolderSetupSnapshot(
+            state = folderState,
+            detail = folderAccessError ?: scanMessage ?: folderDisplayName,
+        )
+        val hydration = AndroidMainScreenHydration(
+            modelKnown = modelPresentationKnown,
+            outputKnown = outputPresentationKnown,
+            folderKnown = folderPresentationKnown,
+            catalogKnown = catalogPresentationKnown,
+        )
+        if (
+            AndroidOnboardingHintPresenter.shouldComplete(
+                onboardingHintLifecycle,
+                hydration,
+                modelSnapshot,
+                outputSnapshot,
+                folderSnapshot,
+            )
+        ) {
+            onboardingHintLifecycle = AndroidOnboardingHintLifecycle.COMPLETED
+            onboardingHintStore.save(onboardingHintLifecycle)
+        }
         taskStateHost.update { current ->
             current.copy(
-                model = ModelSetupSnapshot(
-                    state = modelSetupState,
-                    detail = androidModelTaskDetail(modelSetupState, modelMessage),
-                    installationPhase = modelMessage.takeIf {
-                        modelSetupState == ModelSetupSnapshotState.INSTALLING
-                    },
-                    progressPercent = modelDownloadProgress,
-                    downloadAvailable = modelDownloadAvailable,
-                    canCancel = modelInstallCanCancel,
-                ),
-                output = OutputSetupSnapshot(
-                    state = outputState,
-                    detail = outputAccessError ?: outputDisplayName,
-                ),
-                folder = FolderSetupSnapshot(
-                    state = folderState,
-                    detail = folderAccessError ?: scanMessage ?: folderDisplayName,
-                ),
+                model = modelSnapshot,
+                output = outputSnapshot,
+                folder = folderSnapshot,
                 entries = currentEntries,
                 preview = PreviewTaskSnapshot(
                     activeEntryId = previewEntryId,
@@ -1267,12 +1294,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                 transcriptionEligible = eligible,
                 previewEligible = !folderBusy() && !transcriptionActive(),
                 importEnabled = !ingestionActive,
-                hydration = AndroidMainScreenHydration(
-                    modelKnown = modelPresentationKnown,
-                    outputKnown = outputPresentationKnown,
-                    folderKnown = folderPresentationKnown,
-                    catalogKnown = catalogPresentationKnown,
-                ),
+                hydration = hydration,
                 folderSync = AndroidFolderSyncPresentation(
                     visible = folderUri != null || folderSyncState.active,
                     active = folderSyncState.active,
@@ -1283,6 +1305,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                         AndroidFolderSyncPresentation.ACCESSIBILITY_REFRESH
                     },
                 ),
+                onboardingLifecycle = onboardingHintLifecycle,
             )
         }
     }
@@ -1298,12 +1321,19 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         )
         renderingFilter = false
         importAudio.isEnabled = state.importEnabled
-        taskAdapter.submitList(TaskListDisplayItems.from(state.taskList))
+        taskAdapter.submitList(TaskListDisplayItems.from(state.taskList, state.onboardingHint))
         invalidateOptionsMenu()
     }
 
     private fun handleTaskAction(request: AndroidTaskActionRequest) {
         taskActionRouter.route(request)
+    }
+
+    private fun dismissOnboardingHint() {
+        if (onboardingHintLifecycle != AndroidOnboardingHintLifecycle.ACTIVE) return
+        onboardingHintLifecycle = AndroidOnboardingHintLifecycle.DISMISSED
+        onboardingHintStore.save(onboardingHintLifecycle)
+        publishTaskState()
     }
 
     private fun performTaskAction(kind: TaskActionKind, entry: AudioCatalogEntry?) {

@@ -57,6 +57,11 @@
     <string name="all_label">All</string>
     <string name="no_new_audio_files">No new audio files</string>
     <string name="transcribe_all">Transcribe all</string>
+    <string name="onboarding_dismiss">Dismiss setup guide</string>
+    <string name="onboarding_step_complete">✓ %1$s</string>
+    <string name="onboarding_step_incomplete">○ %1$s</string>
+    <string name="onboarding_step_complete_accessibility">Completed: %1$s</string>
+    <string name="onboarding_step_incomplete_accessibility">Not completed: %1$s</string>
     <plurals name="transcribe_all_count">
         <item quantity="one">Transcribe all (%1$d file)</item>
         <item quantity="other">Transcribe all (%1$d files)</item>
