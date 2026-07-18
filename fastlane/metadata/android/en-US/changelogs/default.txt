@@ -1,0 +1,6 @@
+Initial Google Play release.
+
+• Import individual audio files or select a recording folder
+• Transcribe recordings locally after installing the speech model
+• Append results to a Markdown or plain-text document
+• Review, play, retry, and process recordings from the task list

@@ -80,7 +80,38 @@ class MainActivityInstrumentedTest {
                 val setup = displayItems(activity).filterIsInstance<TaskListDisplayItem.Setup>()
                 setup.any { row -> row.task.actions.any { it.kind == TaskActionKind.DOWNLOAD_MODEL && it.enabled } } &&
                     setup.any { row -> row.task.actions.any { it.kind == TaskActionKind.IMPORT_MODEL && it.enabled } } &&
-                    setup.any { row -> row.task.actions.any { it.kind == TaskActionKind.SELECT_OUTPUT && it.enabled } }
+                    setup.any { row ->
+                        row.task.actions.map { it.kind } ==
+                            listOf(TaskActionKind.CREATE_OUTPUT, TaskActionKind.SELECT_OUTPUT) &&
+                            row.task.actions.all { it.enabled }
+                    }
+            }
+        }
+    }
+
+    @Test
+    fun acceptedCreatedOutputUsesExistingPersistenceAndReadinessPath() {
+        clearActivityState()
+        val output = DocumentsContract.buildDocumentUri(TestAudioDocumentsProvider.AUTHORITY, "output")
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val preferences = context.getSharedPreferences(
+            DocumentSelectionStore.PREFERENCES_NAME,
+            Context.MODE_PRIVATE,
+        )
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                MainActivity::class.java
+                    .getDeclaredMethod("acceptOutput", Uri::class.java)
+                    .apply { isAccessible = true }
+                    .invoke(activity, output)
+            }
+
+            awaitActivity(scenario) { activity ->
+                preferences.getString("output_uri", null) == output.toString() &&
+                    MainActivity::class.java.getDeclaredField("outputAccessReady")
+                        .apply { isAccessible = true }
+                        .getBoolean(activity)
             }
         }
     }
@@ -434,7 +465,7 @@ class MainActivityInstrumentedTest {
             }
             awaitActivity(scenario) { activity ->
                 displayItems(activity).filterIsInstance<TaskListDisplayItem.OnboardingHint>()
-                    .singleOrNull()?.presentation?.action?.kind == TaskActionKind.SELECT_OUTPUT
+                    .singleOrNull()?.presentation?.action?.kind == TaskActionKind.CREATE_OUTPUT
             }
             scenario.onActivity { activity ->
                 stateHost(activity).replace(

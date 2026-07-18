@@ -21,6 +21,19 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class SettingsActivityInstrumentedTest {
     @Test
+    fun outputConfigurationOffersCreationBeforeExistingSelection() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        clearSettings(context)
+
+        ActivityScenario.launch(SettingsActivity::class.java).use {
+            onView(withId(R.id.settingsOutputRow)).perform(scrollTo(), click())
+            onView(withText(R.string.settings_output_action_title)).check(matches(isDisplayed()))
+            onView(withText(R.string.settings_output_create_new)).check(matches(isDisplayed()))
+            onView(withText(R.string.settings_output_choose_existing)).check(matches(isDisplayed()))
+        }
+    }
+
+    @Test
     fun startupPolicyIsDisplayedAndPersistsWithoutChangingNightlySettings() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         clearSettings(context)

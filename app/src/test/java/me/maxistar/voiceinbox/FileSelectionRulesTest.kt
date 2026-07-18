@@ -15,6 +15,12 @@ class FileSelectionRulesTest {
     }
 
     @Test
+    fun outputCreationUsesMarkdownAndSuggestedInboxName() {
+        assertEquals("text/markdown", FileSelectionRules.CREATED_OUTPUT_MIME_TYPE)
+        assertEquals("Voice Inbox.md", FileSelectionRules.DEFAULT_OUTPUT_FILE_NAME)
+    }
+
+    @Test
     fun providerDisplayNameWins() {
         assertEquals("notes.txt", FileSelectionRules.displayName("notes.txt", "fallback"))
     }

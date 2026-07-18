@@ -3,6 +3,13 @@ import Layout from '../layouts/Layout.astro';
 
 const githubUrl = 'https://github.com/maxistar/Voice-Inbox';
 const releaseUrl = `${githubUrl}/releases`;
+const licenseUrl = `${githubUrl}/blob/master/LICENSE`;
+const thirdPartyNoticesUrl = `${githubUrl}/blob/master/THIRD_PARTY_NOTICES.md`;
+const modelNoticesUrl = `${githubUrl}/blob/master/MODEL_NOTICES.md`;
+const baseModelUrl = 'https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3';
+const convertedModelUrl = 'https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx';
+const modelRevisionUrl = `${convertedModelUrl}/tree/8f23f0c03c8761650bdb5b40aaf3e40d2c15f1ce`;
+const ccByUrl = 'https://creativecommons.org/licenses/by/4.0/';
 ---
 <Layout title="Legal" description="Voice Inbox legal, support, privacy, and publication information.">
   <style>
@@ -72,8 +79,34 @@ const releaseUrl = `${githubUrl}/releases`;
     <section class="section">
       <h2>License and acknowledgements</h2>
       <p>
-        Voice Inbox is distributed from its public source repository. TODO: confirm final app license text
-        and add third-party acknowledgements for AndroidX, Apple platform APIs, ONNX Runtime, Rust crates, Kotlin Multiplatform libraries, and the speech model before publication.
+        Unless otherwise noted, original Voice Inbox source code is licensed under the
+        <a href={licenseUrl} target="_blank" rel="noopener">Apache License 2.0</a>.
+        Third-party components and speech-model weights retain their own licenses and are not
+        relicensed as Voice Inbox source code.
+      </p>
+      <ul>
+        <li><a href={licenseUrl} target="_blank" rel="noopener">Full Voice Inbox license</a></li>
+        <li><a href={thirdPartyNoticesUrl} target="_blank" rel="noopener">Third-party software notices</a></li>
+        <li><a href={modelNoticesUrl} target="_blank" rel="noopener">Speech-model notice</a></li>
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2>Speech-model attribution</h2>
+      <p>
+        Voice Inbox can download the
+        <a href={convertedModelUrl} target="_blank" rel="noopener">ONNX/INT8 conversion by <code>istupakov</code></a>
+        of the
+        <a href={baseModelUrl} target="_blank" rel="noopener">NVIDIA Parakeet TDT 0.6B v3 base model</a>.
+        Voice Inbox pins
+        <a href={modelRevisionUrl} target="_blank" rel="noopener"><code>8f23f0c03c8761650bdb5b40aaf3e40d2c15f1ce</code></a>.
+      </p>
+      <p>
+        The base model and conversion are provided under
+        <a href={ccByUrl} target="_blank" rel="noopener">Creative Commons Attribution 4.0 International (CC BY 4.0)</a>.
+        The weights are downloaded separately at the user's request and are not included in the
+        Voice Inbox source repository or Android and iOS application packages. Voice Inbox does
+        not claim ownership, sponsorship, or endorsement by NVIDIA or the converter.
       </p>
     </section>
 

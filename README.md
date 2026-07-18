@@ -98,6 +98,18 @@ Requirements:
 The Gradle build extracts ONNX Runtime, builds the Rust JNI library for
 `arm64-v8a`, and packages the required native libraries.
 
+## License
+
+Unless otherwise noted, original Voice Inbox source code is licensed under the
+[Apache License 2.0](LICENSE). Third-party components and speech-model weights
+retain their own licenses and are not relicensed as Voice Inbox source code.
+
+- [Third-party software notices](THIRD_PARTY_NOTICES.md)
+- [Speech model attribution and CC BY 4.0 terms](MODEL_NOTICES.md)
+
+The speech-model weights are downloaded separately and are not included in this
+source repository or in the Android and iOS application packages.
+
 ## iOS Application
 
 The repository includes a SwiftUI iOS application at

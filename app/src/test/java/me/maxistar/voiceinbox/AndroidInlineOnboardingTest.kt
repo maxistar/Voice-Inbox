@@ -62,7 +62,9 @@ class AndroidInlineOnboardingTest {
     @Test
     fun directSetupCompletionAdvancesThroughOutputAndOptionalFolder() {
         val output = present(model = readyModel())
-        assertEquals(TaskActionKind.SELECT_OUTPUT, output.action?.kind)
+        assertEquals(TaskActionKind.CREATE_OUTPUT, output.action?.kind)
+        assertEquals("Create Output File", output.action?.label)
+        assertTrue(output.steps.single { it.kind == AndroidOnboardingStepKind.OUTPUT }.label.contains("Create or choose"))
         assertTrue(output.steps.first().complete)
 
         val folder = present(model = readyModel(), output = readyOutput())

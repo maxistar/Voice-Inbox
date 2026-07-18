@@ -11,7 +11,10 @@
     <string name="settings_title">Settings</string>
     <string name="settings_storage_title">Storage</string>
     <string name="settings_audio_folder_title">Audio folder</string>
-    <string name="settings_output_file_title">Output file</string>
+    <string name="settings_output_file_title">Output document</string>
+    <string name="settings_output_action_title">Configure output document</string>
+    <string name="settings_output_create_new">Create New</string>
+    <string name="settings_output_choose_existing">Choose Existing</string>
     <string name="settings_about_title">About</string>
     <string name="settings_about_version">Version: %1$s</string>
     <string name="settings_about_website">Website</string>
