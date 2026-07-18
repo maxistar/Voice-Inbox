@@ -101,12 +101,56 @@ class TaskListDisplayItemsTest {
         )
     }
 
+    @Test
+    fun onboardingHintIsStableAndOrderedAfterSetupBeforeBatchAudioAndEmpty() {
+        val hint = onboardingHint()
+        val withWork = items(
+            model = ModelSetupSnapshot(ModelSetupSnapshotState.REQUIRED, downloadAvailable = true),
+            output = OutputSetupSnapshot(OutputSetupSnapshotState.REQUIRED),
+            audio = listOf(pending(1), pending(2), pending(3)),
+            onboardingHint = hint,
+        )
+        assertEquals(
+            listOf(
+                "setup:model",
+                "setup:output",
+                TaskListDisplayItem.OnboardingHint.STABLE_KEY,
+                TaskListDisplayItem.BatchAction.STABLE_KEY,
+                "audio:3",
+                "audio:2",
+                "audio:1",
+            ),
+            withWork.map { it.stableKey },
+        )
+
+        val empty = items(onboardingHint = hint)
+        assertTrue(empty[0] is TaskListDisplayItem.OnboardingHint)
+        assertTrue(empty[1] is TaskListDisplayItem.Empty)
+
+        val changedHint = hint.copy(
+            steps = hint.steps.mapIndexed { index, step -> step.copy(complete = index == 0) },
+            action = AndroidOnboardingHintAction("Select output file", true, TaskActionKind.SELECT_OUTPUT),
+        )
+        val oldItem = empty.first()
+        val newItem = items(onboardingHint = changedHint).first()
+        assertTrue(TaskListDisplayItemDiff.areItemsTheSame(oldItem, newItem))
+        assertFalse(TaskListDisplayItemDiff.areContentsTheSame(oldItem, newItem))
+    }
+
+    @Test
+    fun absentOrIneligibleHintLeavesProcessedAndAllListsUnchanged() {
+        val hidden = items(filter = TaskListFilter.PROCESSED, onboardingHint = AndroidOnboardingHintPresentation.HIDDEN)
+        assertTrue(hidden.single() is TaskListDisplayItem.Empty)
+        assertTrue(items(filter = TaskListFilter.ALL).none { it is TaskListDisplayItem.OnboardingHint })
+    }
+
     private fun items(
         filter: TaskListFilter = TaskListFilter.NEW,
         model: ModelSetupSnapshot = ModelSetupSnapshot(ModelSetupSnapshotState.READY),
         output: OutputSetupSnapshot = OutputSetupSnapshot(OutputSetupSnapshotState.READY),
         audio: List<AudioTaskSnapshot> = emptyList(),
         transcription: TranscriptionTaskSnapshot = TranscriptionTaskSnapshot(),
+        onboardingHint: AndroidOnboardingHintPresentation = AndroidOnboardingHintPresentation.HIDDEN,
     ): List<TaskListDisplayItem> = TaskListDisplayItems.from(
         TaskListPresentationController.state(
             TaskListInput(
@@ -118,6 +162,17 @@ class TaskListDisplayItemsTest {
                 transcription = transcription,
             ),
         ),
+        onboardingHint,
+    )
+
+    private fun onboardingHint() = AndroidOnboardingHintPresentation(
+        visible = true,
+        steps = listOf(
+            AndroidOnboardingChecklistStep(AndroidOnboardingStepKind.MODEL, "Install speech model", false),
+            AndroidOnboardingChecklistStep(AndroidOnboardingStepKind.OUTPUT, "Select transcript output", false),
+            AndroidOnboardingChecklistStep(AndroidOnboardingStepKind.FOLDER, "Select audio folder · Optional", false, true),
+        ),
+        action = AndroidOnboardingHintAction("Start setup", true, TaskActionKind.DOWNLOAD_MODEL),
     )
 
     private fun pending(id: Long) = AudioTaskSnapshot(

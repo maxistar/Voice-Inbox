@@ -183,6 +183,50 @@ class AndroidMainScreenStateHostTest {
         assertTrue(state.taskList.tasks.isEmpty())
         assertNull(state.taskList.emptyMessage)
         assertTrue(state.taskList.emptyActions.isEmpty())
+        assertFalse(state.onboardingHint.visible)
+    }
+
+    @Test
+    fun onboardingPresentationUsesCurrentSnapshotsAndFilterWithoutMutatingSetupTasks() {
+        val initial = AndroidTaskListSnapshotMapper.state(
+            AndroidMainScreenInput(
+                model = ModelSetupSnapshot(ModelSetupSnapshotState.REQUIRED, downloadAvailable = true),
+                output = OutputSetupSnapshot(OutputSetupSnapshotState.REQUIRED),
+                folder = FolderSetupSnapshot(FolderSetupSnapshotState.UNSELECTED),
+                hydration = hydrated(),
+                onboardingLifecycle = AndroidOnboardingHintLifecycle.ACTIVE,
+            ),
+        )
+        assertTrue(initial.onboardingHint.visible)
+        assertEquals(TaskActionKind.DOWNLOAD_MODEL, initial.onboardingHint.action?.kind)
+        assertEquals(
+            listOf("setup:model", "setup:output"),
+            initial.taskList.tasks.map { it.stableId },
+        )
+
+        val directModelCompletion = AndroidTaskListSnapshotMapper.state(
+            AndroidMainScreenInput(
+                model = ModelSetupSnapshot(ModelSetupSnapshotState.READY),
+                output = OutputSetupSnapshot(OutputSetupSnapshotState.REQUIRED),
+                folder = FolderSetupSnapshot(FolderSetupSnapshotState.UNSELECTED),
+                hydration = hydrated(),
+                onboardingLifecycle = AndroidOnboardingHintLifecycle.ACTIVE,
+            ),
+        )
+        assertEquals(TaskActionKind.SELECT_OUTPUT, directModelCompletion.onboardingHint.action?.kind)
+        assertEquals(listOf("setup:output"), directModelCompletion.taskList.tasks.map { it.stableId })
+
+        val allFilter = AndroidTaskListSnapshotMapper.state(
+            AndroidMainScreenInput(
+                filter = TaskListFilter.ALL,
+                model = ModelSetupSnapshot(ModelSetupSnapshotState.REQUIRED),
+                output = OutputSetupSnapshot(OutputSetupSnapshotState.REQUIRED),
+                folder = FolderSetupSnapshot(FolderSetupSnapshotState.UNSELECTED),
+                hydration = hydrated(),
+                onboardingLifecycle = AndroidOnboardingHintLifecycle.ACTIVE,
+            ),
+        )
+        assertFalse(allFilter.onboardingHint.visible)
     }
 
     @Test

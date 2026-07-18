@@ -60,11 +60,13 @@ class TaskListPresentationControllerTest {
             state(
                 model = ModelSetupSnapshot(
                     state = ModelSetupSnapshotState.INSTALLING,
+                    detail = "Installing from selected folder",
                     installationPhase = "Verifying local model",
                     progressPercent = 75,
                 ),
             ).tasks.single(),
         )
+        assertNull(localImport.detail)
         assertEquals("Verifying local model", localImport.progress?.phase)
         assertTrue(localImport.actions.isEmpty())
 

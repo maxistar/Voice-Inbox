@@ -34,6 +34,7 @@ data class AndroidMainScreenInput(
     val importEnabled: Boolean = true,
     val hydration: AndroidMainScreenHydration = AndroidMainScreenHydration(),
     val folderSync: AndroidFolderSyncPresentation = AndroidFolderSyncPresentation(),
+    val onboardingLifecycle: AndroidOnboardingHintLifecycle = AndroidOnboardingHintLifecycle.DISMISSED,
 )
 
 data class AndroidMainScreenHydration(
@@ -67,6 +68,7 @@ data class AndroidMainScreenState(
     val entriesById: Map<Long, AudioCatalogEntry>,
     val importEnabled: Boolean,
     val folderSync: AndroidFolderSyncPresentation,
+    val onboardingHint: AndroidOnboardingHintPresentation,
 ) {
     val refreshFolderVisible: Boolean get() = folderSync.visible
     val refreshFolderEnabled: Boolean get() = folderSync.enabled
@@ -114,6 +116,14 @@ object AndroidTaskListSnapshotMapper {
             entriesById = input.entries.associateBy(AudioCatalogEntry::id),
             importEnabled = input.importEnabled,
             folderSync = input.folderSync,
+            onboardingHint = AndroidOnboardingHintPresenter.present(
+                lifecycle = input.onboardingLifecycle,
+                filter = input.filter,
+                hydration = input.hydration,
+                model = input.model,
+                output = input.output,
+                folder = input.folder,
+            ),
         )
     }
 

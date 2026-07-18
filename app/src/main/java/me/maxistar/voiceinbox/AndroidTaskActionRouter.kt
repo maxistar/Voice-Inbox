@@ -21,6 +21,11 @@ class AndroidTaskActionRouter(
     fun route(request: AndroidTaskActionRequest): Boolean {
         val state = currentState()
         val authorized = when {
+            request.stableId == TaskListDisplayItem.OnboardingHint.STABLE_KEY ->
+                state.onboardingHint.visible &&
+                    state.onboardingHint.action?.let { action ->
+                        action.kind == request.kind && action.enabled
+                    } == true
             request.kind == TaskActionKind.TRANSCRIBE_ALL ->
                 request.stableId == TaskListDisplayItem.BatchAction.STABLE_KEY &&
                     state.taskList.batchAction.visible &&

@@ -4,6 +4,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
+import android.widget.ImageButton
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.core.view.isVisible
@@ -45,6 +46,16 @@ sealed class TaskListDisplayItem {
         }
     }
 
+    data class OnboardingHint(
+        val presentation: AndroidOnboardingHintPresentation,
+    ) : TaskListDisplayItem() {
+        override val stableKey: String = STABLE_KEY
+
+        companion object {
+            const val STABLE_KEY = "hint:android-onboarding"
+        }
+    }
+
     data class Empty(
         val message: String,
         val actions: List<TaskActionPresentation>,
@@ -58,14 +69,16 @@ sealed class TaskListDisplayItem {
 }
 
 object TaskListDisplayItems {
-    fun from(state: TaskListState): List<TaskListDisplayItem> {
-        val emptyMessage = state.emptyMessage
-        if (emptyMessage != null) {
-            return listOf(TaskListDisplayItem.Empty(emptyMessage, state.emptyActions))
-        }
+    fun from(
+        state: TaskListState,
+        onboardingHint: AndroidOnboardingHintPresentation = AndroidOnboardingHintPresentation.HIDDEN,
+    ): List<TaskListDisplayItem> {
         return buildList {
             state.tasks.filterIsInstance<SetupTaskPresentation>().forEach {
                 add(TaskListDisplayItem.Setup(it))
+            }
+            if (onboardingHint.visible) {
+                add(TaskListDisplayItem.OnboardingHint(onboardingHint))
             }
             if (state.batchAction.visible) {
                 add(
@@ -77,6 +90,9 @@ object TaskListDisplayItems {
             }
             state.tasks.filterIsInstance<AudioTaskPresentation>().forEach {
                 add(TaskListDisplayItem.Audio(it))
+            }
+            state.emptyMessage?.let { message ->
+                add(TaskListDisplayItem.Empty(message, state.emptyActions))
             }
         }
     }
@@ -114,6 +130,7 @@ sealed class TaskListChangePayload {
 
 class TaskListAdapter(
     private val onAction: (AndroidTaskActionRequest) -> Unit,
+    private val onDismissOnboarding: () -> Unit,
 ) : ListAdapter<TaskListDisplayItem, RecyclerView.ViewHolder>(TaskListDisplayItemDiff) {
     init {
         setHasStableIds(true)
@@ -125,6 +142,7 @@ class TaskListAdapter(
         is TaskListDisplayItem.Setup -> VIEW_SETUP
         is TaskListDisplayItem.Audio -> VIEW_AUDIO
         is TaskListDisplayItem.BatchAction -> VIEW_BATCH
+        is TaskListDisplayItem.OnboardingHint -> VIEW_ONBOARDING
         is TaskListDisplayItem.Empty -> VIEW_EMPTY
     }
 
@@ -136,6 +154,11 @@ class TaskListAdapter(
             VIEW_BATCH -> BatchActionViewHolder(
                 inflater.inflate(R.layout.row_batch_action, parent, false),
                 onAction,
+            )
+            VIEW_ONBOARDING -> OnboardingHintViewHolder(
+                inflater.inflate(R.layout.row_onboarding_hint, parent, false),
+                onAction,
+                onDismissOnboarding,
             )
             VIEW_EMPTY -> EmptyTaskViewHolder(
                 inflater.inflate(R.layout.row_empty_task, parent, false),
@@ -150,6 +173,7 @@ class TaskListAdapter(
             is TaskListDisplayItem.Setup -> (holder as SetupTaskViewHolder).bind(item.task)
             is TaskListDisplayItem.Audio -> (holder as AudioTaskViewHolder).bind(item.task)
             is TaskListDisplayItem.BatchAction -> (holder as BatchActionViewHolder).bind(item)
+            is TaskListDisplayItem.OnboardingHint -> (holder as OnboardingHintViewHolder).bind(item)
             is TaskListDisplayItem.Empty -> (holder as EmptyTaskViewHolder).bind(item)
         }
     }
@@ -275,6 +299,55 @@ class TaskListAdapter(
         }
     }
 
+    private class OnboardingHintViewHolder(
+        itemView: View,
+        private val onAction: (AndroidTaskActionRequest) -> Unit,
+        onDismiss: () -> Unit,
+    ) : RecyclerView.ViewHolder(itemView) {
+        private val title: TextView = itemView.findViewById(R.id.onboardingTitle)
+        private val explanation: TextView = itemView.findViewById(R.id.onboardingExplanation)
+        private val disclosure: TextView = itemView.findViewById(R.id.onboardingDownloadDisclosure)
+        private val modelStep: TextView = itemView.findViewById(R.id.onboardingModelStep)
+        private val outputStep: TextView = itemView.findViewById(R.id.onboardingOutputStep)
+        private val folderStep: TextView = itemView.findViewById(R.id.onboardingFolderStep)
+        private val action: MaterialButton = itemView.findViewById(R.id.onboardingAction)
+        private val close: ImageButton = itemView.findViewById(R.id.onboardingClose)
+
+        init {
+            close.setOnClickListener { onDismiss() }
+        }
+
+        fun bind(item: TaskListDisplayItem.OnboardingHint) {
+            val presentation = item.presentation
+            title.text = presentation.title
+            explanation.text = presentation.explanation
+            disclosure.text = presentation.downloadDisclosure.orEmpty()
+            disclosure.isVisible = presentation.downloadDisclosure != null
+            bindStep(modelStep, presentation.steps.first { it.kind == AndroidOnboardingStepKind.MODEL })
+            bindStep(outputStep, presentation.steps.first { it.kind == AndroidOnboardingStepKind.OUTPUT })
+            bindStep(folderStep, presentation.steps.first { it.kind == AndroidOnboardingStepKind.FOLDER })
+            action.text = presentation.action?.label.orEmpty()
+            action.isEnabled = presentation.action?.enabled == true
+            action.isVisible = presentation.action != null
+            action.setOnClickListener {
+                presentation.action?.let { current ->
+                    onAction(AndroidTaskActionRequest(item.stableKey, null, current.kind))
+                }
+            }
+        }
+
+        private fun bindStep(view: TextView, step: AndroidOnboardingChecklistStep) {
+            view.text = itemView.resources.getString(
+                if (step.complete) R.string.onboarding_step_complete else R.string.onboarding_step_incomplete,
+                step.label,
+            )
+            view.contentDescription = itemView.resources.getString(
+                if (step.complete) R.string.onboarding_step_complete_accessibility else R.string.onboarding_step_incomplete_accessibility,
+                step.label,
+            )
+        }
+    }
+
     private class EmptyTaskViewHolder(
         itemView: View,
         private val onAction: (AndroidTaskActionRequest) -> Unit,
@@ -311,6 +384,7 @@ class TaskListAdapter(
         const val VIEW_AUDIO = 2
         const val VIEW_BATCH = 3
         const val VIEW_EMPTY = 4
+        const val VIEW_ONBOARDING = 5
 
         fun stableLongId(value: String): Long {
             var hash = -0x340d631b8c46753bL
