@@ -9,6 +9,7 @@ const {
   description = 'Voice Inbox turns accumulated voice recordings into a local Markdown or text inbox.',
 } = Astro.props;
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const gaId = import.meta.env.PUBLIC_GA_ID;
 const githubUrl = 'https://github.com/maxistar/Voice-Inbox';
 const releaseUrl = `${githubUrl}/releases`;
 const nav = [
@@ -25,6 +26,19 @@ const nav = [
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content={description} />
     <title>{title} - Voice Inbox</title>
+    {
+      gaId && (
+        <>
+          <script async src={'https://www.googletagmanager.com/gtag/js?id=' + gaId}></script>
+          <script is:inline define:vars={{ gaId }}>
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){window.dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', gaId);
+          </script>
+        </>
+      )
+    }
     <style>
       :root {
         color-scheme: light;
