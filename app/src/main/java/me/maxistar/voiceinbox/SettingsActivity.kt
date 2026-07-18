@@ -20,6 +20,11 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import java.util.concurrent.Executors
 
+internal object VoiceInboxPublicLinks {
+    const val WEBSITE = "https://voiceinbox.simpleditor.org/"
+    const val LEGAL = "https://voiceinbox.simpleditor.org/legal/"
+}
+
 class SettingsActivity : AppCompatActivity() {
     private lateinit var settingsStore: ScheduledTranscriptionSettingsStore
     private lateinit var startupPolicyStore: StartupProcessingPolicyStore
@@ -90,10 +95,10 @@ class SettingsActivity : AppCompatActivity() {
             outputPicker.launch(FileSelectionRules.outputMimeTypes)
         }
         findViewById<View>(R.id.settingsWebsiteRow).setOnClickListener {
-            openExternalUrl(WEBSITE_URL)
+            openExternalUrl(VoiceInboxPublicLinks.WEBSITE)
         }
         findViewById<View>(R.id.settingsLegalRow).setOnClickListener {
-            openExternalUrl(LEGAL_URL)
+            openExternalUrl(VoiceInboxPublicLinks.LEGAL)
         }
         val startupPolicyGroup = findViewById<RadioGroup>(R.id.startupProcessingPolicy)
         startupPolicyGroup.check(
@@ -275,8 +280,4 @@ class SettingsActivity : AppCompatActivity() {
             packageManager.getPackageInfo(packageName, 0).versionName ?: "Unknown"
         }.getOrDefault("Unknown")
 
-    private companion object {
-        const val WEBSITE_URL = "https://projects.maxistar.me/Voice-Inbox/"
-        const val LEGAL_URL = "https://projects.maxistar.me/Voice-Inbox/legal/"
-    }
 }

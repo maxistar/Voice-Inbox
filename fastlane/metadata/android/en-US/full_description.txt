@@ -1,0 +1,20 @@
+Voice Inbox helps you clear a backlog of voice recordings and collect the recognized text in one portable document.
+
+Import individual audio files shared from messaging and recording apps, or select a folder that contains multiple recordings. Review new and processed items, preview audio before transcription, and process one recording or the whole queue when convenient.
+
+Voice Inbox appends each successful transcription to an existing Markdown or plain-text file that you select. The resulting document can be opened in Simple Text Editor or any other compatible editor. Voice Inbox does not require a Simple Text Editor integration or account.
+
+Key features:
+• Import audio shared from other Android apps
+• Scan a selected folder for new or changed recordings
+• Preview recordings before processing
+• Transcribe one file or all new files
+• Append results to your existing .md or .txt document
+• Review completed and failed tasks and retry failures
+• Optionally schedule best-effort background processing
+
+Speech recognition runs on your device after the speech model is installed. Network access is required to download the model. The initial model download is approximately 640 MiB and installation needs additional free storage.
+
+Voice Inbox is designed for accumulated recordings rather than live dictation or cloud transcription. Scheduled processing is managed by Android and may run later than the selected time.
+
+Requires an ARM64 device running Android 7.0 or later.
