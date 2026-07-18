@@ -13,12 +13,14 @@ data class MainScreenRowInput(
 
 data class MainScreenInput(
     val modelMessage: String,
-    val modelLoading: Boolean,
+    val modelInstallationState: SpeechModelInstallationState,
+    val modelRuntimeState: SpeechModelRuntimeState,
     val modelDownloadAvailable: Boolean,
     val modelDownloadProgress: Int?,
-    val modelReady: Boolean,
     val outputSelected: Boolean,
     val folderSelected: Boolean,
+    val outputReady: Boolean = outputSelected,
+    val folderReady: Boolean = folderSelected,
     val pendingCount: Int,
     val folderChecking: Boolean,
     val folderScanQueued: Boolean,
@@ -40,6 +42,7 @@ data class MainScreenInput(
     val activePreviewEntryId: Long?,
     val previewState: PreviewPlaybackState,
     val rows: List<MainScreenRowInput> = emptyList(),
+    val importInboxAvailable: Boolean = false,
 )
 
 data class MainScreenState(
@@ -77,12 +80,20 @@ object MainScreenStateController {
     fun state(input: MainScreenInput): MainScreenState {
         val busy = input.folderChecking || input.folderScanQueued || input.scanning
         val controls = TranscriptionUiRules.catalogControls(
-            modelReady = input.modelReady,
-            outputSelected = input.outputSelected,
-            folderSelected = input.folderSelected,
+            modelInstallationState = input.modelInstallationState,
+            outputSelected = input.outputReady,
+            folderSelected = input.folderReady,
             pendingCount = input.pendingCount,
             transcriptionState = input.transcriptionState,
             scanning = busy,
+            audioInputAvailable = if (input.folderSelected) {
+                input.folderReady
+            } else {
+                input.importInboxAvailable
+            },
+        ).copy(
+            outputSetupVisible = !input.outputSelected,
+            folderSetupVisible = !input.folderSelected,
         )
         return MainScreenState(
             status = TranscriptionUiRules.statusProgressBlock(input.toStatusInput()),
@@ -132,10 +143,10 @@ object MainScreenStateController {
     private fun MainScreenInput.toStatusInput(): StatusProgressInput =
         StatusProgressInput(
             modelMessage = modelMessage,
-            modelLoading = modelLoading,
+            modelInstallationState = modelInstallationState,
+            modelRuntimeState = modelRuntimeState,
             modelDownloadAvailable = modelDownloadAvailable,
             modelDownloadProgress = modelDownloadProgress,
-            modelReady = modelReady,
             outputSelected = outputSelected,
             folderSelected = folderSelected,
             pendingCount = pendingCount,

@@ -13,7 +13,6 @@ sealed interface SpeechModelReadinessState {
 
 class SpeechModelReadinessManager(
     private val repository: SpeechModelRepository,
-    private val initializeModel: (File) -> Boolean,
     private val executor: Executor,
 ) {
     private val lock = Any()
@@ -53,19 +52,13 @@ class SpeechModelReadinessManager(
     private fun checkModel() {
         val state = runCatching {
             repository.cleanupStaleState()
-            when (val installed = repository.inspect()) {
-                is InstalledSpeechModelState.Ready -> {
-                    if (initializeModel(installed.directory)) {
-                        SpeechModelReadinessState.Ready(installed.directory)
-                    } else {
-                        SpeechModelReadinessState.Failed("Speech model failed to load")
-                    }
-                }
+            when (val installed = repository.inspectLightweight()) {
+                is InstalledSpeechModelState.Ready -> SpeechModelReadinessState.Ready(installed.directory)
                 InstalledSpeechModelState.Missing -> SpeechModelReadinessState.Missing
                 is InstalledSpeechModelState.Invalid -> SpeechModelReadinessState.Invalid(installed.reason)
             }
         }.getOrElse { error ->
-            SpeechModelReadinessState.Failed(error.message ?: "Speech model failed to load")
+            SpeechModelReadinessState.Failed(error.message ?: "Speech model inspection failed")
         }
 
         val pending = synchronized(lock) {

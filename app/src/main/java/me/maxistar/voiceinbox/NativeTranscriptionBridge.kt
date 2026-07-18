@@ -22,6 +22,8 @@ object NativeTranscriptionBridge {
 
     external fun initialize(modelDirectory: String): Boolean
 
+    external fun reset()
+
     private external fun transcribeChunkJson(samples: FloatArray): String?
 
     fun transcribeChunk(samples: FloatArray): NativeChunkResult? {

@@ -88,12 +88,20 @@ const releaseUrl = `${githubUrl}/releases`;
     </div>
 
     <div class="step">
-      <h2>6. Optional: scheduled transcription</h2>
+      <h2>6. Optional: startup processing</h2>
       <p>
-        Open Settings to enable scheduled transcription and choose a preferred time. Android may delay background work,
+        In Settings, choose whether Voice Inbox should ask, transcribe automatically, or leave files queued when
+        the app opens and finishes scanning. Ask is the default. Startup processing is available on Android and iOS.
+      </p>
+    </div>
+
+    <div class="step">
+      <h2>7. Optional: nightly transcription</h2>
+      <p>
+        On Android, open Settings to enable nightly transcription and choose a preferred time. Android may delay background work,
         so scheduled runs should be treated as best-effort rather than exact alarms.
       </p>
-      <p>Scheduled background transcription is not part of the current iOS MVP.</p>
+      <p>Nightly background transcription is independent from startup processing and is not part of the current iOS MVP.</p>
     </div>
   </section>
 </Layout>

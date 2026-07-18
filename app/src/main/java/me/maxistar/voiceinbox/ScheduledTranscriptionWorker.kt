@@ -51,15 +51,18 @@ class ScheduledTranscriptionWorker(
         documentAccess.requireAppendable(output)
         folderScanner.requireReadable(folder)
 
-        val model = SpeechModelRepository(
+        if (SpeechModelRepository(
             applicationContext.noBackupFilesDir.resolve("models"),
-        ).inspect() as? InstalledSpeechModelState.Ready ?: return
-        if (!NativeTranscriptionBridge.initialize(model.directory.absolutePath)) return
+        ).inspectLightweight() !is InstalledSpeechModelState.Ready) return
 
         val catalog = AndroidSqlDelightAudioCatalogFactory(applicationContext).create()
         val files = folderScanner.scan(folder)
         catalog.reconcile(folder.toString(), files)
-        val pending = catalog.pendingCount(folder.toString())
+        val pending = catalog.pendingCount(
+            AudioCatalogSourceScope.of(
+                listOf(AndroidAudioImportConstants.SOURCE_ID, folder.toString()),
+            ),
+        )
         if (ScheduledTranscriptionRules.shouldStartTranscription(pending, transcriptionActive())) {
             TranscriptionWorker.enqueueAll(applicationContext, folder, output)
         }

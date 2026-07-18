@@ -121,6 +121,31 @@ class SqlDelightAudioCatalogRepositoryTest {
         assertEquals(listOf("new.wav", "processed.wav"), rows.map { it.displayName })
     }
 
+    @Test
+    fun activeSourceScopeMergesListsCountsAndClaimsWithoutTouchingOtherSources() {
+        val repository = repository()
+        val folder = imported(repository, "folder.wav", modified = 10, folderUri = FOLDER)
+        val imported = imported(repository, "voice.ogg", modified = 20, folderUri = IMPORTS)
+        imported(repository, "inactive.wav", modified = 30, folderUri = OTHER_FOLDER)
+        val failed = imported(
+            repository,
+            "failed.opus",
+            modified = 40,
+            folderUri = IMPORTS,
+            state = AudioFileState.FAILED,
+            lastError = "decode failed",
+        )
+        val scope = AudioCatalogSourceScope.of(listOf(FOLDER, IMPORTS))
+
+        assertEquals(listOf(imported.id, folder.id), repository.newEntries(scope).map { it.id })
+        assertEquals(listOf(failed.id), repository.processedEntries(scope).map { it.id })
+        assertEquals(2, repository.pendingCount(scope))
+        assertEquals(folder.id, repository.claimPending(scope)?.id)
+        assertEquals(imported.id, repository.claimPending(scope)?.id)
+        assertNull(repository.claimPending(scope))
+        assertEquals(failed.id, repository.claimFailed(scope, failed.id)?.id)
+    }
+
     private fun repository(): SqlDelightAudioCatalogRepository {
         val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         VoiceInboxDatabase.Schema.create(driver)
@@ -135,9 +160,10 @@ class SqlDelightAudioCatalogRepositoryTest {
         lastError: String? = null,
         processedAtMillis: Long? = null,
         transcriptText: String? = null,
+        folderUri: String = FOLDER,
     ): SqlDelightAudioCatalogFile =
         repository.upsertImportedFile(
-            folderUri = FOLDER,
+            folderUri = folderUri,
             documentUri = name,
             displayName = name,
             mimeType = "audio/wav",
@@ -161,5 +187,7 @@ class SqlDelightAudioCatalogRepositoryTest {
 
     private companion object {
         const val FOLDER = "ios-imported-audio"
+        const val IMPORTS = "android-imported-audio"
+        const val OTHER_FOLDER = "content://other-folder"
     }
 }

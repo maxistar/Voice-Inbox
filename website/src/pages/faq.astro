@@ -55,8 +55,8 @@ import Layout from '../layouts/Layout.astro';
       <summary>Is iOS supported?</summary>
       <p>
         iOS has an active MVP: import audio files, preview playback, speech model download, local transcription,
-        transcript display, and output append are available in the development app. Folder automation, scheduled background transcription,
-        and full Android parity are still in progress.
+        transcript display, selected-folder refresh, startup processing, and output append are available in the development app.
+        Scheduled background transcription and full Android parity are still in progress.
       </p>
     </details>
 
@@ -74,6 +74,14 @@ import Layout from '../layouts/Layout.astro';
       <p>
         It appends new entries to the selected output document. It does not search, replace, or delete previous Markdown/text content,
         because the document may be edited independently.
+      </p>
+    </details>
+
+    <details>
+      <summary>What happens when Voice Inbox finds queued files at startup?</summary>
+      <p>
+        Startup processing defaults to Ask. In Settings, you can instead make the app transcribe automatically or leave files queued.
+        This foreground startup behavior is separate from Android&apos;s optional nightly background transcription.
       </p>
     </details>
 

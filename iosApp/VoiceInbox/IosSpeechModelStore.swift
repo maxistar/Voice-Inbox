@@ -3,10 +3,21 @@ import CryptoKit
 import Foundation
 import Shared
 
+enum IosSpeechModelInstallationState: Equatable {
+    case missing
+    case installedVerified
+    case installedLegacy
+    case invalid
+}
+
 struct IosSpeechModelStatus {
     let directory: URL
-    let isReady: Bool
+    let installationState: IosSpeechModelInstallationState
     let missingFiles: [String]
+
+    var isReady: Bool {
+        installationState == .installedVerified || installationState == .installedLegacy
+    }
 
     var summary: String {
         if isReady {
@@ -48,6 +59,14 @@ enum IosSpeechModelPaths {
     static var backupDirectory: URL {
         applicationSupportDirectory.appendingPathComponent("SpeechModel.previous", isDirectory: true)
     }
+
+    static var receiptFile: URL {
+        applicationSupportDirectory.appendingPathComponent("SpeechModel.receipt")
+    }
+
+    static var invalidFile: URL {
+        applicationSupportDirectory.appendingPathComponent("SpeechModel.invalid")
+    }
 }
 
 struct IosSpeechModelDownloadProgress {
@@ -66,13 +85,52 @@ final class IosSpeechModelStore: ObservableObject {
     @Published private(set) var status: IosSpeechModelStatus
     @Published private(set) var isInstalling = false
     @Published private(set) var downloadProgress: IosSpeechModelDownloadProgress?
+    @Published private(set) var runtimeState = SpeechModelRuntimeState.unloaded
     @Published var message: String?
 
     private var downloadTask: Task<Void, Never>?
+    private var preparationTask: Task<PreparationResult, Never>?
+    private let installationDirectory: URL
+    private let inspectInstallation: @Sendable (URL) -> IosSpeechModelStatus
+    private let validateInstallation: @Sendable (URL) -> [String]
+    private let prepareNative: @Sendable (String) -> Bool
+    private let nativeError: @Sendable () -> String?
+    private let recordVerified: @Sendable () -> Void
+    private let recordInvalid: @Sendable (String) -> Void
+    private let resetNative: @Sendable () -> Void
 
-    init() {
-        let directory = IosSpeechModelPaths.modelDirectory
-        status = Self.validate(directory: directory)
+    convenience init() {
+        self.init(
+            directory: IosSpeechModelPaths.modelDirectory,
+            inspectInstallation: { Self.inspectLightweight(directory: $0) },
+            validateInstallation: { Self.validateModelFiles(in: $0).missingFiles },
+            prepareNative: { IosNativeTranscriber.prepare(modelDirectory: $0) },
+            nativeError: { IosNativeTranscriber.consumeLastError() },
+            recordVerified: { Self.recordVerifiedInstallation() },
+            recordInvalid: { Self.recordInvalidInstallation($0) },
+            resetNative: { IosNativeTranscriber.resetModel() }
+        )
+    }
+
+    init(
+        directory: URL,
+        inspectInstallation: @escaping @Sendable (URL) -> IosSpeechModelStatus,
+        validateInstallation: @escaping @Sendable (URL) -> [String],
+        prepareNative: @escaping @Sendable (String) -> Bool,
+        nativeError: @escaping @Sendable () -> String?,
+        recordVerified: @escaping @Sendable () -> Void,
+        recordInvalid: @escaping @Sendable (String) -> Void,
+        resetNative: @escaping @Sendable () -> Void
+    ) {
+        installationDirectory = directory
+        self.inspectInstallation = inspectInstallation
+        self.validateInstallation = validateInstallation
+        self.prepareNative = prepareNative
+        self.nativeError = nativeError
+        self.recordVerified = recordVerified
+        self.recordInvalid = recordInvalid
+        self.resetNative = resetNative
+        status = inspectInstallation(directory)
     }
 
     var isReady: Bool {
@@ -87,8 +145,12 @@ final class IosSpeechModelStore: ObservableObject {
         isInstalling || downloadTask != nil
     }
 
+    var canCancelDownload: Bool {
+        downloadTask != nil
+    }
+
     func reload() {
-        status = Self.validate(directory: IosSpeechModelPaths.modelDirectory)
+        status = inspectInstallation(installationDirectory)
     }
 
     func installModel(from sourceURL: URL) {
@@ -104,7 +166,8 @@ final class IosSpeechModelStore: ObservableObject {
             }.value
 
             isInstalling = false
-            status = Self.validate(directory: IosSpeechModelPaths.modelDirectory)
+            status = Self.inspectLightweight(directory: IosSpeechModelPaths.modelDirectory)
+            runtimeState = .unloaded
             message = result.message
         }
     }
@@ -134,7 +197,8 @@ final class IosSpeechModelStore: ObservableObject {
 
             isInstalling = false
             downloadTask = nil
-            status = Self.validate(directory: IosSpeechModelPaths.modelDirectory)
+            status = Self.inspectLightweight(directory: IosSpeechModelPaths.modelDirectory)
+            runtimeState = .unloaded
             downloadProgress = nil
             message = result.message
         }
@@ -148,13 +212,130 @@ final class IosSpeechModelStore: ObservableObject {
         message = "Speech model download cancelled."
     }
 
-    nonisolated private static func validate(directory: URL) -> IosSpeechModelStatus {
-        let result = validateModelFiles(in: directory)
+    func prepareForTranscription() async -> URL? {
+        if runtimeState == .loaded { return modelDirectory }
+        let task: Task<PreparationResult, Never>
+        if let existing = preparationTask {
+            task = existing
+        } else {
+            runtimeState = .loading
+            message = "Preparing speech model..."
+            let directory = modelDirectory
+            let validateInstallation = validateInstallation
+            let prepareNative = prepareNative
+            let nativeError = nativeError
+            let recordVerified = recordVerified
+            let recordInvalid = recordInvalid
+            task = Task.detached(priority: .userInitiated) {
+                let validationIssues = validateInstallation(directory)
+                guard validationIssues.isEmpty else {
+                    let reason = validationIssues.joined(separator: ", ")
+                    recordInvalid(reason)
+                    return PreparationResult(
+                        directory: nil,
+                        invalidInstallation: true,
+                        message: "Speech model is invalid: \(reason)"
+                    )
+                }
+                guard prepareNative(directory.path) else {
+                    return PreparationResult(
+                        directory: nil,
+                        invalidInstallation: false,
+                        message: nativeError()
+                            ?? "Speech model failed to load."
+                    )
+                }
+                recordVerified()
+                return PreparationResult(directory: directory, invalidInstallation: false, message: nil)
+            }
+            preparationTask = task
+        }
+
+        let result = await task.value
+        preparationTask = nil
+        if let directory = result.directory {
+            status = inspectInstallation(directory)
+            runtimeState = .loaded
+            message = nil
+            return directory
+        }
+        runtimeState = .failed
+        if result.invalidInstallation {
+            status = inspectInstallation(modelDirectory)
+        }
+        message = result.message
+        return nil
+    }
+
+    func invalidateRuntimeAfterReplacement() {
+        preparationTask?.cancel()
+        preparationTask = nil
+        runtimeState = .unloaded
+        resetNative()
+    }
+
+    nonisolated static func inspectLightweight(
+        directory: URL,
+        receiptFile: URL = IosSpeechModelPaths.receiptFile,
+        invalidFile: URL = IosSpeechModelPaths.invalidFile,
+        requiredFileNames: [String]? = nil
+    ) -> IosSpeechModelStatus {
+        if let reason = try? String(contentsOf: invalidFile, encoding: .utf8),
+           !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return IosSpeechModelStatus(
+                directory: directory,
+                installationState: .invalid,
+                missingFiles: [reason]
+            )
+        }
+        let fileManager = FileManager.default
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: directory.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            return IosSpeechModelStatus(
+                directory: directory,
+                installationState: .missing,
+                missingFiles: ["model directory"]
+            )
+        }
+        let missing = (requiredFileNames ?? manifestFiles().map(\.name)).compactMap { fileName in
+            fileManager.isReadableFile(atPath: directory.appendingPathComponent(fileName).path)
+                ? nil
+                : fileName
+        }
+        guard missing.isEmpty else {
+            return IosSpeechModelStatus(
+                directory: directory,
+                installationState: .invalid,
+                missingFiles: missing
+            )
+        }
+        let receipt = try? String(contentsOf: receiptFile, encoding: .utf8)
+        let state: IosSpeechModelInstallationState = receipt?.trimmingCharacters(in: .whitespacesAndNewlines)
+            == EmbeddedSpeechModel.shared.manifest.version
+            ? .installedVerified
+            : .installedLegacy
         return IosSpeechModelStatus(
             directory: directory,
-            isReady: result.missingFiles.isEmpty,
-            missingFiles: result.missingFiles
+            installationState: state,
+            missingFiles: []
         )
+    }
+
+    nonisolated private static func recordVerifiedInstallation() {
+        try? FileManager.default.createDirectory(
+            at: IosSpeechModelPaths.applicationSupportDirectory,
+            withIntermediateDirectories: true
+        )
+        try? EmbeddedSpeechModel.shared.manifest.version.write(
+            to: IosSpeechModelPaths.receiptFile,
+            atomically: true,
+            encoding: .utf8
+        )
+        try? removeItemIfExists(IosSpeechModelPaths.invalidFile)
+    }
+
+    nonisolated private static func recordInvalidInstallation(_ reason: String) {
+        try? reason.write(to: IosSpeechModelPaths.invalidFile, atomically: true, encoding: .utf8)
     }
 
     nonisolated private static func validateModelFiles(in directory: URL) -> ModelValidationResult {
@@ -221,6 +402,8 @@ final class IosSpeechModelStore: ObservableObject {
             do {
                 try fileManager.moveItem(at: IosSpeechModelPaths.installDirectory, to: IosSpeechModelPaths.modelDirectory)
                 try removeItemIfExists(IosSpeechModelPaths.backupDirectory)
+                recordVerifiedInstallation()
+                IosNativeTranscriber.resetModel()
                 return InstallResult(message: "Speech model installed.")
             } catch {
                 if fileManager.fileExists(atPath: IosSpeechModelPaths.backupDirectory.path) {
@@ -311,6 +494,8 @@ final class IosSpeechModelStore: ObservableObject {
             }
 
             try activateStagedModel()
+            recordVerifiedInstallation()
+            IosNativeTranscriber.resetModel()
             return InstallResult(message: "Speech model downloaded and installed.")
         } catch is CancellationError {
             try? removeItemIfExists(IosSpeechModelPaths.stagingDirectory)
@@ -461,8 +646,7 @@ final class IosSpeechModelStore: ObservableObject {
 
     nonisolated private static func manifestFiles() -> [IosSpeechModelManifestFile] {
         let manifest = EmbeddedSpeechModel.shared.manifest
-        return manifest.files.compactMap { item in
-            guard let file = item as? SpeechModelFile else { return nil }
+        return manifest.files.map { file in
             return IosSpeechModelManifestFile(
                 name: file.name,
                 sizeBytes: file.sizeBytes,
@@ -482,6 +666,12 @@ final class IosSpeechModelStore: ObservableObject {
         func cleanup() {
             try? IosSpeechModelStore.removeItemIfExists(IosSpeechModelPaths.stagingDirectory)
         }
+    }
+
+    private struct PreparationResult {
+        let directory: URL?
+        let invalidInstallation: Bool
+        let message: String?
     }
 
     private struct IosSpeechModelManifestFile {

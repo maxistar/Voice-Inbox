@@ -3,6 +3,7 @@ package me.maxistar.voiceinbox
 import me.maxistar.voiceinbox.core.*
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -35,6 +36,38 @@ class SpeechModelRepositoryTest {
             installed.canonicalFile,
             (recreated.inspect() as InstalledSpeechModelState.Ready).directory.canonicalFile,
         )
+    }
+
+    @Test
+    fun lightweightInspectionDoesNotHashInstalledPayloads() {
+        val repository = repository()
+        repository.prepareForInstall().getOrThrow()
+        writeValidStaging(repository)
+        val installed = repository.activate().getOrThrow()
+        installed.resolve("model.bin").writeText("other")
+
+        val lightweight = repository.inspectLightweight() as InstalledSpeechModelState.Ready
+        assertEquals(InstalledSpeechModelState.Ready.Verification.VERIFIED, lightweight.verification)
+        assertTrue(repository.inspect() is InstalledSpeechModelState.Invalid)
+        assertTrue(repository.inspectLightweight() is InstalledSpeechModelState.Invalid)
+    }
+
+    @Test
+    fun legacyInstallationWithoutReceiptIsAvailableLightweight() {
+        val repository = repository()
+        repository.prepareForInstall().getOrThrow()
+        writeValidStaging(repository)
+        repository.activate().getOrThrow()
+        File(temporaryFolder.root, "models/active-model").delete()
+
+        val legacy = repository.inspectLightweight() as InstalledSpeechModelState.Ready
+        assertEquals(InstalledSpeechModelState.Ready.Verification.LEGACY_UNVERIFIED, legacy.verification)
+        assertTrue(repository.inspect() is InstalledSpeechModelState.Ready)
+        assertEquals(
+            InstalledSpeechModelState.Ready.Verification.VERIFIED,
+            (repository.inspectLightweight() as InstalledSpeechModelState.Ready).verification,
+        )
+        assertTrue(File(temporaryFolder.root, "models/active-model").isFile)
     }
 
     @Test
@@ -92,6 +125,98 @@ class SpeechModelRepositoryTest {
         )
 
         assertTrue(repository.prepareForInstall().isFailure)
+    }
+
+    @Test
+    fun freshImportClearsCurrentStagingAndChecksFullModelSpace() {
+        val repository = repository()
+        repository.prepareForInstall().getOrThrow()
+        writeValidStaging(repository)
+
+        repository.prepareFreshImport().getOrThrow()
+
+        assertTrue(repository.stagingDirectory.isDirectory)
+        assertTrue(repository.stagingDirectory.listFiles().orEmpty().isEmpty())
+
+        val insufficient = SpeechModelRepository(
+            root = File(temporaryFolder.root, "small-models"),
+            manifest = testManifest,
+            usableSpace = { testManifest.requiredFreeBytes - 1 },
+        )
+        assertTrue(insufficient.prepareFreshImport().isFailure)
+    }
+
+    @Test
+    fun verifiedTemporaryFileIsAcceptedIntoStaging() {
+        val repository = repository()
+        repository.prepareFreshImport().getOrThrow()
+        val entry = testManifest.files.first()
+        repository.temporaryFile(entry).writeBytes(testFiles.getValue(entry.name))
+
+        val accepted = repository.acceptTemporaryFile(entry).getOrThrow()
+
+        assertEquals(repository.stagingFile(entry), accepted)
+        assertTrue(accepted.isFile)
+        assertFalse(repository.temporaryFile(entry).exists())
+    }
+
+    @Test
+    fun activationFailureRestoresPreviousValidModel() {
+        val initial = repository()
+        initial.prepareForInstall().getOrThrow()
+        writeValidStaging(initial)
+        initial.activate().getOrThrow()
+
+        val failing = SpeechModelRepository(
+            root = File(temporaryFolder.root, "models"),
+            manifest = testManifest,
+            usableSpace = { Long.MAX_VALUE },
+            moveDirectory = { source, destination ->
+                if (source.path.contains("${File.separator}staging${File.separator}")) false
+                else source.renameTo(destination)
+            },
+        )
+        failing.prepareFreshImport().getOrThrow()
+        writeValidStaging(failing)
+
+        assertTrue(failing.activate().isFailure)
+        assertTrue(repository().inspect() is InstalledSpeechModelState.Ready)
+    }
+
+    @Test
+    fun interruptedReplacementRestoresBackupDuringInspection() {
+        val repository = repository()
+        repository.prepareForInstall().getOrThrow()
+        writeValidStaging(repository)
+        val installed = repository.activate().getOrThrow()
+        val root = File(temporaryFolder.root, "models")
+        val backup = File(root, "installed/${testManifest.version}.backup")
+        assertTrue(installed.renameTo(backup))
+        installed.mkdirs()
+        installed.resolve("model.bin").writeText("partial")
+        File(root, "activation-model").writeText("replacement")
+
+        val recovered = repository().inspectLightweight()
+
+        assertTrue(recovered is InstalledSpeechModelState.Ready)
+        assertFalse(backup.exists())
+        assertFalse(File(root, "activation-model").exists())
+        assertEquals("model", installed.resolve("model.bin").readText())
+    }
+
+    @Test
+    fun staleBackupIsRemovedAfterCompletedActivation() {
+        val repository = repository()
+        repository.prepareForInstall().getOrThrow()
+        writeValidStaging(repository)
+        val installed = repository.activate().getOrThrow()
+        val backup = File(temporaryFolder.root, "models/installed/${testManifest.version}.backup")
+        installed.copyRecursively(backup)
+
+        repository.cleanupStaleState()
+
+        assertFalse(backup.exists())
+        assertTrue(repository.inspectLightweight() is InstalledSpeechModelState.Ready)
     }
 
     private fun repository() = SpeechModelRepository(

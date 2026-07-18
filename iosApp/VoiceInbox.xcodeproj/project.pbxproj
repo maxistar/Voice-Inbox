@@ -19,7 +19,43 @@
 		101010101010101010101036 /* IosSingleFileTranscriptionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101010101010101010101037 /* IosSingleFileTranscriptionController.swift */; };
 		101010101010101010101039 /* IosSpeechModelStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101010101010101010101041 /* IosSpeechModelStore.swift */; };
 		101010101010101010101040 /* IosSpeechModelDirectoryPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101010101010101010101042 /* IosSpeechModelDirectoryPicker.swift */; };
+		18B94FCC65FAAF5B349BF28B /* IosSharedImportStaging.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DF805AFB19C13EC1D442253 /* IosSharedImportStaging.swift */; };
+		361EE03677F4524C001986C0 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2A88E9CFF2023E878C6EC22 /* ShareViewController.swift */; };
+		5E50C86D75D247316B5953AB /* VoiceInboxShareExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 242890FE4BBC56636FBA9F10 /* VoiceInboxShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		9FAC76B26E6BD4116D968475 /* IosSharedImportStaging.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD030301C0E14C9932DCBFE6 /* IosSharedImportStaging.swift */; };
+		A10000000000000000000001 /* DeferredSpeechModelLoadingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000002 /* DeferredSpeechModelLoadingTests.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		B02BB42352D5BAE85F16E7A7 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 101010101010101010101010 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D93524F1DBD24C87F8DF0EB9;
+			remoteInfo = VoiceInboxShareExtension;
+		};
+		A1000000000000000000000A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 101010101010101010101010 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 101010101010101010101007;
+			remoteInfo = VoiceInbox;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		5885D5F7784EAD2E2CF6BB3D /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				5E50C86D75D247316B5953AB /* VoiceInboxShareExtension.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		101010101010101010101003 /* VoiceInbox.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VoiceInbox.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -35,10 +71,33 @@
 		101010101010101010101037 /* IosSingleFileTranscriptionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosSingleFileTranscriptionController.swift; sourceTree = "<group>"; };
 		101010101010101010101041 /* IosSpeechModelStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosSpeechModelStore.swift; sourceTree = "<group>"; };
 		101010101010101010101042 /* IosSpeechModelDirectoryPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosSpeechModelDirectoryPicker.swift; sourceTree = "<group>"; };
+		1DF805AFB19C13EC1D442253 /* IosSharedImportStaging.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = IosSharedImportStaging.swift; sourceTree = "<group>"; };
+		242890FE4BBC56636FBA9F10 /* VoiceInboxShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = VoiceInboxShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A2A88E9CFF2023E878C6EC22 /* ShareViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		A3B22C5C663FBCBBFAB0A81F /* VoiceInboxShareExtension.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = VoiceInboxShareExtension.entitlements; sourceTree = "<group>"; };
+		CD030301C0E14C9932DCBFE6 /* IosSharedImportStaging.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = IosSharedImportStaging.swift; path = ../VoiceInbox/IosSharedImportStaging.swift; sourceTree = "<group>"; };
+		EF9FEAB9A5BF00B4E66B996C /* VoiceInbox.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = VoiceInbox.entitlements; sourceTree = "<group>"; };
+		F63411837D138D0E90F5BA1D /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A10000000000000000000002 /* DeferredSpeechModelLoadingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeferredSpeechModelLoadingTests.swift; sourceTree = "<group>"; };
+		A10000000000000000000003 /* VoiceInboxTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VoiceInboxTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		101010101010101010101004 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9628A0A1DCA14071F9ADBFB8 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10000000000000000000004 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -53,6 +112,8 @@
 			children = (
 				101010101010101010101013 /* VoiceInbox */,
 				101010101010101010101006 /* Products */,
+				F139417D5AA7BD6EFD2ECADD /* VoiceInboxShareExtension */,
+				A10000000000000000000005 /* VoiceInboxTests */,
 			);
 			sourceTree = "<group>";
 		};
@@ -60,6 +121,8 @@
 			isa = PBXGroup;
 			children = (
 				101010101010101010101003 /* VoiceInbox.app */,
+				242890FE4BBC56636FBA9F10 /* VoiceInboxShareExtension.appex */,
+				A10000000000000000000003 /* VoiceInboxTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -79,8 +142,29 @@
 				101010101010101010101026 /* IosMainScreenShellState.swift */,
 				101010101010101010101024 /* SettingsView.swift */,
 				101010101010101010101034 /* Assets.xcassets */,
+				1DF805AFB19C13EC1D442253 /* IosSharedImportStaging.swift */,
+				EF9FEAB9A5BF00B4E66B996C /* VoiceInbox.entitlements */,
 			);
 			path = VoiceInbox;
+			sourceTree = "<group>";
+		};
+		F139417D5AA7BD6EFD2ECADD /* VoiceInboxShareExtension */ = {
+			isa = PBXGroup;
+			children = (
+				A2A88E9CFF2023E878C6EC22 /* ShareViewController.swift */,
+				CD030301C0E14C9932DCBFE6 /* IosSharedImportStaging.swift */,
+				F63411837D138D0E90F5BA1D /* Info.plist */,
+				A3B22C5C663FBCBBFAB0A81F /* VoiceInboxShareExtension.entitlements */,
+			);
+			path = VoiceInboxShareExtension;
+			sourceTree = "<group>";
+		};
+		A10000000000000000000005 /* VoiceInboxTests */ = {
+			isa = PBXGroup;
+			children = (
+				A10000000000000000000002 /* DeferredSpeechModelLoadingTests.swift */,
+			);
+			path = VoiceInboxTests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -95,15 +179,52 @@
 				101010101010101010101009 /* Sources */,
 				101010101010101010101035 /* Resources */,
 				101010101010101010101004 /* Frameworks */,
+				5885D5F7784EAD2E2CF6BB3D /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				7AAEC850980B5408864DC85C /* PBXTargetDependency */,
 			);
 			name = VoiceInbox;
 			productName = VoiceInbox;
 			productReference = 101010101010101010101003 /* VoiceInbox.app */;
 			productType = "com.apple.product-type.application";
+		};
+		D93524F1DBD24C87F8DF0EB9 /* VoiceInboxShareExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AB4D7BF990566F2ADFD3580A /* Build configuration list for PBXNativeTarget "VoiceInboxShareExtension" */;
+			buildPhases = (
+				76207A5A815CD15CCD17A632 /* Sources */,
+				9628A0A1DCA14071F9ADBFB8 /* Frameworks */,
+				84DEA1E9E8C3D8ECF1E3BF03 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = VoiceInboxShareExtension;
+			productName = VoiceInboxShareExtension;
+			productReference = 242890FE4BBC56636FBA9F10 /* VoiceInboxShareExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		A10000000000000000000006 /* VoiceInboxTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1000000000000000000000D /* Build configuration list for PBXNativeTarget "VoiceInboxTests" */;
+			buildPhases = (
+				A10000000000000000000008 /* Sources */,
+				A10000000000000000000004 /* Frameworks */,
+				A10000000000000000000007 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A10000000000000000000009 /* PBXTargetDependency */,
+			);
+			name = VoiceInboxTests;
+			productName = VoiceInboxTests;
+			productReference = A10000000000000000000003 /* VoiceInboxTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -116,6 +237,9 @@
 				LastUpgradeCheck = 1600;
 				TargetAttributes = {
 					101010101010101010101007 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					A10000000000000000000006 = {
 						CreatedOnToolsVersion = 16.0;
 					};
 				};
@@ -134,6 +258,8 @@
 			projectRoot = "";
 			targets = (
 				101010101010101010101007 /* VoiceInbox */,
+				D93524F1DBD24C87F8DF0EB9 /* VoiceInboxShareExtension */,
+				A10000000000000000000006 /* VoiceInboxTests */,
 			);
 		};
 /* End PBXProject section */
@@ -144,6 +270,20 @@
 			buildActionMask = 2147483647;
 			files = (
 				101010101010101010101033 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		84DEA1E9E8C3D8ECF1E3BF03 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10000000000000000000007 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -210,10 +350,42 @@
 				101010101010101010101021 /* IosScheduledTranscriptionSettingsStore.swift in Sources */,
 				101010101010101010101025 /* IosMainScreenShellState.swift in Sources */,
 				101010101010101010101022 /* SettingsView.swift in Sources */,
+				18B94FCC65FAAF5B349BF28B /* IosSharedImportStaging.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		76207A5A815CD15CCD17A632 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				361EE03677F4524C001986C0 /* ShareViewController.swift in Sources */,
+				9FAC76B26E6BD4116D968475 /* IosSharedImportStaging.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10000000000000000000008 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000001 /* DeferredSpeechModelLoadingTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		7AAEC850980B5408864DC85C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = VoiceInboxShareExtension;
+			target = D93524F1DBD24C87F8DF0EB9 /* VoiceInboxShareExtension */;
+			targetProxy = B02BB42352D5BAE85F16E7A7 /* PBXContainerItemProxy */;
+		};
+		A10000000000000000000009 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 101010101010101010101007 /* VoiceInbox */;
+			targetProxy = A1000000000000000000000A /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		101010101010101010101017 /* Debug */ = {
@@ -330,8 +502,9 @@
 		101010101010101010101019 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = VoiceInbox/VoiceInbox.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 2835P3MJR8;
@@ -380,8 +553,9 @@
 		101010101010101010101020 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = VoiceInbox/VoiceInbox.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 2835P3MJR8;
@@ -425,6 +599,91 @@
 			};
 			name = Release;
 		};
+		647FF692FFBAEA14F829FBEF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = VoiceInboxShareExtension/VoiceInboxShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2835P3MJR8;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = VoiceInboxShareExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = me.maxistar.voiceinbox.ios.share;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		912904D2DC8D23268FD953E8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = VoiceInboxShareExtension/VoiceInboxShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2835P3MJR8;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = VoiceInboxShareExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = me.maxistar.voiceinbox.ios.share;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		A1000000000000000000000B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 2835P3MJR8;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				PRODUCT_BUNDLE_IDENTIFIER = me.maxistar.voiceinbox.ios.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/VoiceInbox.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/VoiceInbox";
+			};
+			name = Debug;
+		};
+		A1000000000000000000000C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 2835P3MJR8;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				PRODUCT_BUNDLE_IDENTIFIER = me.maxistar.voiceinbox.ios.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/VoiceInbox.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/VoiceInbox";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -442,6 +701,24 @@
 			buildConfigurations = (
 				101010101010101010101017 /* Debug */,
 				101010101010101010101018 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AB4D7BF990566F2ADFD3580A /* Build configuration list for PBXNativeTarget "VoiceInboxShareExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				912904D2DC8D23268FD953E8 /* Release */,
+				647FF692FFBAEA14F829FBEF /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1000000000000000000000D /* Build configuration list for PBXNativeTarget "VoiceInboxTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1000000000000000000000B /* Debug */,
+				A1000000000000000000000C /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

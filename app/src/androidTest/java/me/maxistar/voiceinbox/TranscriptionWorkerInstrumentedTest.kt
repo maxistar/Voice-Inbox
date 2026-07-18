@@ -7,6 +7,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.core.content.FileProvider
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import me.maxistar.voiceinbox.test.R as TestR
@@ -28,6 +29,7 @@ class TranscriptionWorkerInstrumentedTest {
     @Before
     fun cleanCatalog() {
         targetContext.deleteDatabase(AndroidSqlDelightAudioCatalogFactory.DATABASE_NAME)
+        File(targetContext.filesDir, AndroidAudioImportConstants.DIRECTORY_NAME).deleteRecursively()
     }
 
     @Test
@@ -76,6 +78,55 @@ class TranscriptionWorkerInstrumentedTest {
                 .get(30, TimeUnit.SECONDS)
                 .size,
         )
+    }
+
+    @Test
+    fun importOnlyEntryCanRunAndRetryWithoutSelectedFolder() {
+        requireModel()
+        val importDirectory = File(targetContext.filesDir, AndroidAudioImportConstants.DIRECTORY_NAME)
+            .apply { mkdirs() }
+        val audio = File(importDirectory, "invalid-import.wav").apply {
+            writeText("not audio")
+        }
+        val audioUri = FileProvider.getUriForFile(
+            targetContext,
+            "${targetContext.packageName}.files",
+            audio,
+        )
+        val output = File(targetContext.cacheDir, "import-only-output.txt").apply {
+            writeText("unchanged")
+        }
+        val entryId = withRepository { repository ->
+            repository.upsertImportedFile(
+                folderUri = AndroidAudioImportConstants.SOURCE_ID,
+                documentUri = audioUri.toString(),
+                displayName = "invalid-import.wav",
+                mimeType = "audio/wav",
+                sizeBytes = audio.length(),
+                importedAtMillis = 10,
+                state = AudioFileState.PENDING,
+                lastError = null,
+                processedAtMillis = null,
+                transcriptText = null,
+                durationUs = null,
+            ).id
+        }
+        val manager = WorkManager.getInstance(targetContext)
+        manager.cancelUniqueWork(TranscriptionWorker.UNIQUE_WORK_NAME)
+            .result.get(30, TimeUnit.SECONDS)
+
+        val first = TranscriptionWorker.enqueueAll(targetContext, null, Uri.fromFile(output))
+        assertEquals(WorkInfo.State.SUCCEEDED, waitForFinished(manager, first).state)
+        withRepository { repository ->
+            assertEquals(
+                AudioFileState.FAILED,
+                repository.processedEntries(AndroidAudioImportConstants.SOURCE_ID).single().state,
+            )
+        }
+
+        val retry = TranscriptionWorker.enqueueRetry(targetContext, null, Uri.fromFile(output), entryId)
+        assertEquals(WorkInfo.State.SUCCEEDED, waitForFinished(manager, retry).state)
+        assertEquals("unchanged", output.readText())
     }
 
     @Test

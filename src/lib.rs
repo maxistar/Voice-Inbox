@@ -20,7 +20,7 @@ use jni::sys::{jboolean, jstring, JNI_FALSE, JNI_TRUE};
 use jni::JNIEnv;
 #[cfg(target_os = "android")]
 use std::path::PathBuf;
-#[cfg(any(not(target_os = "ios"), all(target_os = "ios", feature = "ios-onnx")))]
+#[cfg(any(target_os = "android", all(target_os = "ios", feature = "ios-onnx")))]
 use transcribe_rs::TranscriptionEngine;
 
 #[cfg(any(not(target_os = "ios"), all(target_os = "ios", feature = "ios-onnx")))]
@@ -76,6 +76,15 @@ pub unsafe extern "system" fn Java_me_maxistar_voiceinbox_NativeTranscriptionBri
 
 #[cfg(target_os = "android")]
 #[no_mangle]
+pub extern "system" fn Java_me_maxistar_voiceinbox_NativeTranscriptionBridge_reset(
+    _env: JNIEnv,
+    _class: JClass,
+) {
+    engine::invalidate_loaded_model();
+}
+
+#[cfg(target_os = "android")]
+#[no_mangle]
 pub unsafe extern "system" fn Java_me_maxistar_voiceinbox_NativeTranscriptionBridge_transcribeChunkJson(
     env: JNIEnv,
     _class: JClass,
@@ -86,7 +95,10 @@ pub unsafe extern "system" fn Java_me_maxistar_voiceinbox_NativeTranscriptionBri
         Err(_) => return std::ptr::null_mut(),
     };
     let mut buffer = vec![0.0f32; length];
-    if env.get_float_array_region(&samples, 0, &mut buffer).is_err() {
+    if env
+        .get_float_array_region(&samples, 0, &mut buffer)
+        .is_err()
+    {
         return std::ptr::null_mut();
     }
 
@@ -225,6 +237,16 @@ pub unsafe extern "C" fn voiceinbox_transcription_initialize(
 
     true
 }
+
+#[cfg(all(target_os = "ios", feature = "ios-onnx"))]
+#[no_mangle]
+pub extern "C" fn voiceinbox_transcription_reset() {
+    engine::invalidate_loaded_model();
+}
+
+#[cfg(all(target_os = "ios", not(feature = "ios-onnx")))]
+#[no_mangle]
+pub extern "C" fn voiceinbox_transcription_reset() {}
 
 #[cfg(all(target_os = "ios", not(feature = "ios-onnx")))]
 #[no_mangle]

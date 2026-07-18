@@ -25,7 +25,6 @@ class TranscriptionWorker(
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val folderUri = inputData.getString(KEY_FOLDER_URI)
-            ?: return@withContext failure("Audio folder is missing")
         val outputUri = inputData.getString(KEY_OUTPUT_URI)?.let(Uri::parse)
             ?: return@withContext failure("Output file is missing")
         val retryId = inputData.getLong(KEY_RETRY_ID, NO_RETRY_ID).takeIf { it != NO_RETRY_ID }
@@ -34,14 +33,13 @@ class TranscriptionWorker(
 
         try {
             setForeground(foreground("Preparing transcription", 0, true))
-            val model = SpeechModelRepository(
+            val modelRepository = SpeechModelRepository(
                 applicationContext.noBackupFilesDir.resolve("models"),
-            ).inspect() as? InstalledSpeechModelState.Ready
-                ?: return@withContext failure("Speech model is not installed")
-            publish("Loading model", null, 0, 0, null, null)
-            if (!NativeTranscriptionBridge.initialize(model.directory.absolutePath)) {
-                return@withContext failure("Speech model failed to load")
-            }
+            )
+            publish("Preparing speech model", null, null, 0, 0, null, null)
+            SpeechModelPreparation.prepare(modelRepository) { directory ->
+                NativeTranscriptionBridge.initialize(directory.absolutePath)
+            }.getOrElse { return@withContext failure(it.message ?: "Speech model preparation failed") }
 
             val batch = BatchTranscriptionUseCase(
                 catalog = catalog,
@@ -53,7 +51,9 @@ class TranscriptionWorker(
             )
             val result = batch.transcribe(
                 BatchTranscriptionInput(
-                    folderId = folderUri,
+                    sourceScope = AudioCatalogSourceScope.of(
+                        listOfNotNull(AndroidAudioImportConstants.SOURCE_ID, folderUri),
+                    ),
                     outputId = outputUri.toString(),
                     runId = id.toString(),
                     retryEntryId = retryId,
@@ -81,6 +81,7 @@ class TranscriptionWorker(
 
     private suspend fun publish(
         phase: String,
+        activeEntryId: Long?,
         filename: String?,
         completed: Int,
         total: Int,
@@ -90,6 +91,7 @@ class TranscriptionWorker(
         val percent = BatchTranscriptionRules.percent(processedUs, durationUs)
         val data = progressData(
             phase,
+            activeEntryId,
             filename,
             completed,
             total,
@@ -105,6 +107,7 @@ class TranscriptionWorker(
     private fun publishAsync(progress: BatchTranscriptionProgress) {
         publishAsync(
             phase = progress.phase,
+            activeEntryId = progress.activeEntryId,
             filename = progress.filename,
             completed = progress.completed,
             total = progress.total,
@@ -117,6 +120,7 @@ class TranscriptionWorker(
 
     private fun publishAsync(
         phase: String,
+        activeEntryId: Long?,
         filename: String?,
         completed: Int,
         total: Int,
@@ -127,6 +131,7 @@ class TranscriptionWorker(
     ) {
         val data = progressData(
             phase,
+            activeEntryId,
             filename,
             completed,
             total,
@@ -147,6 +152,7 @@ class TranscriptionWorker(
 
     private fun progressData(
         phase: String,
+        activeEntryId: Long?,
         filename: String?,
         completed: Int,
         total: Int,
@@ -156,6 +162,7 @@ class TranscriptionWorker(
         progress: Int?,
     ) = workDataOf(
         KEY_PHASE to phase,
+        KEY_ACTIVE_ENTRY_ID to (activeEntryId ?: NO_ENTRY_ID),
         KEY_FILENAME to filename,
         KEY_COMPLETED_FILES to completed,
         KEY_TOTAL_FILES to total,
@@ -238,6 +245,7 @@ class TranscriptionWorker(
         const val KEY_OUTPUT_URI = "output-uri"
         const val KEY_RETRY_ID = "retry-id"
         const val KEY_PHASE = "phase"
+        const val KEY_ACTIVE_ENTRY_ID = "active-entry-id"
         const val KEY_FILENAME = "filename"
         const val KEY_COMPLETED_FILES = "completed-files"
         const val KEY_TOTAL_FILES = "total-files"
@@ -249,33 +257,40 @@ class TranscriptionWorker(
         const val KEY_ERROR = "error"
 
         private const val NO_RETRY_ID = -1L
+        const val NO_ENTRY_ID = -1L
         private const val NOTIFICATION_CHANNEL = "audio-transcription"
         private const val NOTIFICATION_ID = 2109
 
-        fun enqueueAll(context: Context, folderUri: Uri, outputUri: Uri): UUID =
+        fun enqueueAll(context: Context, folderUri: Uri?, outputUri: Uri): UUID =
             enqueue(context, folderUri, outputUri, null)
 
         fun enqueueRetry(
             context: Context,
-            folderUri: Uri,
+            folderUri: Uri?,
+            outputUri: Uri,
+            entryId: Long,
+        ): UUID = enqueue(context, folderUri, outputUri, entryId)
+
+        fun enqueueEntry(
+            context: Context,
+            folderUri: Uri?,
             outputUri: Uri,
             entryId: Long,
         ): UUID = enqueue(context, folderUri, outputUri, entryId)
 
         private fun enqueue(
             context: Context,
-            folderUri: Uri,
+            folderUri: Uri?,
             outputUri: Uri,
             retryId: Long?,
         ): UUID {
+            val input = androidx.work.Data.Builder()
+                .putString(KEY_OUTPUT_URI, outputUri.toString())
+                .putLong(KEY_RETRY_ID, retryId ?: NO_RETRY_ID)
+                .apply { folderUri?.let { putString(KEY_FOLDER_URI, it.toString()) } }
+                .build()
             val request = OneTimeWorkRequestBuilder<TranscriptionWorker>()
-                .setInputData(
-                    workDataOf(
-                        KEY_FOLDER_URI to folderUri.toString(),
-                        KEY_OUTPUT_URI to outputUri.toString(),
-                        KEY_RETRY_ID to (retryId ?: NO_RETRY_ID),
-                    ),
-                )
+                .setInputData(input)
                 .build()
             WorkManager.getInstance(context).enqueueUniqueWork(
                 UNIQUE_WORK_NAME,

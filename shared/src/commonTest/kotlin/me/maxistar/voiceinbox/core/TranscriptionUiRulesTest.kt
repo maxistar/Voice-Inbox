@@ -6,9 +6,26 @@ import kotlin.test.Test
 
 class TranscriptionUiRulesTest {
     @Test
+    fun importedAudioAllowsTranscriptionWithoutSelectedFolder() {
+        val controls = TranscriptionUiRules.catalogControls(
+            modelInstallationState = SpeechModelInstallationState.INSTALLED,
+            outputSelected = true,
+            folderSelected = false,
+            pendingCount = 1,
+            transcriptionState = TranscriptionObservationState.IDLE,
+            scanning = false,
+            audioInputAvailable = true,
+        )
+
+        assertEquals(true, controls.transcribeAllEnabled)
+        assertEquals(true, controls.retryEnabled)
+        assertEquals(false, controls.refreshEnabled)
+    }
+
+    @Test
     fun controlsRequireModelSelectionsPendingWorkAndIdleState() {
         assertEquals(
-            CatalogControlState(false, false, true, true, false, false, false),
+            CatalogControlState(true, true, true, true, false, false, false),
             controls(modelReady = false),
         )
         assertEquals(
@@ -40,11 +57,51 @@ class TranscriptionUiRulesTest {
     }
 
     @Test
+    fun storageSelectionDoesNotRequireAnInstalledModel() {
+        listOf(
+            SpeechModelInstallationState.NOT_INSTALLED,
+            SpeechModelInstallationState.INSTALLING,
+            SpeechModelInstallationState.INVALID,
+            SpeechModelInstallationState.INSTALLED,
+        ).forEach { modelState ->
+            val controls = TranscriptionUiRules.catalogControls(
+                modelInstallationState = modelState,
+                outputSelected = false,
+                folderSelected = false,
+                pendingCount = 1,
+                transcriptionState = TranscriptionObservationState.IDLE,
+                scanning = false,
+            )
+
+            assertEquals(true, controls.outputEnabled, modelState.name)
+            assertEquals(true, controls.folderEnabled, modelState.name)
+            assertEquals(false, controls.refreshEnabled, modelState.name)
+            assertEquals(false, controls.transcribeAllEnabled, modelState.name)
+            assertEquals(false, controls.retryEnabled, modelState.name)
+        }
+    }
+
+    @Test
+    fun activeWorkBlocksStorageSelectionWithoutAnInstalledModel() {
+        val controls = TranscriptionUiRules.catalogControls(
+            modelInstallationState = SpeechModelInstallationState.INSTALLING,
+            outputSelected = false,
+            folderSelected = false,
+            pendingCount = 0,
+            transcriptionState = TranscriptionObservationState.ACTIVE,
+            scanning = false,
+        )
+
+        assertEquals(false, controls.outputEnabled)
+        assertEquals(false, controls.folderEnabled)
+    }
+
+    @Test
     fun selectionControlsAreDisabledWhileScanningOrTranscribing() {
         assertEquals(
             CatalogControlState(false, false, false, false, false, false, false),
             TranscriptionUiRules.catalogControls(
-                modelReady = true,
+                modelInstallationState = SpeechModelInstallationState.INSTALLED,
                 outputSelected = true,
                 folderSelected = true,
                 pendingCount = 2,
@@ -55,7 +112,7 @@ class TranscriptionUiRulesTest {
         assertEquals(
             CatalogControlState(false, false, false, false, false, false, false),
             TranscriptionUiRules.catalogControls(
-                modelReady = true,
+                modelInstallationState = SpeechModelInstallationState.INSTALLED,
                 outputSelected = true,
                 folderSelected = true,
                 pendingCount = 2,
@@ -70,7 +127,7 @@ class TranscriptionUiRulesTest {
         assertEquals(
             CatalogControlState(false, false, false, false, false, false, false),
             TranscriptionUiRules.catalogControls(
-                modelReady = true,
+                modelInstallationState = SpeechModelInstallationState.INSTALLED,
                 outputSelected = true,
                 folderSelected = true,
                 pendingCount = 2,
@@ -432,7 +489,7 @@ class TranscriptionUiRulesTest {
         pending: Int = 0,
         active: Boolean = false,
     ) = TranscriptionUiRules.catalogControls(
-        modelReady,
+        if (modelReady) SpeechModelInstallationState.INSTALLED else SpeechModelInstallationState.NOT_INSTALLED,
         output,
         folder,
         pending,
@@ -466,10 +523,14 @@ class TranscriptionUiRulesTest {
     ) = TranscriptionUiRules.statusProgressBlock(
         StatusProgressInput(
             modelMessage = modelMessage,
-            modelLoading = modelLoading,
+            modelInstallationState = when {
+                modelLoading -> SpeechModelInstallationState.INSTALLING
+                modelReady -> SpeechModelInstallationState.INSTALLED
+                else -> SpeechModelInstallationState.NOT_INSTALLED
+            },
+            modelRuntimeState = SpeechModelRuntimeState.UNLOADED,
             modelDownloadAvailable = modelDownloadAvailable,
             modelDownloadProgress = modelDownloadProgress,
-            modelReady = modelReady,
             outputSelected = output,
             folderSelected = folder,
             pendingCount = pending,

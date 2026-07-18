@@ -2,14 +2,9 @@ package me.maxistar.voiceinbox
 
 import me.maxistar.voiceinbox.core.*
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.content.Context
-import android.os.Build
-import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
-import androidx.work.ForegroundInfo
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -36,7 +31,7 @@ class SpeechModelDownloadWorker(
         .build()
 
     override suspend fun doWork(): Result {
-        setForeground(createForegroundInfo(0, "Preparing model download"))
+        setForeground(SpeechModelInstallationWork.foregroundInfo(applicationContext, 0, "Preparing model download"))
         repository.prepareForInstall().getOrElse {
             return failure(it.message ?: "Model installation preflight failed")
         }
@@ -85,6 +80,7 @@ class SpeechModelDownloadWorker(
         val installedDirectory = repository.activate().getOrElse {
             return failure(it.message ?: "Failed to activate speech model")
         }
+        SpeechModelPreparation.invalidate(NativeTranscriptionBridge::reset)
         return Result.success(workDataOf(KEY_MODEL_PATH to installedDirectory.absolutePath))
     }
 
@@ -133,49 +129,23 @@ class SpeechModelDownloadWorker(
                 KEY_MESSAGE to message,
             ),
         )
-        setForeground(createForegroundInfo(percent, message))
-    }
-
-    private fun createForegroundInfo(progress: Int, message: String): ForegroundInfo {
-        val manager =
-            applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            manager.createNotificationChannel(
-                NotificationChannel(
-                    NOTIFICATION_CHANNEL,
-                    "Speech model download",
-                    NotificationManager.IMPORTANCE_LOW,
-                ),
-            )
-        }
-        val notification = NotificationCompat.Builder(applicationContext, NOTIFICATION_CHANNEL)
-            .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setContentTitle("Voice Inbox")
-            .setContentText(message)
-            .setOnlyAlertOnce(true)
-            .setOngoing(true)
-            .setProgress(100, progress, false)
-            .build()
-        return ForegroundInfo(NOTIFICATION_ID, notification)
+        setForeground(SpeechModelInstallationWork.foregroundInfo(applicationContext, percent, message))
     }
 
     private fun failure(message: String): Result =
         Result.failure(workDataOf(KEY_ERROR to message))
 
     companion object {
-        const val UNIQUE_WORK_NAME = "speech-model-installation"
-        const val KEY_BYTES_DOWNLOADED = "bytes-downloaded"
-        const val KEY_TOTAL_BYTES = "total-bytes"
-        const val KEY_MESSAGE = "message"
-        const val KEY_ERROR = "error"
-        const val KEY_MODEL_PATH = "model-path"
+        const val UNIQUE_WORK_NAME = SpeechModelInstallationWork.UNIQUE_WORK_NAME
+        const val KEY_BYTES_DOWNLOADED = SpeechModelInstallationWork.KEY_BYTES_DOWNLOADED
+        const val KEY_TOTAL_BYTES = SpeechModelInstallationWork.KEY_TOTAL_BYTES
+        const val KEY_MESSAGE = SpeechModelInstallationWork.KEY_MESSAGE
+        const val KEY_ERROR = SpeechModelInstallationWork.KEY_ERROR
+        const val KEY_MODEL_PATH = SpeechModelInstallationWork.KEY_MODEL_PATH
 
         private const val MAX_ATTEMPTS = 3
         private const val RETRY_DELAY_MS = 2_000L
         private const val PROGRESS_STEP_BYTES = 2L * 1024L * 1024L
-        private const val NOTIFICATION_CHANNEL = "speech-model-download"
-        private const val NOTIFICATION_ID = 1907
-
         fun enqueue(context: Context) {
             val request = OneTimeWorkRequestBuilder<SpeechModelDownloadWorker>().build()
             WorkManager.getInstance(context).enqueueUniqueWork(

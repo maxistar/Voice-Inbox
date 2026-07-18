@@ -64,6 +64,7 @@ struct IosImportedAudioFile: Codable, Identifiable, Equatable {
     var transcriptText: String?
     var durationUs: Int64?
     var lastError: String?
+    var processedAt: Date?
 
     init(
         id: Int64,
@@ -74,7 +75,8 @@ struct IosImportedAudioFile: Codable, Identifiable, Equatable {
         status: IosImportedAudioStatus = .pending,
         transcriptText: String? = nil,
         durationUs: Int64? = nil,
-        lastError: String? = nil
+        lastError: String? = nil,
+        processedAt: Date? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -85,6 +87,7 @@ struct IosImportedAudioFile: Codable, Identifiable, Equatable {
         self.transcriptText = transcriptText
         self.durationUs = durationUs
         self.lastError = lastError
+        self.processedAt = processedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -98,6 +101,7 @@ struct IosImportedAudioFile: Codable, Identifiable, Equatable {
         transcriptText = try container.decodeIfPresent(String.self, forKey: .transcriptText)
         durationUs = try container.decodeIfPresent(Int64.self, forKey: .durationUs)
         lastError = try container.decodeIfPresent(String.self, forKey: .lastError)
+        processedAt = try container.decodeIfPresent(Date.self, forKey: .processedAt)
     }
 
     var formattedSize: String {
@@ -112,6 +116,14 @@ struct IosAudioImportSummary {
     let imported: Int
     let skipped: Int
     let failed: Int
+    let importedFileIds: [Int64]
+
+    init(imported: Int, skipped: Int, failed: Int, importedFileIds: [Int64] = []) {
+        self.imported = imported
+        self.skipped = skipped
+        self.failed = failed
+        self.importedFileIds = importedFileIds
+    }
 
     var message: String {
         var parts: [String] = []
@@ -120,12 +132,33 @@ struct IosAudioImportSummary {
         if failed > 0 { parts.append("\(failed) failed") }
         return parts.isEmpty ? "No files imported" : parts.joined(separator: ", ")
     }
+
+    var alertMessage: String? {
+        failed > 0 ? message : nil
+    }
 }
 
 struct IosInboxFolderStatus {
     let displayName: String?
     let message: String?
     let needsSelection: Bool
+    let hasError: Bool
+
+    init(displayName: String?, message: String?, needsSelection: Bool) {
+        self.init(
+            displayName: displayName,
+            message: message,
+            needsSelection: needsSelection,
+            hasError: false
+        )
+    }
+
+    init(displayName: String?, message: String?, needsSelection: Bool, hasError: Bool) {
+        self.displayName = displayName
+        self.message = message
+        self.needsSelection = needsSelection
+        self.hasError = hasError
+    }
 
     var title: String {
         displayName ?? "No audio folder selected"
@@ -163,7 +196,27 @@ final class IosAudioImportStore: ObservableObject {
     func importFiles(from urls: [URL]) {
         let summary = copySupportedFiles(from: urls)
         load()
-        importMessage = summary.message
+        importMessage = summary.alertMessage
+    }
+
+    @discardableResult
+    func ingestSharedImports() -> IosAudioImportSummary? {
+        guard let directory = try? IosSharedImportStaging.stagingDirectory(fileManager: fileManager) else { return nil }
+        guard let urls = try? fileManager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return nil
+        }
+
+        let stagedFiles = urls.filter { $0.pathExtension.lowercased() != IosSharedImportStaging.manifestExtension }
+        guard !stagedFiles.isEmpty else { return nil }
+
+        let summary = copySupportedSharedFiles(from: stagedFiles)
+        load()
+        importMessage = summary.alertMessage
+        return summary
     }
 
     func selectInboxFolder(_ url: URL) {
@@ -207,10 +260,13 @@ final class IosAudioImportStore: ObservableObject {
         isScanningFolder = false
         inboxFolderStatus = IosInboxFolderStatus(
             displayName: folder.url.lastPathComponent,
-            message: summary.message,
-            needsSelection: false
+            message: summary.failed > 0
+                ? "Audio folder scan failed. Check folder access and try again."
+                : summary.message,
+            needsSelection: false,
+            hasError: summary.failed > 0
         )
-        importMessage = summary.message
+        importMessage = nil
     }
 
     func localURL(for file: IosImportedAudioFile) -> URL {
@@ -219,6 +275,10 @@ final class IosAudioImportStore: ObservableObject {
 
     func localURL(documentUri: String) -> URL {
         importDirectory.appendingPathComponent(documentUri)
+    }
+
+    var pendingCount: Int {
+        files.count { $0.status == .pending }
     }
 
     func refresh() {
@@ -241,7 +301,7 @@ final class IosAudioImportStore: ObservableObject {
     }
 
     func markFailed(fileId: Int64, error: String) {
-        catalog.markFailed(id: fileId, message: error)
+        catalog.markFailedAt(id: fileId, message: error, processedAtMillis: currentTimeMillis())
         load()
     }
 
@@ -345,6 +405,7 @@ final class IosAudioImportStore: ObservableObject {
         var imported = 0
         var skipped = 0
         var failed = 0
+        var importedFileIds: [Int64] = []
         let existingByLocalName = Dictionary(uniqueKeysWithValues: files.map { ($0.localFileName, $0) })
 
         for sourceURL in urls {
@@ -374,7 +435,7 @@ final class IosAudioImportStore: ObservableObject {
                     try fileManager.removeItem(at: targetURL)
                 }
                 try fileManager.copyItem(at: sourceURL, to: targetURL)
-                _ = catalog.upsertImportedFile(
+                let importedFile = catalog.upsertImportedFile(
                     folderUri: IosAudioCatalogConstants.importedFolderUri,
                     documentUri: targetFileName,
                     displayName: sourceURL.lastPathComponent,
@@ -387,13 +448,19 @@ final class IosAudioImportStore: ObservableObject {
                     transcriptText: nil,
                     durationUs: nil
                 )
+                importedFileIds.append(importedFile.id)
                 imported += 1
             } catch {
                 failed += 1
             }
         }
 
-        return IosAudioImportSummary(imported: imported, skipped: skipped, failed: failed)
+        return IosAudioImportSummary(
+            imported: imported,
+            skipped: skipped,
+            failed: failed,
+            importedFileIds: importedFileIds
+        )
     }
 
     private func copySupportedFiles(from urls: [URL]) -> IosAudioImportSummary {
@@ -401,6 +468,7 @@ final class IosAudioImportStore: ObservableObject {
         var imported = 0
         var skipped = 0
         var failed = 0
+        var importedFileIds: [Int64] = []
 
         for sourceURL in urls {
             guard isSupportedAudio(sourceURL) else {
@@ -419,7 +487,7 @@ final class IosAudioImportStore: ObservableObject {
                 let targetFileName = nextAvailableFileName(for: sourceURL.lastPathComponent)
                 let targetURL = importDirectory.appendingPathComponent(targetFileName)
                 try fileManager.copyItem(at: sourceURL, to: targetURL)
-                _ = catalog.upsertImportedFile(
+                let importedFile = catalog.upsertImportedFile(
                     folderUri: IosAudioCatalogConstants.importedFolderUri,
                     documentUri: targetFileName,
                     displayName: sourceURL.lastPathComponent,
@@ -432,13 +500,70 @@ final class IosAudioImportStore: ObservableObject {
                     transcriptText: nil,
                     durationUs: nil
                 )
+                importedFileIds.append(importedFile.id)
                 imported += 1
             } catch {
                 failed += 1
             }
         }
 
-        return IosAudioImportSummary(imported: imported, skipped: skipped, failed: failed)
+        return IosAudioImportSummary(
+            imported: imported,
+            skipped: skipped,
+            failed: failed,
+            importedFileIds: importedFileIds
+        )
+    }
+
+    private func copySupportedSharedFiles(from urls: [URL]) -> IosAudioImportSummary {
+        ensureImportDirectoryExists()
+        var imported = 0
+        var skipped = 0
+        var failed = 0
+        var importedFileIds: [Int64] = []
+
+        for stagedURL in urls {
+            guard isSupportedAudio(stagedURL) else {
+                IosSharedImportStaging.removeStagedFileAndMetadata(stagedURL, fileManager: fileManager)
+                skipped += 1
+                continue
+            }
+
+            let metadata = IosSharedImportStaging.readMetadata(for: stagedURL)
+            let displayName = metadata?.displayName ?? stagedURL.lastPathComponent
+            let importedAtMillis = metadata?.modifiedMillis ?? metadata?.stagedAtMillis ?? currentTimeMillis()
+
+            do {
+                let targetFileName = nextAvailableFileName(for: displayName)
+                let targetURL = importDirectory.appendingPathComponent(targetFileName)
+                try fileManager.copyItem(at: stagedURL, to: targetURL)
+                let importedFile = catalog.upsertImportedFile(
+                    folderUri: IosAudioCatalogConstants.importedFolderUri,
+                    documentUri: targetFileName,
+                    displayName: displayName,
+                    mimeType: nil,
+                    sizeBytes: KotlinLong(longLong: fileSize(at: targetURL)),
+                    importedAtMillis: KotlinLong(longLong: importedAtMillis),
+                    state: AudioFileState.pending,
+                    lastError: nil,
+                    processedAtMillis: nil,
+                    transcriptText: nil,
+                    durationUs: nil
+                )
+                IosSharedImportStaging.removeStagedFileAndMetadata(stagedURL, fileManager: fileManager)
+                importedFileIds.append(importedFile.id)
+                imported += 1
+            } catch {
+                failed += 1
+            }
+        }
+
+        return IosAudioImportSummary(
+            imported: imported,
+            skipped: skipped,
+            failed: failed,
+            importedFileIds: importedFileIds
+        )
     }
 
     private func load() {
@@ -480,7 +605,10 @@ final class IosAudioImportStore: ObservableObject {
             status: IosImportedAudioStatus(sharedState: file.state),
             transcriptText: file.transcriptText,
             durationUs: file.durationUs?.int64Value,
-            lastError: file.lastError
+            lastError: file.lastError,
+            processedAt: file.processedAtMillis.map {
+                Date(timeIntervalSince1970: Double($0.int64Value) / 1000)
+            }
         )
     }
 

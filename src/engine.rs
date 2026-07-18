@@ -33,16 +33,77 @@ pub fn is_engine_loaded() -> bool {
 }
 
 pub fn configure_model_directory(path: PathBuf) {
+    let path = std::fs::canonicalize(&path).unwrap_or(path);
+    let unchanged = MODEL_DIRECTORY.lock().unwrap().as_ref() == Some(&path);
+    if unchanged {
+        return;
+    }
+    invalidate_loaded_model();
     *MODEL_DIRECTORY.lock().unwrap() = Some(path);
+}
+
+pub fn invalidate_loaded_model() {
     *GLOBAL_ENGINE.lock().unwrap() = None;
     *LOAD_STATE.0.lock().unwrap() = LoadState::Idle;
+    LOAD_STATE.1.notify_all();
 }
 
 pub fn ensure_loaded_without_callback() -> Result<(), String> {
+    ensure_loaded_with_status(|_| {})
+}
+
+fn ensure_loaded_with_status(mut status: impl FnMut(&str)) -> Result<(), String> {
     if is_engine_loaded() {
+        status("Ready");
         return Ok(());
     }
 
+    let (lock, cvar) = &*LOAD_STATE;
+    let mut state = lock.lock().unwrap();
+    if is_engine_loaded() {
+        status("Ready");
+        return Ok(());
+    }
+
+    if *state == LoadState::Loading {
+        status("Waiting for model...");
+        while *state == LoadState::Loading {
+            state = cvar.wait(state).unwrap();
+        }
+        return match &*state {
+            LoadState::Done if is_engine_loaded() => {
+                status("Ready");
+                Ok(())
+            }
+            LoadState::Failed(message) => {
+                status(&format!("Error: {message}"));
+                Err(message.clone())
+            }
+            _ => Err("Model loading was interrupted".to_string()),
+        };
+    }
+
+    *state = LoadState::Loading;
+    drop(state);
+    status("Loading model...");
+
+    let result = load_configured_engine();
+    let mut state = lock.lock().unwrap();
+    match &result {
+        Ok(()) => {
+            *state = LoadState::Done;
+            status("Ready");
+        }
+        Err(message) => {
+            *state = LoadState::Failed(message.clone());
+            status(&format!("Error: {message}"));
+        }
+    }
+    cvar.notify_all();
+    result
+}
+
+fn load_configured_engine() -> Result<(), String> {
     let path = MODEL_DIRECTORY
         .lock()
         .unwrap()
@@ -56,7 +117,6 @@ pub fn ensure_loaded_without_callback() -> Result<(), String> {
         )
         .map_err(|error| format!("Model error: {error}"))?;
     *GLOBAL_ENGINE.lock().unwrap() = Some(Arc::new(Mutex::new(engine)));
-    *LOAD_STATE.0.lock().unwrap() = LoadState::Done;
     Ok(())
 }
 
@@ -74,55 +134,7 @@ fn notify_status(env: &mut JNIEnv, obj: &JObject, msg: &str) {
 
 #[cfg(target_os = "android")]
 pub fn ensure_loaded(env: &mut JNIEnv, context: &JObject) -> Result<(), String> {
-    if is_engine_loaded() {
-        notify_status(env, context, "Ready");
-        return Ok(());
-    }
-
-    let (lock, cvar) = &*LOAD_STATE;
-    let mut state = lock.lock().unwrap();
-
-    if is_engine_loaded() {
-        notify_status(env, context, "Ready");
-        return Ok(());
-    }
-
-    match &*state {
-        LoadState::Loading => {
-            notify_status(env, context, "Waiting for model...");
-            while *state == LoadState::Loading {
-                state = cvar.wait(state).unwrap();
-            }
-            drop(state);
-
-            if is_engine_loaded() {
-                notify_status(env, context, "Ready");
-                Ok(())
-            } else {
-                let msg = "Model failed to load".to_string();
-                notify_status(env, context, &format!("Error: {}", msg));
-                Err(msg)
-            }
-        }
-        LoadState::Done => {
-            notify_status(env, context, "Ready");
-            Ok(())
-        }
-        LoadState::Idle | LoadState::Failed(_) => {
-            *state = LoadState::Loading;
-            drop(state);
-
-            let result = do_load(env, context);
-
-            let mut state = lock.lock().unwrap();
-            match &result {
-                Ok(()) => *state = LoadState::Done,
-                Err(msg) => *state = LoadState::Failed(msg.clone()),
-            }
-            cvar.notify_all();
-            result
-        }
-    }
+    ensure_loaded_with_status(|message| notify_status(env, context, message))
 }
 
 #[cfg(target_os = "android")]
@@ -130,98 +142,44 @@ pub fn ensure_loaded_from_thread(
     jvm: &Arc<jni::JavaVM>,
     target_ref: &GlobalRef,
 ) -> Result<(), String> {
-    if is_engine_loaded() {
+    ensure_loaded_with_status(|message| {
         if let Ok(mut env) = jvm.attach_current_thread() {
-            notify_status(&mut env, target_ref.as_obj(), "Ready");
+            notify_status(&mut env, target_ref.as_obj(), message);
         }
-        return Ok(());
-    }
-
-    let (lock, cvar) = &*LOAD_STATE;
-    let mut state = lock.lock().unwrap();
-
-    if is_engine_loaded() {
-        if let Ok(mut env) = jvm.attach_current_thread() {
-            notify_status(&mut env, target_ref.as_obj(), "Ready");
-        }
-        return Ok(());
-    }
-
-    match &*state {
-        LoadState::Loading => {
-            if let Ok(mut env) = jvm.attach_current_thread() {
-                notify_status(&mut env, target_ref.as_obj(), "Waiting for model...");
-            }
-            while *state == LoadState::Loading {
-                state = cvar.wait(state).unwrap();
-            }
-            drop(state);
-
-            if is_engine_loaded() {
-                if let Ok(mut env) = jvm.attach_current_thread() {
-                    notify_status(&mut env, target_ref.as_obj(), "Ready");
-                }
-                Ok(())
-            } else {
-                let msg = "Model failed to load".to_string();
-                if let Ok(mut env) = jvm.attach_current_thread() {
-                    notify_status(&mut env, target_ref.as_obj(), &format!("Error: {}", msg));
-                }
-                Err(msg)
-            }
-        }
-        LoadState::Done => {
-            if let Ok(mut env) = jvm.attach_current_thread() {
-                notify_status(&mut env, target_ref.as_obj(), "Ready");
-            }
-            Ok(())
-        }
-        LoadState::Idle | LoadState::Failed(_) => {
-            *state = LoadState::Loading;
-            drop(state);
-
-            let result = if let Ok(mut env) = jvm.attach_current_thread() {
-                let obj = target_ref.as_obj();
-                do_load(&mut env, obj)
-            } else {
-                Err("Failed to attach JNI thread".to_string())
-            };
-
-            let mut state = lock.lock().unwrap();
-            match &result {
-                Ok(()) => *state = LoadState::Done,
-                Err(msg) => *state = LoadState::Failed(msg.clone()),
-            }
-            cvar.notify_all();
-            result
-        }
-    }
+    })
 }
 
-#[cfg(target_os = "android")]
-fn do_load(env: &mut JNIEnv, context: &JObject) -> Result<(), String> {
-    let path = MODEL_DIRECTORY
-        .lock()
-        .unwrap()
-        .clone()
-        .ok_or_else(|| "Model directory was not configured".to_string())?;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    notify_status(env, context, "Loading model...");
+    static TEST_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
-    let mut eng = ParakeetEngine::new();
-    match eng.load_model_with_params(
-        &path,
-        transcribe_rs::engines::parakeet::ParakeetModelParams::int8(),
-    ) {
-        Ok(_) => {
-            *GLOBAL_ENGINE.lock().unwrap() = Some(Arc::new(Mutex::new(eng)));
-            notify_status(env, context, "Ready");
-            Ok(())
-        }
-        Err(e) => {
-            let msg = format!("Model error: {}", e);
-            notify_status(env, context, &format!("Error: {}", msg));
-            Err(msg)
-        }
+    #[test]
+    fn configuring_same_directory_preserves_load_state() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        invalidate_loaded_model();
+        configure_model_directory(PathBuf::from("test-model"));
+        *LOAD_STATE.0.lock().unwrap() = LoadState::Done;
+
+        configure_model_directory(PathBuf::from("test-model"));
+
+        assert_eq!(*LOAD_STATE.0.lock().unwrap(), LoadState::Done);
+        invalidate_loaded_model();
+    }
+
+    #[test]
+    fn changing_directory_and_explicit_invalidation_reset_state() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        invalidate_loaded_model();
+        configure_model_directory(PathBuf::from("first-model"));
+        *LOAD_STATE.0.lock().unwrap() = LoadState::Done;
+
+        configure_model_directory(PathBuf::from("second-model"));
+        assert_eq!(*LOAD_STATE.0.lock().unwrap(), LoadState::Idle);
+
+        *LOAD_STATE.0.lock().unwrap() = LoadState::Failed("failed".to_string());
+        invalidate_loaded_model();
+        assert_eq!(*LOAD_STATE.0.lock().unwrap(), LoadState::Idle);
     }
 }

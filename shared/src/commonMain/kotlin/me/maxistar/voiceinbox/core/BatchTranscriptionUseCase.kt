@@ -3,7 +3,7 @@ package me.maxistar.voiceinbox.core
 import kotlin.coroutines.cancellation.CancellationException
 
 data class BatchTranscriptionInput(
-    val folderId: String,
+    val sourceScope: AudioCatalogSourceScope,
     val outputId: String,
     val runId: String,
     val retryEntryId: Long? = null,
@@ -11,6 +11,7 @@ data class BatchTranscriptionInput(
 
 data class BatchTranscriptionProgress(
     val phase: String,
+    val activeEntryId: Long? = null,
     val filename: String? = null,
     val completed: Int,
     val total: Int,
@@ -62,7 +63,7 @@ class BatchTranscriptionUseCase(
     ): BatchTranscriptionResult {
         catalog.recoverInterrupted()
         val total = if (input.retryEntryId == null) {
-            catalog.pendingCount(input.folderId)
+            catalog.pendingCount(input.sourceScope)
         } else {
             1
         }
@@ -83,6 +84,7 @@ class BatchTranscriptionUseCase(
                         onProgress(
                             BatchTranscriptionProgress(
                                 phase = progress.phase,
+                                activeEntryId = entry.id,
                                 filename = entry.displayName,
                                 completed = completed,
                                 total = total,
@@ -106,7 +108,11 @@ class BatchTranscriptionUseCase(
                     currentEntry = null
                     throw cancelled
                 } catch (error: Throwable) {
-                    catalog.markFailed(entry.id, error.message ?: ERROR_TRANSCRIPTION_FAILED)
+                    catalog.markFailedAt(
+                        entry.id,
+                        error.message ?: ERROR_TRANSCRIPTION_FAILED,
+                        clock.currentTimeMillis(),
+                    )
                     failed += 1
                 }
                 completed += 1
@@ -137,9 +143,10 @@ class BatchTranscriptionUseCase(
         completed: Int,
     ): AudioCatalogEntry? =
         if (input.retryEntryId == null) {
-            catalog.claimPending(input.folderId)
+            catalog.claimPending(input.sourceScope)
         } else if (completed == 0) {
-            catalog.claimFailed(input.folderId, input.retryEntryId)
+            catalog.claimFailed(input.sourceScope, input.retryEntryId)
+                ?: catalog.claimPending(input.sourceScope, input.retryEntryId)
         } else {
             null
         }
@@ -150,6 +157,7 @@ class BatchTranscriptionUseCase(
         failed: Int,
     ): BatchTranscriptionProgress = BatchTranscriptionProgress(
         phase = BatchTranscriptionRules.summary(completed, total, failed),
+        activeEntryId = null,
         filename = null,
         completed = completed,
         total = total,
