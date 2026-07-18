@@ -213,7 +213,11 @@ class AndroidMainScreenStateHostTest {
                 onboardingLifecycle = AndroidOnboardingHintLifecycle.ACTIVE,
             ),
         )
-        assertEquals(TaskActionKind.SELECT_OUTPUT, directModelCompletion.onboardingHint.action?.kind)
+        assertEquals(TaskActionKind.CREATE_OUTPUT, directModelCompletion.onboardingHint.action?.kind)
+        assertEquals(
+            listOf(TaskActionKind.CREATE_OUTPUT, TaskActionKind.SELECT_OUTPUT),
+            directModelCompletion.taskList.tasks.single().actions.map { it.kind },
+        )
         assertEquals(listOf("setup:output"), directModelCompletion.taskList.tasks.map { it.stableId })
 
         val allFilter = AndroidTaskListSnapshotMapper.state(

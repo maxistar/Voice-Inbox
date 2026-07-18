@@ -1,6 +1,9 @@
 package me.maxistar.voiceinbox
 
 object FileSelectionRules {
+    const val DEFAULT_OUTPUT_FILE_NAME = "Voice Inbox.md"
+    const val CREATED_OUTPUT_MIME_TYPE = "text/markdown"
+
     val outputMimeTypes = arrayOf(
         "text/plain",
         "text/markdown",

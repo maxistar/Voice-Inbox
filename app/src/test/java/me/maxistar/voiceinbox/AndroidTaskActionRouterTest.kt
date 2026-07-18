@@ -39,6 +39,25 @@ class AndroidTaskActionRouterTest {
     }
 
     @Test
+    fun routesBothCurrentOutputConfigurationActionsAndRejectsAnotherKind() {
+        val state = AndroidTaskListSnapshotMapper.state(
+            AndroidMainScreenInput(
+                model = ModelSetupSnapshot(ModelSetupSnapshotState.READY),
+                output = OutputSetupSnapshot(OutputSetupSnapshotState.REQUIRED),
+                folder = FolderSetupSnapshot(FolderSetupSnapshotState.UNSELECTED),
+                hydration = AndroidMainScreenHydration(true, true, true, true),
+            ),
+        )
+        val calls = mutableListOf<TaskActionKind>()
+        val router = AndroidTaskActionRouter({ state }) { kind, _ -> calls += kind }
+
+        assertTrue(router.route(request("setup:output", null, TaskActionKind.CREATE_OUTPUT)))
+        assertTrue(router.route(request("setup:output", null, TaskActionKind.SELECT_OUTPUT)))
+        assertFalse(router.route(request("setup:output", null, TaskActionKind.SELECT_FOLDER)))
+        assertEquals(listOf(TaskActionKind.CREATE_OUTPUT, TaskActionKind.SELECT_OUTPUT), calls)
+    }
+
+    @Test
     fun rejectsStaleDisabledConflictingAndMismatchedClicks() {
         var state = state(entries = listOf(entry(9)))
         var callCount = 0
@@ -96,6 +115,20 @@ class AndroidTaskActionRouterTest {
 
         state = onboardingState(
             model = ModelSetupSnapshot(ModelSetupSnapshotState.READY),
+        )
+        assertTrue(
+            router.route(
+                request(TaskListDisplayItem.OnboardingHint.STABLE_KEY, null, TaskActionKind.CREATE_OUTPUT),
+            ),
+        )
+        assertFalse(
+            router.route(
+                request(TaskListDisplayItem.OnboardingHint.STABLE_KEY, null, TaskActionKind.SELECT_OUTPUT),
+            ),
+        )
+
+        state = onboardingState(
+            model = ModelSetupSnapshot(ModelSetupSnapshotState.READY),
             output = OutputSetupSnapshot(OutputSetupSnapshotState.READY),
             folder = FolderSetupSnapshot(FolderSetupSnapshotState.UNSELECTED),
         )
@@ -114,7 +147,10 @@ class AndroidTaskActionRouterTest {
                 request(TaskListDisplayItem.OnboardingHint.STABLE_KEY, null, TaskActionKind.DOWNLOAD_MODEL),
             ),
         )
-        assertEquals(listOf(TaskActionKind.DOWNLOAD_MODEL, TaskActionKind.SELECT_FOLDER), calls)
+        assertEquals(
+            listOf(TaskActionKind.DOWNLOAD_MODEL, TaskActionKind.CREATE_OUTPUT, TaskActionKind.SELECT_FOLDER),
+            calls,
+        )
     }
 
     @Test

@@ -36,6 +36,7 @@ enum class TaskActionKind {
     IMPORT_MODEL,
     CANCEL_MODEL_DOWNLOAD,
     RETRY_MODEL_DOWNLOAD,
+    CREATE_OUTPUT,
     SELECT_OUTPUT,
     SELECT_FOLDER,
     REFRESH_FOLDER,
@@ -296,12 +297,15 @@ object TaskListPresentationController {
             stableId = "setup:output",
             kind = SetupTaskKind.OUTPUT,
             state = if (error) SetupTaskState.ERROR else SetupTaskState.REQUIRED,
-            title = "Select Output File",
+            title = "Output Document",
             detail = snapshot.detail,
             badge = if (error) "Needs attention" else "Required",
             progress = null,
             errorMessage = snapshot.detail.takeIf { error },
-            actions = listOf(TaskActionPresentation(TaskActionKind.SELECT_OUTPUT, "Select Output File")),
+            actions = listOf(
+                TaskActionPresentation(TaskActionKind.CREATE_OUTPUT, "Create New"),
+                TaskActionPresentation(TaskActionKind.SELECT_OUTPUT, "Choose Existing"),
+            ),
         )
     }
 

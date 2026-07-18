@@ -124,7 +124,7 @@ object AndroidOnboardingHintPresenter {
             ),
             AndroidOnboardingChecklistStep(
                 kind = AndroidOnboardingStepKind.OUTPUT,
-                label = "Select transcript output",
+                label = "Create or choose transcript output",
                 complete = output.state == OutputSetupSnapshotState.READY,
             ),
             AndroidOnboardingChecklistStep(
@@ -195,9 +195,9 @@ object AndroidOnboardingHintPresenter {
             kind = TaskActionKind.IMPORT_MODEL,
         )
         output.state != OutputSetupSnapshotState.READY -> AndroidOnboardingHintAction(
-            label = "Select output file",
+            label = "Create Output File",
             enabled = true,
-            kind = TaskActionKind.SELECT_OUTPUT,
+            kind = TaskActionKind.CREATE_OUTPUT,
         )
         else -> AndroidOnboardingHintAction(
             label = "Select audio folder (optional)",

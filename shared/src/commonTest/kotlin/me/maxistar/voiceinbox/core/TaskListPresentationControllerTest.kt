@@ -39,6 +39,26 @@ class TaskListPresentationControllerTest {
     }
 
     @Test
+    fun outputSetupOffersCreationBeforeExistingDocumentSelection() {
+        val task = assertIs<SetupTaskPresentation>(
+            state(output = OutputSetupSnapshot(OutputSetupSnapshotState.REQUIRED)).tasks.single(),
+        )
+
+        assertEquals("Output Document", task.title)
+        assertEquals(
+            listOf(TaskActionKind.CREATE_OUTPUT, TaskActionKind.SELECT_OUTPUT),
+            task.actions.map { it.kind },
+        )
+        assertEquals(listOf("Create New", "Choose Existing"), task.actions.map { it.label })
+
+        val invalid = assertIs<SetupTaskPresentation>(
+            state(output = OutputSetupSnapshot(OutputSetupSnapshotState.INVALID, "Access expired")).tasks.single(),
+        )
+        assertEquals("Access expired", invalid.errorMessage)
+        assertEquals(task.actions, invalid.actions)
+    }
+
+    @Test
     fun activeModelInstallationUsesSuppliedPhaseAndNeutralFallback() {
         val download = assertIs<SetupTaskPresentation>(
             state(

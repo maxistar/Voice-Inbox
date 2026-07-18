@@ -126,6 +126,12 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         if (uri != null) acceptOutput(uri)
     }
 
+    private val outputCreator = registerForActivityResult(
+        ActivityResultContracts.CreateDocument(FileSelectionRules.CREATED_OUTPUT_MIME_TYPE),
+    ) { uri ->
+        if (uri != null) acceptOutput(uri)
+    }
+
     private val folderPicker = registerForActivityResult(
         ActivityResultContracts.OpenDocumentTree(),
     ) { uri ->
@@ -1073,6 +1079,12 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         }
     }
 
+    private fun launchOutputCreatorIfEnabled() {
+        if (selectionControls().outputEnabled) {
+            outputCreator.launch(FileSelectionRules.DEFAULT_OUTPUT_FILE_NAME)
+        }
+    }
+
     private fun launchFolderPickerIfEnabled() {
         if (selectionControls().folderEnabled) {
             folderPicker.launch(folderUri)
@@ -1343,6 +1355,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
             -> SpeechModelDownloadWorker.enqueue(this)
             TaskActionKind.IMPORT_MODEL -> modelFolderPicker.launch(null)
             TaskActionKind.CANCEL_MODEL_DOWNLOAD -> SpeechModelDownloadWorker.cancel(this)
+            TaskActionKind.CREATE_OUTPUT -> launchOutputCreatorIfEnabled()
             TaskActionKind.SELECT_OUTPUT -> launchOutputPickerIfEnabled()
             TaskActionKind.SELECT_FOLDER -> launchFolderPickerIfEnabled()
             TaskActionKind.REFRESH_FOLDER -> dispatchManualFolderRefresh()

@@ -18,6 +18,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import java.util.concurrent.Executors
 
 internal object VoiceInboxPublicLinks {
@@ -42,6 +43,12 @@ class SettingsActivity : AppCompatActivity() {
 
     private val outputPicker = registerForActivityResult(
         ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) acceptOutput(uri) else renderStorage()
+    }
+
+    private val outputCreator = registerForActivityResult(
+        ActivityResultContracts.CreateDocument(FileSelectionRules.CREATED_OUTPUT_MIME_TYPE),
     ) { uri ->
         if (uri != null) acceptOutput(uri) else renderStorage()
     }
@@ -92,7 +99,7 @@ class SettingsActivity : AppCompatActivity() {
             folderPicker.launch(selectionStore.loadFolderUri()?.let(Uri::parse))
         }
         findViewById<View>(R.id.settingsOutputRow).setOnClickListener {
-            outputPicker.launch(FileSelectionRules.outputMimeTypes)
+            showOutputDocumentOptions()
         }
         findViewById<View>(R.id.settingsWebsiteRow).setOnClickListener {
             openExternalUrl(VoiceInboxPublicLinks.WEBSITE)
@@ -178,6 +185,22 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    private fun showOutputDocumentOptions() {
+        val actions = arrayOf(
+            getString(R.string.settings_output_create_new),
+            getString(R.string.settings_output_choose_existing),
+        )
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.settings_output_action_title)
+            .setItems(actions) { _, index ->
+                when (index) {
+                    0 -> outputCreator.launch(FileSelectionRules.DEFAULT_OUTPUT_FILE_NAME)
+                    1 -> outputPicker.launch(FileSelectionRules.outputMimeTypes)
+                }
+            }
+            .show()
     }
 
     private fun acceptFolder(uri: Uri) {
