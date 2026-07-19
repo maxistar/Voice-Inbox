@@ -15,6 +15,7 @@ const releaseUrl = `${githubUrl}/releases`;
 const nav = [
   ['Home', '/'],
   ['Setup', '/setup/'],
+  ['Testing', '/testing/'],
   ['FAQ', '/faq/'],
   ['Other Projects', '/projects/'],
 ];
@@ -39,7 +40,7 @@ const nav = [
         </>
       )
     }
-    <style>
+    <style is:global>
       :root {
         color-scheme: light;
         --bg: #f7f9fc;
@@ -148,8 +149,45 @@ const nav = [
       }
       .footer-links {
         display: flex;
+        align-items: center;
         gap: 16px;
         flex-wrap: wrap;
+      }
+      .github-link {
+        display: inline-flex;
+        width: 44px;
+        height: 44px;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--border);
+        border-radius: 50%;
+        color: var(--muted);
+        background: var(--surface);
+      }
+      .github-link:hover {
+        color: var(--ink);
+        text-decoration: none;
+        background: var(--surface-strong);
+      }
+      .github-link svg {
+        width: 22px;
+        height: 22px;
+        fill: currentColor;
+      }
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      a:focus-visible {
+        outline: 3px solid rgba(37, 99, 235, 0.42);
+        outline-offset: 3px;
       }
       h1, h2, h3, p { margin-top: 0; }
       h1 {
@@ -249,7 +287,6 @@ const nav = [
         </a>
         <nav aria-label="Main navigation">
           {nav.map(([label, href]) => <a href={`${base}${href}`}>{label}</a>)}
-          <a href={githubUrl} target="_blank" rel="noopener">GitHub</a>
         </nav>
       </div>
     </header>
@@ -267,6 +304,12 @@ const nav = [
           <a href={`${base}/faq/`}>FAQ</a>
           <a href={`${base}/privacy/`}>Privacy</a>
           <a href={`${base}/legal/`}>Legal</a>
+          <a class="github-link" href={githubUrl} target="_blank" rel="noopener" title="Voice Inbox source code on GitHub">
+            <span class="visually-hidden">Voice Inbox source code on GitHub</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 2C6.48 2 2 6.59 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49 0-.24-.01-.89-.01-1.75-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.9 1.57 2.35 1.12 2.92.85.09-.66.35-1.12.64-1.37-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.04 1.03-2.76-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05A9.3 9.3 0 0 1 12 6.69a9.3 9.3 0 0 1 2.5.34c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.46.1 2.72.64.72 1.03 1.64 1.03 2.76 0 3.94-2.34 4.8-4.57 5.06.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.49A10.27 10.27 0 0 0 22 12.25C22 6.59 17.52 2 12 2Z" />
+            </svg>
+          </a>
         </span>
       </div>
     </footer>
