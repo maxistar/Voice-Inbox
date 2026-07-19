@@ -2,8 +2,8 @@
 import Layout from '../layouts/Layout.astro';
 
 const githubUrl = 'https://github.com/maxistar/Voice-Inbox';
-const releaseUrl = `${githubUrl}/releases`;
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const testingUrl = `${base}/testing/`;
 const androidScreenshot = `${base}/screenshots/android-main.jpg`;
 ---
 <Layout
@@ -103,13 +103,13 @@ const androidScreenshot = `${base}/screenshots/android-main.jpg`;
       <h1>Turn voice notes into a Markdown inbox.</h1>
       <p>
         Voice Inbox turns accumulated recordings into a readable text inbox. Android has the mature
-        folder workflow today; iOS now has an active MVP for importing, previewing, transcribing,
+        task-list workflow today; iOS now has an active MVP for importing, previewing, transcribing,
         and appending individual recordings locally.
       </p>
       <div class="button-row">
-        <a class="button primary" href={releaseUrl} target="_blank" rel="noopener">Download from GitHub Releases</a>
-        <a class="button" href={githubUrl} target="_blank" rel="noopener">View source</a>
+        <a class="button primary" href={testingUrl}>Join Android closed test</a>
         <a class="button" href={`${base}/setup/`}>Setup guide</a>
+        <a class="button" href={githubUrl} target="_blank" rel="noopener">View source</a>
       </div>
     </div>
 
@@ -123,12 +123,12 @@ const androidScreenshot = `${base}/screenshots/android-main.jpg`;
 
   <section class="section">
     <p class="eyebrow">Platform status</p>
-    <h2>Android is ready; iOS is catching up fast.</h2>
+    <h2>Android is in closed testing; iOS is catching up fast.</h2>
     <div class="grid">
       <div class="card platform-card">
-        <span class="status-badge">Android ready</span>
-        <h3>Full folder workflow</h3>
-        <p>Scan a selected audio folder, preview recordings, transcribe individual files or all New files, append to Markdown or text, retry failures, and schedule best-effort background runs.</p>
+        <span class="status-badge">Android closed test</span>
+        <h3>Flexible task workflow</h3>
+        <p>Import or receive individual recordings, optionally scan a selected audio folder, preview tasks, transcribe one file or a batch, retry failures, and schedule best-effort background runs.</p>
       </div>
       <div class="card platform-card">
         <span class="status-badge">iOS MVP</span>
@@ -148,16 +148,16 @@ const androidScreenshot = `${base}/screenshots/android-main.jpg`;
     <h2>Built for accumulated recordings, not live dictation.</h2>
     <div class="grid">
       <div class="card">
-        <h3>Incremental folder transcription</h3>
-        <p>Select one folder, review discovered recordings, and process only files that are new or changed.</p>
+        <h3>Individual or folder transcription</h3>
+        <p>Import or share individual recordings, or optionally select one folder and process only files that are new or changed.</p>
       </div>
       <div class="card">
         <h3>Local recognition</h3>
-        <p>After the first model download, recognition runs on device instead of sending audio to an app cloud service.</p>
+        <p>Download the model or install it from a compatible local folder. After installation, recognition runs on device instead of sending audio to an app cloud service.</p>
       </div>
       <div class="card">
         <h3>Markdown or plain text output</h3>
-        <p>Each successful note is appended to an existing writable <code>.md</code> or <code>.txt</code> document.</p>
+        <p>Create a new <code>.md</code> or <code>.txt</code> document, or choose an existing writable file. Each successful note is appended without replacing earlier content.</p>
       </div>
       <div class="card">
         <h3>Preview before processing</h3>
@@ -178,11 +178,11 @@ const androidScreenshot = `${base}/screenshots/android-main.jpg`;
     <p class="eyebrow">Workflow</p>
     <h2>From recordings to notes in five steps.</h2>
     <div class="grid flow">
-      <div class="card"><h3>Install the model</h3><p>Download and verify the speech model on first launch.</p></div>
-      <div class="card"><h3>Select output</h3><p>Choose an existing writable Markdown or text file.</p></div>
-      <div class="card"><h3>Select recordings</h3><p>Pick the folder that contains your audio notes.</p></div>
-      <div class="card"><h3>Review New files</h3><p>Preview recordings and check what will be processed.</p></div>
-      <div class="card"><h3>Transcribe all</h3><p>Append one entry per successful file with filename, recording time, and recognized text.</p></div>
+      <div class="card"><h3>Install the model</h3><p>Download and verify the model, or install it from a compatible local folder.</p></div>
+      <div class="card"><h3>Prepare output</h3><p>Create or choose a writable Markdown or text document.</p></div>
+      <div class="card"><h3>Add recordings</h3><p>Import files, share audio to Voice Inbox, or optionally select an audio folder.</p></div>
+      <div class="card"><h3>Review tasks</h3><p>Preview recordings and check what is ready to process.</p></div>
+      <div class="card"><h3>Transcribe</h3><p>Append one entry per successful file with filename, recording time, and recognized text.</p></div>
     </div>
   </section>
 
@@ -194,7 +194,7 @@ const androidScreenshot = `${base}/screenshots/android-main.jpg`;
       need network access for the first model download and enough free storage for model installation.
     </p>
     <div class="button-row">
-      <a class="button primary" href={releaseUrl} target="_blank" rel="noopener">Get the APK</a>
+      <a class="button primary" href={testingUrl}>Join Android closed test</a>
       <a class="button" href={`${base}/faq/`}>Read FAQ</a>
     </div>
   </section>

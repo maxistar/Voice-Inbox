@@ -3,6 +3,7 @@ import Layout from '../layouts/Layout.astro';
 
 const githubUrl = 'https://github.com/maxistar/Voice-Inbox';
 const releaseUrl = `${githubUrl}/releases`;
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 <Layout title="Setup" description="How to install and configure Voice Inbox on Android and use the current iOS MVP.">
   <style>
@@ -29,9 +30,9 @@ const releaseUrl = `${githubUrl}/releases`;
     <p class="eyebrow">Setup guide</p>
     <h1>Get Voice Inbox ready for your recordings.</h1>
     <p>
-      Voice Inbox works with an existing output document and user-selected audio. Android is the full
-      folder workflow today; iOS currently supports a manual import MVP. The first model download is large,
-      but after verification recognition runs locally.
+      Voice Inbox writes recognized speech to a user-selected output document and processes audio that you
+      import, share, or discover in an optional folder. Android has the mature task-list workflow today;
+      iOS is an active MVP. Model installation is large, but recognition runs locally after it completes.
     </p>
   </section>
 
@@ -39,37 +40,42 @@ const releaseUrl = `${githubUrl}/releases`;
     <div class="step">
       <h2>1. Install the app</h2>
       <p>
-        Download the latest Android APK from
-        <a href={releaseUrl} target="_blank" rel="noopener">GitHub Releases</a>
-        and install it on an ARM64 Android device running Android 7.0 or later.
+        Voice Inbox is currently available through a restricted Google Play closed test. Follow the
+        <a href={`${base}/testing/`}>closed-testing instructions</a> to join the tester group, opt in with
+        the same Google account, and install the app on an ARM64 Android device running Android 7.0 or later.
       </p>
       <p class="note">
-        iOS is currently an MVP built from source rather than a store release. When Google Play or App Store
-        listings exist, this page can link to them as the primary install paths.
+        Android source builds and APKs remain available from
+        <a href={releaseUrl} target="_blank" rel="noopener">GitHub Releases</a>. iOS is currently an MVP built
+        from source rather than an App Store release.
       </p>
     </div>
 
     <div class="step">
       <h2>2. Download the speech model</h2>
       <p>
-        On first launch, download and verify the pinned int8 Parakeet model. The download is about
-        640 MiB, and installation needs about 704 MiB of free storage.
+        Download and verify the pinned int8 Parakeet model from the model task. The download is about
+        640 MiB, and installation needs about 704 MiB of free storage. If the download source is unavailable,
+        Android can instead install the same model from a compatible local folder.
       </p>
-      <p>Network access is required for this first model download. Recognition runs locally after the model is installed.</p>
+      <p>Network access is required for the normal download, but not for a valid local-folder installation. Recognition runs locally after the model is installed.</p>
     </div>
 
     <div class="step">
       <h2>3. Select an output document</h2>
       <p>
-        Choose an existing writable <code>.txt</code> or <code>.md</code> file. Voice Inbox appends new entries
-        and preserves existing document content. On iOS, this uses the document picker and security-scoped access.
+        Use <strong>Create New</strong> to create a writable <code>.txt</code> or <code>.md</code> document, or
+        <strong>Choose Existing</strong> to select one you already use. Voice Inbox appends new entries and
+        preserves existing content. On iOS, output selection uses the document picker and security-scoped access.
       </p>
     </div>
 
     <div class="step">
-      <h2>4. Select recordings</h2>
+      <h2>4. Add recordings</h2>
       <p>
-        On Android, choose one readable folder that contains audio recordings. The app scans direct children only and does not traverse nested folders.
+        On Android, use <strong>Import Audio Files</strong> for one or more recordings, or share an audio file to
+        Voice Inbox from another app. Selecting an audio folder is optional and useful for batch processing;
+        the app scans direct children only and does not traverse nested folders.
       </p>
       <p>
         On iOS, use the current manual import workflow to add audio files to the app-local catalog.
@@ -79,8 +85,8 @@ const releaseUrl = `${githubUrl}/releases`;
     <div class="step">
       <h2>5. Review and transcribe</h2>
       <p>
-        The New tab lists files that are pending or being processed. Use Play to preview a recording, then choose
-        <strong>Transcribe All</strong> when you are ready.
+        The main screen presents setup and audio work as a task list. Use Play to preview a recording, transcribe
+        it individually, or choose <strong>Transcribe All</strong> when multiple tasks are ready.
       </p>
       <p>
         Failed files move to the Processed tab with their latest error and a Retry action. Successful files are appended to the output document.
