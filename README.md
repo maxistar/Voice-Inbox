@@ -1,7 +1,17 @@
 # Voice Inbox
 
-Android application for incrementally transcribing a folder of audio recordings
-into an existing plain-text (`.txt`) or Markdown (`.md`) file.
+Local-first Android and iOS application for turning imported, shared, or
+folder-discovered audio recordings into a plain-text (`.txt`) or Markdown
+(`.md`) inbox.
+
+**Website:** [voiceinbox.simpleditor.org](https://voiceinbox.simpleditor.org/)
+
+**Project status:** The Android application is currently available through
+Google Play closed testing. It is not a public production release yet. Eligible
+testers can follow the
+[closed-testing instructions](https://voiceinbox.simpleditor.org/testing/) to
+join the tester group, opt in, and install the application. The iOS application
+remains an active development MVP and is not available through the App Store.
 
 ## Workflow
 
