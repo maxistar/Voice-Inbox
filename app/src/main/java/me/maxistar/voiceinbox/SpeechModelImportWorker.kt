@@ -20,14 +20,14 @@ class SpeechModelImportWorker(
     override suspend fun doWork(): Result {
         val treeUri = inputData.getString(KEY_TREE_URI)?.let(Uri::parse)
             ?: return failure("No model folder was selected")
-        setForeground(
-            SpeechModelInstallationWork.foregroundInfo(
-                applicationContext,
-                0,
-                "Preparing local speech model",
-            ),
-        )
         return try {
+            SpeechModelInstallationWork.promote(
+                worker = this,
+                context = applicationContext,
+                progress = 0,
+                message = "Preparing local speech model",
+                source = SpeechModelInstallationWork.Source.LOCAL_IMPORT,
+            )
             val installed = SpeechModelLocalImporter(
                 resolver = applicationContext.contentResolver,
                 repository = repository,
@@ -38,6 +38,8 @@ class SpeechModelImportWorker(
             Result.success(
                 workDataOf(SpeechModelInstallationWork.KEY_MODEL_PATH to installed.absolutePath),
             )
+        } catch (error: ForegroundPromotionException) {
+            failure(error.userMessage)
         } finally {
             SpeechModelImportPermission.releaseOwnedIfUnused(applicationContext)
         }
@@ -53,17 +55,17 @@ class SpeechModelImportWorker(
                 SpeechModelInstallationWork.KEY_MESSAGE to progress.message,
             ),
         )
-        setForeground(
-            SpeechModelInstallationWork.foregroundInfo(
-                applicationContext,
-                percent,
-                progress.message,
-            ),
+        SpeechModelInstallationWork.promote(
+            worker = this,
+            context = applicationContext,
+            progress = percent,
+            message = progress.message,
+            source = SpeechModelInstallationWork.Source.LOCAL_IMPORT,
         )
     }
 
     private fun failure(message: String): Result = Result.failure(
-        workDataOf(SpeechModelInstallationWork.KEY_ERROR to message),
+        SpeechModelInstallationWork.failureData(message),
     )
 
     companion object {

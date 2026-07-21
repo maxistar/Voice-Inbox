@@ -31,7 +31,21 @@ class SpeechModelDownloadWorker(
         .build()
 
     override suspend fun doWork(): Result {
-        setForeground(SpeechModelInstallationWork.foregroundInfo(applicationContext, 0, "Preparing model download"))
+        return try {
+            installModel()
+        } catch (error: ForegroundPromotionException) {
+            failure(error.userMessage)
+        }
+    }
+
+    private suspend fun installModel(): Result {
+        SpeechModelInstallationWork.promote(
+            worker = this,
+            context = applicationContext,
+            progress = 0,
+            message = "Preparing model download",
+            source = SpeechModelInstallationWork.Source.NETWORK_DOWNLOAD,
+        )
         repository.prepareForInstall().getOrElse {
             return failure(it.message ?: "Model installation preflight failed")
         }
@@ -60,6 +74,9 @@ class SpeechModelDownloadWorker(
                     publishProgress(completedBytes, "Verified ${entry.name}")
                     lastFailure = null
                     break
+                } catch (error: ForegroundPromotionException) {
+                    repository.cleanupFailedCurrentFile(entry)
+                    throw error
                 } catch (error: Throwable) {
                     repository.cleanupFailedCurrentFile(entry)
                     currentCoroutineContext().ensureActive()
@@ -129,11 +146,17 @@ class SpeechModelDownloadWorker(
                 KEY_MESSAGE to message,
             ),
         )
-        setForeground(SpeechModelInstallationWork.foregroundInfo(applicationContext, percent, message))
+        SpeechModelInstallationWork.promote(
+            worker = this,
+            context = applicationContext,
+            progress = percent,
+            message = message,
+            source = SpeechModelInstallationWork.Source.NETWORK_DOWNLOAD,
+        )
     }
 
     private fun failure(message: String): Result =
-        Result.failure(workDataOf(KEY_ERROR to message))
+        Result.failure(SpeechModelInstallationWork.failureData(message))
 
     companion object {
         const val UNIQUE_WORK_NAME = SpeechModelInstallationWork.UNIQUE_WORK_NAME
