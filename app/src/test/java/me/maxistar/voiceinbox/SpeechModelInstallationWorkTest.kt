@@ -60,4 +60,19 @@ class SpeechModelInstallationWorkTest {
         assertTrue(diagnostic.contains("SecurityException"))
         assertTrue(diagnostic.contains("foreground type rejected"))
     }
+
+    @Test
+    fun foregroundFailureDiagnosticIdentifiesTranscription() {
+        val diagnostic = SpeechModelInstallationWork.foregroundFailureDiagnostic(
+            source = SpeechModelInstallationWork.Source.TRANSCRIPTION,
+            sdkInt = 35,
+            manufacturer = "samsung",
+            model = "SM-G990B",
+            error = IllegalStateException("foreground start rejected"),
+        )
+
+        assertTrue(diagnostic.contains("source=transcription"))
+        assertTrue(diagnostic.contains("sdk=35"))
+        assertTrue(diagnostic.contains("IllegalStateException"))
+    }
 }

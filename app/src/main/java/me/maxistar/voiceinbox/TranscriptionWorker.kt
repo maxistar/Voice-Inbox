@@ -32,7 +32,11 @@ class TranscriptionWorker(
             AndroidSqlDelightAudioCatalogFactory(applicationContext).create()
 
         try {
-            setForeground(foreground("Preparing transcription", 0, true))
+            SpeechModelInstallationWork.promote(
+                worker = this@TranscriptionWorker,
+                foregroundInfo = foreground("Preparing transcription", 0, true),
+                source = SpeechModelInstallationWork.Source.TRANSCRIPTION,
+            )
             val modelRepository = SpeechModelRepository(
                 applicationContext.noBackupFilesDir.resolve("models"),
             )
@@ -101,7 +105,15 @@ class TranscriptionWorker(
             percent,
         )
         setProgress(data)
-        setForeground(foreground(notificationText(phase, filename, completed, total), percent ?: 0, percent == null))
+        SpeechModelInstallationWork.promote(
+            worker = this,
+            foregroundInfo = foreground(
+                notificationText(phase, filename, completed, total),
+                percent ?: 0,
+                percent == null,
+            ),
+            source = SpeechModelInstallationWork.Source.TRANSCRIPTION,
+        )
     }
 
     private fun publishAsync(progress: BatchTranscriptionProgress) {
@@ -141,12 +153,14 @@ class TranscriptionWorker(
             progress,
         )
         setProgressAsync(data)
-        setForegroundAsync(
-            foreground(
+        SpeechModelInstallationWork.promoteAsync(
+            worker = this,
+            foregroundInfo = foreground(
                 notificationText(phase, filename, completed, total),
                 progress ?: 0,
                 progress == null,
             ),
+            source = SpeechModelInstallationWork.Source.TRANSCRIPTION,
         )
     }
 
@@ -191,7 +205,7 @@ class TranscriptionWorker(
             .setOngoing(true)
             .setProgress(100, progress, indeterminate)
             .build()
-        return ForegroundInfo(NOTIFICATION_ID, notification)
+        return SpeechModelInstallationWork.foregroundInfo(NOTIFICATION_ID, notification)
     }
 
     private fun notificationText(
