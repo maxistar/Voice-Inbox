@@ -28,6 +28,25 @@ enum IosShellCatalogSelection: String, CaseIterable, Identifiable {
 struct IosTaskListScreen {
     let state: TaskListState
     let filesById: [Int64: IosImportedAudioFile]
+    let onboardingHint: IosOnboardingHintPresentation
+    let onboardingShouldComplete: Bool
+
+    var displayItemStableIds: [String] {
+        var result = state.tasks
+            .filter { $0 is SetupTaskPresentation }
+            .map(\.stableId)
+        if onboardingHint.visible {
+            result.append(IosOnboardingHintPresentation.stableId)
+        }
+        if state.batchAction.visible {
+            result.append("batch:transcribe-all")
+        }
+        result.append(contentsOf: state.tasks.filter { $0 is AudioTaskPresentation }.map(\.stableId))
+        if state.emptyMessage != nil {
+            result.append("empty:\(state.filter.name.lowercased())")
+        }
+        return result
+    }
 }
 
 enum IosTaskActionRoute: Equatable {
@@ -84,21 +103,26 @@ final class IosMainScreenShellState {
         transcription: IosSingleFileTranscriptionState,
         preparationOwnerEntryId: Int64?,
         prerequisiteError: String?,
-        actionsEnabled: Bool
+        actionsEnabled: Bool,
+        onboardingLifecycle: IosOnboardingHintLifecycle = .dismissed,
+        setupHydration: IosSetupHydration = .known
     ) -> IosTaskListScreen {
+        let model = modelSnapshot(
+            status: modelStatus,
+            message: modelMessage,
+            installing: modelInstalling,
+            installationPhase: modelInstallationPhase,
+            downloadAvailable: modelDownloadAvailable,
+            progress: modelDownloadProgress,
+            canCancel: modelCanCancel
+        )
+        let output = outputSnapshot(outputStatus)
+        let folder = folderSnapshot(folderStatus, scanning: folderScanning)
         let input = TaskListInput(
             filter: selection.sharedFilter,
-            model: modelSnapshot(
-                status: modelStatus,
-                message: modelMessage,
-                installing: modelInstalling,
-                installationPhase: modelInstallationPhase,
-                downloadAvailable: modelDownloadAvailable,
-                progress: modelDownloadProgress,
-                canCancel: modelCanCancel
-            ),
-            output: outputSnapshot(outputStatus),
-            folder: folderSnapshot(folderStatus, scanning: folderScanning),
+            model: model,
+            output: output,
+            folder: folder,
             audio: importedFiles.map { file in
                 AudioTaskSnapshot(
                     entryId: file.id,
@@ -134,9 +158,25 @@ final class IosMainScreenShellState {
                 prerequisiteError: prerequisiteError
             )
         )
+        let onboardingHint = IosOnboardingHintPresenter.present(
+            lifecycle: onboardingLifecycle,
+            selection: selection,
+            hydration: setupHydration,
+            model: model,
+            output: output,
+            folder: folder
+        )
         return IosTaskListScreen(
             state: TaskListPresentationController.shared.state(input: input),
-            filesById: Dictionary(uniqueKeysWithValues: importedFiles.map { ($0.id, $0) })
+            filesById: Dictionary(uniqueKeysWithValues: importedFiles.map { ($0.id, $0) }),
+            onboardingHint: onboardingHint,
+            onboardingShouldComplete: IosOnboardingHintPresenter.shouldComplete(
+                lifecycle: onboardingLifecycle,
+                hydration: setupHydration,
+                model: model,
+                output: output,
+                folder: folder
+            )
         )
     }
 

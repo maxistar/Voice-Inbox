@@ -24,6 +24,8 @@
 		5E50C86D75D247316B5953AB /* VoiceInboxShareExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 242890FE4BBC56636FBA9F10 /* VoiceInboxShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		9FAC76B26E6BD4116D968475 /* IosSharedImportStaging.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD030301C0E14C9932DCBFE6 /* IosSharedImportStaging.swift */; };
 		A10000000000000000000001 /* DeferredSpeechModelLoadingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000002 /* DeferredSpeechModelLoadingTests.swift */; };
+		B20000000000000000000001 /* IosInlineOnboarding.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000002 /* IosInlineOnboarding.swift */; };
+		B20000000000000000000003 /* IosInlineOnboardingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000004 /* IosInlineOnboardingTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -80,6 +82,8 @@
 		F63411837D138D0E90F5BA1D /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A10000000000000000000002 /* DeferredSpeechModelLoadingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeferredSpeechModelLoadingTests.swift; sourceTree = "<group>"; };
 		A10000000000000000000003 /* VoiceInboxTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VoiceInboxTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B20000000000000000000002 /* IosInlineOnboarding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosInlineOnboarding.swift; sourceTree = "<group>"; };
+		B20000000000000000000004 /* IosInlineOnboardingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosInlineOnboardingTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -140,6 +144,7 @@
 				101010101010101010101041 /* IosSpeechModelStore.swift */,
 				101010101010101010101023 /* IosScheduledTranscriptionSettingsStore.swift */,
 				101010101010101010101026 /* IosMainScreenShellState.swift */,
+				B20000000000000000000002 /* IosInlineOnboarding.swift */,
 				101010101010101010101024 /* SettingsView.swift */,
 				101010101010101010101034 /* Assets.xcassets */,
 				1DF805AFB19C13EC1D442253 /* IosSharedImportStaging.swift */,
@@ -163,6 +168,7 @@
 			isa = PBXGroup;
 			children = (
 				A10000000000000000000002 /* DeferredSpeechModelLoadingTests.swift */,
+				B20000000000000000000004 /* IosInlineOnboardingTests.swift */,
 			);
 			path = VoiceInboxTests;
 			sourceTree = "<group>";
@@ -349,6 +355,7 @@
 				101010101010101010101039 /* IosSpeechModelStore.swift in Sources */,
 				101010101010101010101021 /* IosScheduledTranscriptionSettingsStore.swift in Sources */,
 				101010101010101010101025 /* IosMainScreenShellState.swift in Sources */,
+				B20000000000000000000001 /* IosInlineOnboarding.swift in Sources */,
 				101010101010101010101022 /* SettingsView.swift in Sources */,
 				18B94FCC65FAAF5B349BF28B /* IosSharedImportStaging.swift in Sources */,
 			);
@@ -368,6 +375,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000001 /* DeferredSpeechModelLoadingTests.swift in Sources */,
+				B20000000000000000000003 /* IosInlineOnboardingTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
