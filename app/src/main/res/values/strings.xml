@@ -52,6 +52,9 @@
     <string name="import_audio">Import audio</string>
     <string name="importing_audio">Importing audio…</string>
     <string name="no_shared_audio">No readable audio was shared.</string>
+    <string name="transcript_share">Share</string>
+    <string name="transcript_close">Close</string>
+    <string name="transcript_text_accessibility">Selectable transcript text</string>
     <string name="checking_speech_model">Checking speech model</string>
     <string name="download_speech_model">Download speech model</string>
     <string name="install_model_from_folder">Install from folder</string>

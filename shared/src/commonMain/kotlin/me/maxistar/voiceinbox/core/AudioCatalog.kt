@@ -33,6 +33,7 @@ data class AudioCatalogEntry(
     val lastError: String?,
     val processedAtMillis: Long?,
     val transcriptText: String?,
+    val durationUs: Long? = null,
 )
 
 data class AudioCatalogSourceScope(

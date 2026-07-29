@@ -12,6 +12,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.widget.Toast
+import android.widget.TextView
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -30,6 +31,7 @@ import androidx.work.WorkManager
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.floatingactionbutton.FloatingActionButton
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
 import java.util.UUID
@@ -842,12 +844,21 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     }
 
     private fun showTranscriptText(entry: AudioCatalogEntry) {
-        val transcript = entry.transcriptText?.takeIf { it.isNotBlank() } ?: return
-        AlertDialog.Builder(this)
-            .setTitle(entry.displayName)
-            .setMessage(transcript)
-            .setPositiveButton(android.R.string.ok, null)
-            .show()
+        val review = AndroidTranscriptReview.from(entry) ?: return
+        val content = layoutInflater.inflate(R.layout.dialog_transcript, null)
+        content.findViewById<TextView>(R.id.transcriptText).text = review.text
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(review.filename)
+            .setView(content)
+            .setNegativeButton(R.string.transcript_close, null)
+            .setPositiveButton(R.string.transcript_share, null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                startActivity(AndroidTranscriptShareIntent.chooser(review))
+            }
+        }
+        dialog.show()
     }
 
     private fun refreshModel() {

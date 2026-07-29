@@ -15,7 +15,7 @@ struct ContentView: View {
     @StateObject private var startupPolicyStore = IosStartupProcessingPolicyStore()
     @State private var selectedTab = IosShellCatalogSelection.new
     @State private var presentedPicker: IosPresentedPicker?
-    @State private var shownTranscript: String?
+    @State private var shownTranscript: IosDisplayedTranscript?
     @State private var startupProcessingChecked = false
     @State private var startupFolderRefreshChecked = false
     @State private var startupProcessingPrompt: IosStartupProcessingPrompt?
@@ -183,21 +183,9 @@ struct ContentView: View {
                 completeOnboardingIfNeeded()
                 evaluateStartupProcessingIfNeeded()
             }
-            .sheet(item: transcriptBinding) { transcript in
-                NavigationStack {
-                    ScrollView {
-                        Text(transcript.text)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding()
-                    }
-                    .navigationTitle("Transcript")
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("Done") {
-                                shownTranscript = nil
-                            }
-                        }
-                    }
+            .sheet(item: $shownTranscript) { transcript in
+                IosTranscriptViewer(transcript: transcript) {
+                    shownTranscript = nil
                 }
             }
             .sheet(item: $startupProcessingPrompt) { prompt in
@@ -256,17 +244,6 @@ struct ContentView: View {
             actionsEnabled: transcriptionReady && !transcriber.isActive && !importStore.isScanningFolder,
             onboardingLifecycle: onboardingLifecycle,
             setupHydration: setupHydration
-        )
-    }
-
-    private var transcriptBinding: Binding<IosDisplayedTranscript?> {
-        Binding(
-            get: {
-                shownTranscript.map(IosDisplayedTranscript.init(text:))
-            },
-            set: { value in
-                shownTranscript = value?.text
-            }
         )
     }
 
@@ -369,7 +346,10 @@ struct ContentView: View {
         case .stop:
             previewPlayer.stop()
         case .showText:
-            shownTranscript = file.transcriptText
+            shownTranscript = IosTranscriptReview.presentation(
+                entryId: file.id,
+                files: importStore.files
+            )
         case .transcribe, .retryTranscription:
             guard let outputDocument = outputStore.currentDocument() else {
                 outputStore.refreshAccess()
@@ -377,7 +357,15 @@ struct ContentView: View {
             }
             previewPlayer.stop()
             let onSuccess: (String) -> Void = { transcript in
-                shownTranscript = transcript
+                shownTranscript = IosTranscriptReview.presentation(
+                    entryId: file.id,
+                    files: importStore.files
+                )
+                    ?? IosDisplayedTranscript(
+                        entryId: file.id,
+                        filename: file.displayName,
+                        text: transcript
+                    )
                 selectedTab = .processed
             }
             if action == .retryTranscription {
@@ -578,11 +566,6 @@ private struct TaskListRow: View {
 private struct IosGlobalMessage: Identifiable {
     let id = UUID()
     let title: String
-    let text: String
-}
-
-private struct IosDisplayedTranscript: Identifiable {
-    let id = UUID()
     let text: String
 }
 

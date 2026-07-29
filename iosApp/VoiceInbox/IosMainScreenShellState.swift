@@ -236,12 +236,11 @@ final class IosMainScreenShellState {
     }
 
     private func subtitle(for file: IosImportedAudioFile) -> String {
-        var parts = ["Imported", file.formattedSize]
-        if let durationUs = file.durationUs, durationUs > 0 {
-            let totalSeconds = durationUs / 1_000_000
-            parts.append("\(totalSeconds / 60):\(String(format: "%02d", totalSeconds % 60))")
-        }
-        return parts.joined(separator: " • ")
+        IosAudioMetadataFormatter.format(
+            timestamp: file.importedAt,
+            sizeBytes: file.sizeBytes,
+            durationUs: file.durationUs
+        ) ?? ""
     }
 
     static func isNoSpeech(_ message: String?) -> Bool {
