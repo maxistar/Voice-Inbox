@@ -85,8 +85,8 @@ private class AndroidPlatformAudioDecoder(
 }
 
 private object AndroidPlatformNativeTranscriber : PlatformNativeTranscriber {
-    override fun initialize(modelDirectory: String): Boolean =
-        NativeTranscriptionBridge.initialize(modelDirectory)
+    // The worker prepares the descriptor-aware native engine before it claims audio work.
+    override fun initialize(modelDirectory: String): Boolean = true
 
     override fun transcribeChunk(samples: FloatArray): String? =
         NativeTranscriptionBridge.transcribeChunk(samples)?.text

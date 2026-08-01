@@ -124,6 +124,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private val stopRefreshIndicator = Runnable(::stopRefreshIndicatorAnimation)
     private val queuedImportUris = mutableListOf<Uri>()
     private var onboardingHintLifecycle = AndroidOnboardingHintLifecycle.DISMISSED
+    private var pendingModelPackageUri: Uri? = null
+    private var pendingModelPackageCatalogId: String? = null
 
     private val outputPicker = registerForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -174,9 +176,9 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         documentAccess = DocumentAccess(contentResolver)
         folderScanner = AudioFolderScanner(contentResolver)
         catalog = AndroidSqlDelightAudioCatalogFactory(this).create()
-        modelReadiness = getSharedModelReadiness(
-            SpeechModelRepository(noBackupFilesDir.resolve("models"), speechModel.manifest),
-        )
+        modelReadiness = getSharedModelReadiness {
+            SpeechModelRepository.forActive(noBackupFilesDir.resolve("models"))
+        }
         startupPolicyStore = StartupProcessingPolicyStore(
             getSharedPreferences(StartupProcessingPolicyStore.PREFERENCES_NAME, MODE_PRIVATE),
         )
@@ -187,6 +189,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         startupCoordinator = StartupProcessingCoordinator.restore(
             savedInstanceState?.getString(STATE_STARTUP_PROCESSING_STAGE),
         )
+        pendingModelPackageUri = savedInstanceState?.getString(STATE_PENDING_MODEL_URI)?.let(Uri::parse)
+        pendingModelPackageCatalogId = savedInstanceState?.getString(STATE_PENDING_MODEL_CATALOG_ID)
         restoreRetainedPresentation()
         taskActionRouter = AndroidTaskActionRouter(
             currentState = { taskStateHost.state.value },
@@ -225,6 +229,11 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         cleanupImportedAudio()
         handleShareIntent(intent)
         refreshModel()
+        restorePendingModelConfirmation()
+        if (intent.getBooleanExtra(EXTRA_OPEN_MODEL_FOLDER_PICKER, false)) {
+            intent.removeExtra(EXTRA_OPEN_MODEL_FOLDER_PICKER)
+            modelFolderPicker.launch(null)
+        }
     }
 
     override fun onStart() {
@@ -244,6 +253,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString(STATE_STARTUP_PROCESSING_STAGE, startupCoordinator.savedStage())
+        outState.putString(STATE_PENDING_MODEL_URI, pendingModelPackageUri?.toString())
+        outState.putString(STATE_PENDING_MODEL_CATALOG_ID, pendingModelPackageCatalogId)
         super.onSaveInstanceState(outState)
     }
 
@@ -645,21 +656,15 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
             return
         }
         if (!alreadyPersisted) SpeechModelImportPermission.recordOwned(this, uri)
-        modelPresentationKnown = true
-        modelReady = false
-        modelSetupState = ModelSetupSnapshotState.INSTALLING
-        setModelUi("Checking local speech model", canDownload = false)
-        updateControls()
         importExecutor.execute {
             runCatching {
-                SpeechModelDirectoryReader(contentResolver).requiredDocuments(
-                    uri,
-                    speechModel.manifest,
-                )
-            }.onSuccess {
+                SpeechModelDirectoryReader(contentResolver).inspectPackage(uri)
+            }.onSuccess { source ->
                 runOnUiThread {
                     if (activityDestroyed) return@runOnUiThread
-                    SpeechModelImportWorker.enqueue(this, uri)
+                    pendingModelPackageUri = uri
+                    pendingModelPackageCatalogId = source.descriptor.catalogId
+                    showModelPackageConfirmation(source.descriptor)
                 }
             }.onFailure { error ->
                 SpeechModelImportPermission.releaseOwnedIfUnused(this)
@@ -676,6 +681,46 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                 }
             }
         }
+    }
+
+    private fun restorePendingModelConfirmation() {
+        val descriptor = pendingModelPackageCatalogId?.let { catalogId ->
+            SpeechModelCatalog.models.singleOrNull { it.catalogId == catalogId }
+        } ?: return
+        showModelPackageConfirmation(descriptor)
+    }
+
+    private fun showModelPackageConfirmation(descriptor: SpeechModelDescriptor) {
+        val uri = pendingModelPackageUri ?: return
+        val size = SpeechModelRepository.formatBytes(descriptor.approximateDownloadBytes)
+        val maturity = descriptor.maturity.name.lowercase().replaceFirstChar(Char::uppercase)
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle("Install ${descriptor.displayName}?")
+            .setMessage("$maturity model · ${descriptor.languages.summary} · approximately $size")
+            .setNegativeButton(android.R.string.cancel) { _, _ ->
+                pendingModelPackageUri = null
+                pendingModelPackageCatalogId = null
+                SpeechModelImportPermission.releaseOwnedIfUnused(this)
+            }
+            .setPositiveButton("Install", null)
+            .create()
+        dialog.setOnShowListener {
+            val confirm = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            confirm.isEnabled = !transcriptionActive()
+            confirm.setOnClickListener {
+                if (transcriptionActive()) return@setOnClickListener
+                pendingModelPackageUri = null
+                pendingModelPackageCatalogId = null
+                modelPresentationKnown = true
+                modelReady = false
+                modelSetupState = ModelSetupSnapshotState.INSTALLING
+                setModelUi("Installing ${descriptor.displayName}", canDownload = false)
+                updateControls()
+                SpeechModelImportWorker.enqueue(this, uri, descriptor)
+                dialog.dismiss()
+            }
+        }
+        dialog.show()
     }
 
     private fun scanFolder(
@@ -1589,6 +1634,9 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
 
     private companion object {
         const val STATE_STARTUP_PROCESSING_STAGE = "startup-processing-stage"
+        const val STATE_PENDING_MODEL_URI = "pending-model-uri"
+        const val STATE_PENDING_MODEL_CATALOG_ID = "pending-model-catalog-id"
+        const val EXTRA_OPEN_MODEL_FOLDER_PICKER = "open-model-folder-picker"
         const val REFRESH_SHOW_DELAY_MS = 180L
         const val REFRESH_MIN_VISIBLE_MS = 450L
         const val REFRESH_ROTATION_MS = 800L
@@ -1603,7 +1651,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         private val handledModelInstallSuccessIds = mutableSetOf<String>()
         private val handledTranscriptionFailureIds = mutableSetOf<String>()
 
-        fun getSharedModelReadiness(repository: SpeechModelRepository): SpeechModelReadinessManager =
+        fun getSharedModelReadiness(repository: () -> SpeechModelRepository): SpeechModelReadinessManager =
             sharedModelReadiness ?: synchronized(this) {
                 sharedModelReadiness ?: SpeechModelReadinessManager(
                     repository = repository,

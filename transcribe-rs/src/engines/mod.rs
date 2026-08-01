@@ -42,6 +42,7 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
+#[cfg(feature = "parakeet")]
 pub mod parakeet;
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[cfg(feature = "whisper")]
 pub mod whisper;

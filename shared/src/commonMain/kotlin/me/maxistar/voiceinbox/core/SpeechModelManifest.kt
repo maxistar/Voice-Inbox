@@ -70,6 +70,12 @@ data class SpeechModelDescriptor(
     val requiredStorageBytes: Long = manifest.requiredFreeBytes
 }
 
+data class SpeechModelPackageIdentity(
+    val schemaVersion: Int,
+    val catalogId: String,
+    val modelVersion: String,
+)
+
 object SpeechModelCatalog {
     val parakeetTdt06bV3Int8 = SpeechModelDescriptor(
         catalogId = "parakeet-tdt-0.6b-v3-int8",
@@ -131,6 +137,68 @@ object SpeechModelCatalog {
         supportedPlatforms = setOf(SpeechModelPlatform.ANDROID, SpeechModelPlatform.IOS),
     )
 
-    val models: List<SpeechModelDescriptor> = listOf(parakeetTdt06bV3Int8)
+    val whisperTinyMultilingual = SpeechModelDescriptor(
+        catalogId = "whisper-tiny-multilingual",
+        displayName = "Whisper Tiny Multilingual",
+        backend = SpeechModelBackend.WHISPER_CPP,
+        manifest = SpeechModelManifest(
+            modelId = "ggerganov/whisper.cpp",
+            version = "whisper-tiny-ggml-f16-r1",
+            repositoryRevision = "5359861c739e955e79d9a303bcbc70fb988958b1",
+            files = listOf(
+                SpeechModelFile(
+                    name = "ggml-tiny.bin",
+                    sizeBytes = 77_691_713,
+                    sha256 = "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21",
+                ),
+            ),
+            safetyMarginBytes = 64L * 1024L * 1024L,
+        ),
+        distribution = SpeechModelDistribution(
+            networkDownloadAvailable = false,
+            localImportAvailable = true,
+        ),
+        languages = SpeechModelLanguageCoverage(
+            summary = "Multilingual",
+            languageTags = emptyList(),
+        ),
+        maturity = SpeechModelMaturity.EXPERIMENTAL,
+        attribution = SpeechModelAttribution(
+            sourceName = "whisper.cpp Whisper Tiny model",
+            sourceUrl = "https://huggingface.co/ggerganov/whisper.cpp",
+            upstreamName = "OpenAI Whisper Tiny",
+            upstreamUrl = "https://github.com/openai/whisper",
+            licenseName = "MIT",
+            licenseUrl = "https://github.com/openai/whisper/blob/main/LICENSE",
+        ),
+        supportedPlatforms = setOf(SpeechModelPlatform.ANDROID),
+    )
+
+    val models: List<SpeechModelDescriptor> = listOf(
+        parakeetTdt06bV3Int8,
+        whisperTinyMultilingual,
+    )
     val defaultModel: SpeechModelDescriptor = parakeetTdt06bV3Int8
+
+    fun resolvePackage(
+        identity: SpeechModelPackageIdentity,
+        platform: SpeechModelPlatform,
+    ): SpeechModelDescriptor? {
+        if (identity.schemaVersion != PACKAGE_SCHEMA_VERSION) return null
+        return models.singleOrNull {
+            it.catalogId == identity.catalogId &&
+                it.manifest.version == identity.modelVersion &&
+                platform in it.supportedPlatforms &&
+                it.distribution.localImportAvailable
+        }
+    }
+
+    fun resolveInstallation(catalogId: String, modelVersion: String): SpeechModelDescriptor? =
+        models.singleOrNull { it.catalogId == catalogId && it.manifest.version == modelVersion }
+
+    fun modelsFor(platform: SpeechModelPlatform): List<SpeechModelDescriptor> =
+        models.filter { platform in it.supportedPlatforms }
+
+    const val PACKAGE_SCHEMA_VERSION = 1
+    const val PACKAGE_MANIFEST_FILENAME = "voice-inbox-model.json"
 }

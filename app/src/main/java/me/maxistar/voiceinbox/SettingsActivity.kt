@@ -101,6 +101,12 @@ class SettingsActivity : AppCompatActivity() {
         findViewById<View>(R.id.settingsOutputRow).setOnClickListener {
             showOutputDocumentOptions()
         }
+        findViewById<View>(R.id.settingsModelRow).setOnClickListener {
+            startActivity(
+                Intent(this, MainActivity::class.java)
+                    .putExtra("open-model-folder-picker", true),
+            )
+        }
         findViewById<View>(R.id.settingsWebsiteRow).setOnClickListener {
             openExternalUrl(VoiceInboxPublicLinks.WEBSITE)
         }

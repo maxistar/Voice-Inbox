@@ -15,6 +15,9 @@ val hasReleaseSigning = listOf(
     releaseKeyAlias,
     releaseKeyPassword,
 ).all { !it.isNullOrBlank() }
+val cargoExecutable = System.getenv("CARGO")
+    ?: File(System.getProperty("user.home"), ".cargo/bin/cargo").takeIf(File::isFile)?.absolutePath
+    ?: "cargo"
 
 android {
     namespace = "me.maxistar.voiceinbox"
@@ -122,6 +125,27 @@ val cargoNdkBuild by tasks.registering(Exec::class) {
         ?: System.getenv("ANDROID_NDK")
         ?: android.ndkDirectory.absolutePath
     environment("ANDROID_NDK_HOME", ndkDir)
+    val ndkPrebuiltDir = File(ndkDir, "toolchains/llvm/prebuilt").listFiles()
+        ?.firstOrNull(File::isDirectory) ?: throw GradleException("NDK LLVM prebuilt directory was not found")
+    val whisperCompatDir = layout.buildDirectory.dir("whisper-android-compat").get().asFile.apply { mkdirs() }
+    val whisperCompatArchive = File(whisperCompatDir, "libggml-blas.a")
+    if (!whisperCompatArchive.exists()) {
+        exec { commandLine(File(ndkPrebuiltDir, "bin/llvm-ar").absolutePath, "crs", whisperCompatArchive.absolutePath) }
+    }
+    val cmake = File(android.sdkDirectory, "cmake").listFiles()
+        ?.sortedByDescending(File::getName)
+        ?.map { File(it, "bin/cmake") }
+        ?.firstOrNull(File::isFile)
+        ?: throw GradleException("Android SDK CMake is required for the Whisper build")
+    environment("CMAKE", cmake.absolutePath)
+    environment("CMAKE_GENERATOR", "Ninja")
+    environment("CMAKE_MAKE_PROGRAM", File(cmake.parentFile, "ninja").absolutePath)
+    environment("CMAKE_ANDROID_ARCH_ABI", "arm64-v8a")
+    environment("RUSTFLAGS", "-Lnative=${whisperCompatDir.absolutePath}")
+    environment(
+        "CMAKE_TOOLCHAIN_FILE",
+        rootProject.file("scripts/whisper-android-cmake/android.toolchain.cmake").absolutePath,
+    )
 
     val extractDir = layout.buildDirectory.dir("ort-extracted").get().asFile
     environment("ORT_LIB_LOCATION", File(extractDir, "jni/arm64-v8a").absolutePath)
@@ -129,10 +153,11 @@ val cargoNdkBuild by tasks.registering(Exec::class) {
 
     val jniLibsDir = project.file("src/main/jniLibs")
     commandLine(
-        "cargo", "ndk",
+        cargoExecutable, "ndk",
         "-t", "arm64-v8a",
         "-o", jniLibsDir.absolutePath,
         "build", "--release",
+        "--features", "android-dual-backend",
     )
 
     doLast {

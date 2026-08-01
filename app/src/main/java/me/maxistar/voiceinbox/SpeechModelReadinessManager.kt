@@ -12,9 +12,14 @@ sealed interface SpeechModelReadinessState {
 }
 
 class SpeechModelReadinessManager(
-    private val repository: SpeechModelRepository,
+    private val repository: () -> SpeechModelRepository,
     private val executor: Executor,
 ) {
+    constructor(
+        repository: SpeechModelRepository,
+        executor: Executor,
+    ) : this(repository = { repository }, executor = executor)
+
     private val lock = Any()
     private var cachedState: SpeechModelReadinessState? = null
     private var checking = false
@@ -51,6 +56,7 @@ class SpeechModelReadinessManager(
 
     private fun checkModel() {
         val state = runCatching {
+            val repository = repository()
             repository.cleanupStaleState()
             when (val installed = repository.inspectLightweight()) {
                 is InstalledSpeechModelState.Ready -> SpeechModelReadinessState.Ready(installed.directory)

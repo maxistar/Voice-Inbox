@@ -24,7 +24,7 @@ class SpeechModelDownloadWorker(
     private val model = SpeechModelCatalog.defaultModel
     private val repository = SpeechModelRepository(
         root = applicationContext.noBackupFilesDir.resolve("models"),
-        manifest = model.manifest,
+        descriptor = model,
     )
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)

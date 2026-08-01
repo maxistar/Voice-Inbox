@@ -8,7 +8,8 @@ final class DeferredSpeechModelLoadingTests: XCTestCase {
         let descriptor = SpeechModelCatalog.shared.defaultModel
         let manifest = descriptor.manifest
 
-        XCTAssertEqual(SpeechModelCatalog.shared.models.count, 1)
+        XCTAssertEqual(SpeechModelCatalog.shared.models.count, 2)
+        XCTAssertEqual(SpeechModelCatalog.shared.modelsFor(platform: .ios).count, 1)
         XCTAssertEqual(descriptor.catalogId, "parakeet-tdt-0.6b-v3-int8")
         XCTAssertEqual(manifest.modelId, "istupakov/parakeet-tdt-0.6b-v3-onnx")
         XCTAssertEqual(manifest.version, "parakeet-tdt-0.6b-v3-int8-r1")

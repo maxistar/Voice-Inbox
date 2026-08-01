@@ -20,8 +20,6 @@ use jni::sys::{jboolean, jstring, JNI_FALSE, JNI_TRUE};
 use jni::JNIEnv;
 #[cfg(target_os = "android")]
 use std::path::PathBuf;
-#[cfg(any(target_os = "android", all(target_os = "ios", feature = "ios-onnx")))]
-use transcribe_rs::TranscriptionEngine;
 
 #[cfg(any(not(target_os = "ios"), all(target_os = "ios", feature = "ios-onnx")))]
 fn serialize_chunk_result(result: transcribe_rs::TranscriptionResult) -> String {
@@ -49,22 +47,30 @@ fn serialize_chunk_result(result: transcribe_rs::TranscriptionResult) -> String 
 pub unsafe extern "system" fn Java_me_maxistar_voiceinbox_NativeTranscriptionBridge_initialize(
     mut env: JNIEnv,
     _class: JClass,
+    backend: JString,
+    installation_identity: JString,
     model_directory: JString,
+    primary_file: JString,
 ) -> jboolean {
     android_logger::init_once(
         android_logger::Config::default().with_max_level(log::LevelFilter::Info),
     );
     let _ = ort::init().commit();
 
-    let model_directory: String = match env.get_string(&model_directory) {
-        Ok(path) => path.into(),
-        Err(error) => {
-            log::error!("Failed to read model directory from JNI: {error}");
-            return JNI_FALSE;
-        }
+    let read = |env: &mut JNIEnv, value: &JString| -> Result<String, String> {
+        env.get_string(value).map(Into::into).map_err(|error| error.to_string())
+    };
+    let configuration = match (
+        read(&mut env, &backend), read(&mut env, &installation_identity),
+        read(&mut env, &model_directory), read(&mut env, &primary_file),
+    ) {
+        (Ok(backend), Ok(identity), Ok(directory), Ok(primary_file)) => engine::ModelConfiguration {
+            backend, identity, directory: PathBuf::from(directory), primary_file,
+        },
+        _ => return JNI_FALSE,
     };
 
-    engine::configure_model_directory(PathBuf::from(model_directory));
+    engine::configure_model(configuration);
     match engine::ensure_loaded_without_callback() {
         Ok(()) => JNI_TRUE,
         Err(error) => {
@@ -105,18 +111,8 @@ pub unsafe extern "system" fn Java_me_maxistar_voiceinbox_NativeTranscriptionBri
     let result = engine::get_engine()
         .ok_or_else(|| "Model is not loaded".to_string())
         .and_then(|engine| {
-            engine
-                .lock()
-                .unwrap()
-                .transcribe_samples(
-                    buffer,
-                    Some(transcribe_rs::engines::parakeet::ParakeetInferenceParams {
-                        timestamp_granularity:
-                            transcribe_rs::engines::parakeet::TimestampGranularity::Word,
-                    }),
-                )
+            engine.lock().unwrap().transcribe_samples(buffer)
                 .map(serialize_chunk_result)
-                .map_err(|error| error.to_string())
         });
 
     match result.and_then(|text| env.new_string(text).map_err(|error| error.to_string())) {
@@ -282,18 +278,8 @@ pub unsafe extern "C" fn voiceinbox_transcription_transcribe_chunk_json(
     let result = engine::get_engine()
         .ok_or_else(|| "Model is not loaded".to_string())
         .and_then(|engine| {
-            engine
-                .lock()
-                .unwrap()
-                .transcribe_samples(
-                    buffer,
-                    Some(transcribe_rs::engines::parakeet::ParakeetInferenceParams {
-                        timestamp_granularity:
-                            transcribe_rs::engines::parakeet::TimestampGranularity::Word,
-                    }),
-                )
+            engine.lock().unwrap().transcribe_samples(buffer)
                 .map(serialize_chunk_result)
-                .map_err(|error| error.to_string())
         });
 
     match result {
