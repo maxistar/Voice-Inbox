@@ -21,6 +21,7 @@ if [[ -z "${IOS_ONNX_RUNTIME_DIR}" && -d "${DEFAULT_IOS_ONNX_RUNTIME_DIR}" ]]; t
   IOS_ONNX_RUNTIME_DIR="${DEFAULT_IOS_ONNX_RUNTIME_DIR}"
 fi
 IOS_ONNX_RUNTIME_XCFRAMEWORK=""
+CARGO_FEATURES=()
 CARGO_FEATURE_ARGS=(--no-default-features)
 
 echo "VoiceInbox native bridge build"
@@ -41,11 +42,35 @@ if [[ -n "${IOS_ONNX_RUNTIME_DIR}" ]]; then
     exit 1
   fi
 
-  CARGO_FEATURE_ARGS=(--no-default-features --features ios-onnx)
+  CARGO_FEATURES+=(ios-onnx)
   echo "  iOS ONNX Runtime artifact=${IOS_ONNX_RUNTIME_XCFRAMEWORK}"
 else
   echo "  iOS ONNX Runtime artifact not configured; building placeholder backend."
   echo "  Set VOICEINBOX_IOS_ONNX_RUNTIME_DIR or place onnxruntime.xcframework under ${DEFAULT_IOS_ONNX_RUNTIME_DIR} to enable the ios-onnx feature."
+fi
+
+if [[ "${VOICEINBOX_WHISPER_MOBILE_SPIKE:-0}" == "1" ]]; then
+  CARGO_FEATURES+=(whisper-mobile-spike)
+  echo "  Whisper mobile spike enabled (test-only build)"
+  # whisper.cpp is built through CMake, which initializes Apple's deployment
+  # target from MACOSX_DEPLOYMENT_TARGET even for an iOS toolchain.
+  export MACOSX_DEPLOYMENT_TARGET="${IPHONEOS_DEPLOYMENT_TARGET:-16.0}"
+  echo "  Native deployment target=${MACOSX_DEPLOYMENT_TARGET}"
+  if ! command -v cmake >/dev/null 2>&1 && [[ -z "${CMAKE:-}" ]]; then
+    ANDROID_SDK_ROOT_CANDIDATE="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-${HOME}/Library/Android/sdk}}"
+    CMAKE_CANDIDATE="$(find "${ANDROID_SDK_ROOT_CANDIDATE}/cmake" -maxdepth 3 -type f -name cmake 2>/dev/null | sort -r | head -n 1 || true)"
+    if [[ -n "${CMAKE_CANDIDATE}" ]]; then
+      export CMAKE="${CMAKE_CANDIDATE}"
+      export CMAKE_GENERATOR="Ninja"
+      export CMAKE_MAKE_PROGRAM="$(dirname "${CMAKE_CANDIDATE}")/ninja"
+      echo "  CMake=${CMAKE}"
+    fi
+  fi
+fi
+
+if [[ ${#CARGO_FEATURES[@]} -gt 0 ]]; then
+  FEATURES_CSV="$(IFS=,; echo "${CARGO_FEATURES[*]}")"
+  CARGO_FEATURE_ARGS=(--no-default-features --features "${FEATURES_CSV}")
 fi
 
 if ! command -v cargo >/dev/null 2>&1; then

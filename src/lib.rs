@@ -1,6 +1,9 @@
 #[cfg(any(not(target_os = "ios"), all(target_os = "ios", feature = "ios-onnx")))]
 pub mod engine;
 
+#[cfg(feature = "whisper-mobile-spike")]
+mod whisper_mobile_spike;
+
 #[cfg(target_os = "ios")]
 use once_cell::sync::Lazy;
 #[cfg(target_os = "ios")]
@@ -11,6 +14,26 @@ use std::os::raw::{c_char, c_float};
 use std::path::Path;
 #[cfg(target_os = "ios")]
 use std::sync::Mutex;
+
+#[cfg(feature = "whisper-mobile-spike")]
+fn run_whisper_spike_operation(
+    operation: &str,
+    action: impl FnOnce() -> String + std::panic::UnwindSafe,
+) -> String {
+    std::panic::catch_unwind(action).unwrap_or_else(|_| {
+        serde_json::json!({
+            "schema_version": 1,
+            "backend": "whisper.cpp",
+            "operation": operation,
+            "status": "error",
+            "error": "Whisper spike operation panicked",
+        })
+        .to_string()
+    })
+}
+
+#[cfg(all(target_os = "ios", feature = "whisper-mobile-spike"))]
+use std::path::PathBuf;
 
 #[cfg(target_os = "android")]
 use jni::objects::{JClass, JFloatArray, JString};
@@ -318,6 +341,80 @@ pub unsafe extern "C" fn voiceinbox_transcription_string_free(value: *mut c_char
     if !value.is_null() {
         drop(CString::from_raw(value));
     }
+}
+
+#[cfg(all(target_os = "ios", feature = "whisper-mobile-spike"))]
+#[no_mangle]
+pub unsafe extern "C" fn voiceinbox_whisper_spike_initialize_json(
+    model_path: *const c_char,
+) -> *mut c_char {
+    let path = match read_model_directory(model_path) {
+        Ok(path) => PathBuf::from(path),
+        Err(error) => {
+            return into_c_string(
+                serde_json::json!({
+                    "schema_version": 1,
+                    "backend": "whisper.cpp",
+                    "operation": "initialize",
+                    "status": "error",
+                    "error": error,
+                })
+                .to_string(),
+            )
+        }
+    };
+    into_c_string(run_whisper_spike_operation("initialize", || {
+        whisper_mobile_spike::initialize(&path)
+    }))
+}
+
+#[cfg(all(target_os = "ios", feature = "whisper-mobile-spike"))]
+#[no_mangle]
+pub unsafe extern "C" fn voiceinbox_whisper_spike_transcribe_json(
+    samples: *const c_float,
+    sample_count: usize,
+    language: *const c_char,
+) -> *mut c_char {
+    if samples.is_null() || sample_count == 0 {
+        return into_c_string(
+            serde_json::json!({
+                "schema_version": 1,
+                "backend": "whisper.cpp",
+                "operation": "transcribe",
+                "status": "error",
+                "error": "No PCM samples were provided",
+            })
+            .to_string(),
+        );
+    }
+    let buffer = std::slice::from_raw_parts(samples, sample_count).to_vec();
+    let language = if language.is_null() {
+        None
+    } else {
+        CStr::from_ptr(language)
+            .to_str()
+            .ok()
+            .map(str::to_owned)
+            .filter(|value| !value.is_empty())
+    };
+    into_c_string(run_whisper_spike_operation("transcribe", || {
+        whisper_mobile_spike::transcribe(buffer, language)
+    }))
+}
+
+#[cfg(all(target_os = "ios", feature = "whisper-mobile-spike"))]
+#[no_mangle]
+pub extern "C" fn voiceinbox_whisper_spike_diagnostics_json() -> *mut c_char {
+    into_c_string(run_whisper_spike_operation(
+        "diagnostics",
+        whisper_mobile_spike::diagnostics,
+    ))
+}
+
+#[cfg(all(target_os = "ios", feature = "whisper-mobile-spike"))]
+#[no_mangle]
+pub extern "C" fn voiceinbox_whisper_spike_reset() {
+    let _ = std::panic::catch_unwind(whisper_mobile_spike::reset);
 }
 
 #[cfg(test)]

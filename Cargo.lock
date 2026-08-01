@@ -1154,6 +1154,7 @@ dependencies = [
  "once_cell",
  "ort",
  "serde_json",
+ "sha2",
  "transcribe-rs",
 ]
 

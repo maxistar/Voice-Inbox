@@ -68,6 +68,38 @@
       debugServiceExtension = "internal"
       allowLocationSimulation = "YES"
       queueDebuggingEnableBacktraceRecording = "Yes">
+      <EnvironmentVariables>
+         <EnvironmentVariable
+            key = "WHISPER_MODEL_PATH"
+            value = "Documents/whisper-spike/ggml-tiny.bin"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "WHISPER_PCM_PATH"
+            value = "Documents/whisper-spike/input-f32le-16khz.pcm"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "WHISPER_LANGUAGE"
+            value = ""
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "WHISPER_DEVICE_NAME"
+            value = "physical iPhone"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "WHISPER_CORPUS_ITEM_ID"
+            value = "physical-ios-smoke"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "WHISPER_BUILD_REVISION"
+            value = "workspace"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+      </EnvironmentVariables>
       <BuildableProductRunnable
          runnableDebuggingMode = "0">
          <BuildableReference
