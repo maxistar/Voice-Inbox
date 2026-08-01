@@ -139,6 +139,31 @@ class AndroidMainScreenStateHostTest {
         val owner = state.taskList.tasks.filterIsInstance<AudioTaskPresentation>().single { it.progress != null }
         assertEquals(2L, owner.entryId)
         assertEquals(AudioTaskState.PROCESSING, owner.state)
+        assertTrue(owner.actions.none { it.enabled })
+        assertFalse(state.taskList.batchAction.enabled)
+    }
+
+    @Test
+    fun explicitPreparationOwnerOverridesOldestEligibleEntry() {
+        val state = AndroidTaskListSnapshotMapper.state(
+            readyInput(
+                entries = listOf(
+                    entry(1, AudioFileState.PENDING, AndroidAudioImportConstants.SOURCE_ID, modified = 50),
+                    entry(2, AudioFileState.PENDING, "content://folder", modified = 100),
+                ),
+                transcription = TranscriptionTaskSnapshot(
+                    active = true,
+                    preparationOwnerEntryId = 2,
+                    phase = "Preparing speech model",
+                ),
+            ),
+        )
+
+        val tasks = state.taskList.tasks.filterIsInstance<AudioTaskPresentation>()
+        assertNull(tasks.single { it.entryId == 1L }.progress)
+        val owner = tasks.single { it.entryId == 2L }
+        assertEquals(AudioTaskState.PROCESSING, owner.state)
+        assertEquals("Preparing speech model", owner.progress?.phase)
     }
 
     @Test

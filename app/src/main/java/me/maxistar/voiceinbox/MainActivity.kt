@@ -77,6 +77,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private var lastCatalogWorkState: CatalogWorkRefreshKey? = null
     private var currentSessionTranscriptionWorkId: UUID? = null
     private var currentSessionObservedActiveTranscription = false
+    private val transcriptionHandoff = AndroidTranscriptionHandoffCoordinator()
     private var modelMessage = "Checking speech model"
     private var modelDownloadAvailable = false
     private var modelDownloadProgress: Int? = null
@@ -86,6 +87,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private var transcriptionPhase: String? = null
     private var transcriptionFilename: String? = null
     private var transcriptionEntryId: Long? = null
+    private var transcriptionPreparationOwnerEntryId: Long? = null
     private var transcriptionIndeterminate = true
     private var transcriptionProgressValue = 0
     private var processedUs = -1L
@@ -835,12 +837,9 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private fun retryEntry(entry: AudioCatalogEntry) {
         val output = outputUri ?: return
         stopPreviewPlayback(render = true)
-        currentSessionTranscriptionWorkId = TranscriptionWorker.enqueueRetry(
-            this,
-            folderUri,
-            output,
-            entry.id,
-        )
+        val request = TranscriptionWorker.requestRetry(folderUri, output, entry.id)
+        beginTranscriptionHandoff(request.id, entry.id)
+        TranscriptionWorker.enqueue(this, request)
     }
 
     private fun showTranscriptText(entry: AudioCatalogEntry) {
@@ -985,6 +984,12 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         WorkManager.getInstance(this)
             .getWorkInfosForUniqueWorkLiveData(TranscriptionWorker.UNIQUE_WORK_NAME)
             .observe(this) { infos ->
+                transcriptionHandoff.reconcile(infos.map { info ->
+                    AndroidTranscriptionWorkObservation(
+                        workId = info.id.toString(),
+                        active = info.state in ACTIVE_WORK_STATES,
+                    )
+                })
                 transcriptionState = classifyTranscriptionState(infos)
                 startupCoordinator.setTranscriptionState(
                     known = true,
@@ -1005,7 +1010,9 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                 } else {
                     null
                 } ?: run {
-                    clearTranscriptionProgress()
+                    if (transcriptionHandoff.handoff == null) {
+                        clearTranscriptionProgress()
+                    }
                     publishTaskState()
                     updateControls()
                     return@observe
@@ -1019,19 +1026,27 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                 }
                 transcriptionFinished = transcriptionState == TranscriptionObservationState.FINISHED
                 val data = if (info.state.isFinished) info.outputData else info.progress
-                transcriptionPhase = data.getString(TranscriptionWorker.KEY_PHASE)
-                    ?: when (info.state) {
-                        WorkInfo.State.ENQUEUED -> "Queued"
-                        WorkInfo.State.RUNNING -> "Transcribing"
-                        WorkInfo.State.SUCCEEDED -> "Completed"
-                        WorkInfo.State.FAILED ->
-                            data.getString(TranscriptionWorker.KEY_ERROR) ?: "Failed"
-                        else -> info.state.name
-                    }
                 transcriptionFilename = data.getString(TranscriptionWorker.KEY_FILENAME)
                 transcriptionEntryId = data
                     .getLong(TranscriptionWorker.KEY_ACTIVE_ENTRY_ID, TranscriptionWorker.NO_ENTRY_ID)
                     .takeIf { it != TranscriptionWorker.NO_ENTRY_ID }
+                val workActive = info.state in ACTIVE_WORK_STATES
+                val requestedEntryId = transcriptionHandoff.requestedEntryId(info.tags)
+                transcriptionPreparationOwnerEntryId = transcriptionHandoff.preparationOwnerEntryId(
+                    observedActive = workActive,
+                    activeEntryId = transcriptionEntryId,
+                    requestedEntryId = requestedEntryId,
+                )
+                transcriptionPhase = transcriptionHandoff.phase(
+                    observedPhase = data.getString(TranscriptionWorker.KEY_PHASE),
+                    observedActive = workActive,
+                    activeEntryId = transcriptionEntryId,
+                ) ?: when (info.state) {
+                    WorkInfo.State.SUCCEEDED -> "Completed"
+                    WorkInfo.State.FAILED ->
+                        data.getString(TranscriptionWorker.KEY_ERROR) ?: "Failed"
+                    else -> info.state.name
+                }
                 transcriptionIndeterminate =
                     transcriptionActive() && data.getBoolean(TranscriptionWorker.KEY_INDETERMINATE, true)
                 transcriptionProgressValue = data.getInt(TranscriptionWorker.KEY_PROGRESS, 0)
@@ -1106,7 +1121,9 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         val output = outputUri ?: return
         if (!outputAccessReady || (folderUri != null && !folderAccessReady)) return
         stopPreviewPlayback(render = true)
-        currentSessionTranscriptionWorkId = TranscriptionWorker.enqueueAll(this, folderUri, output)
+        val request = TranscriptionWorker.requestAll(folderUri, output)
+        beginTranscriptionHandoff(request.id, requestedEntryId = null)
+        TranscriptionWorker.enqueue(this, request)
     }
 
     private fun evaluateStartupProcessing() {
@@ -1143,10 +1160,24 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         updateControls()
     }
 
-    private fun transcriptionActive(): Boolean = transcriptionState == TranscriptionObservationState.ACTIVE
+    private fun beginTranscriptionHandoff(workId: UUID, requestedEntryId: Long?) {
+        currentSessionTranscriptionWorkId = workId
+        currentSessionObservedActiveTranscription = false
+        transcriptionHandoff.begin(workId.toString(), requestedEntryId)
+        clearTranscriptionProgress()
+        transcriptionState = TranscriptionObservationState.ACTIVE
+        transcriptionPhase = AndroidTranscriptionHandoffCoordinator.PREPARATION_PHASE
+        transcriptionPreparationOwnerEntryId = requestedEntryId
+        startupCoordinator.setTranscriptionState(known = true, active = true)
+        updateControls()
+    }
+
+    private fun transcriptionActive(): Boolean = transcriptionHandoff.active(
+        transcriptionState == TranscriptionObservationState.ACTIVE,
+    )
 
     private fun classifyTranscriptionState(infos: List<WorkInfo>): TranscriptionObservationState {
-        val active = infos.any { it.state in ACTIVE_WORK_STATES }
+        val active = transcriptionHandoff.active(infos.any { it.state in ACTIVE_WORK_STATES })
         val currentSessionFinished = infos.any { info ->
             info.state.isFinished &&
                 (info.id == currentSessionTranscriptionWorkId || currentSessionObservedActiveTranscription)
@@ -1164,6 +1195,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         transcriptionPhase = null
         transcriptionFilename = null
         transcriptionEntryId = null
+        transcriptionPreparationOwnerEntryId = null
         transcriptionIndeterminate = true
         transcriptionProgressValue = 0
         processedUs = -1L
@@ -1250,12 +1282,11 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         val eligible = modelReady &&
             outputAccessReady &&
             audioInputAvailable &&
-            !folderBusy() &&
-            !transcriptionActive()
+            !folderBusy()
         val transcription = TranscriptionTaskSnapshot(
             active = transcriptionActive(),
             activeEntryId = transcriptionEntryId,
-            preparationOwnerEntryId = null,
+            preparationOwnerEntryId = transcriptionPreparationOwnerEntryId,
             phase = transcriptionPhase,
             percent = transcriptionProgressValue.takeUnless { transcriptionIndeterminate },
             processedUs = processedUs.takeIf { it >= 0 },
@@ -1386,12 +1417,9 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         val output = outputUri ?: return
         if (entry.state != AudioFileState.PENDING || !outputAccessReady) return
         stopPreviewPlayback(render = true)
-        currentSessionTranscriptionWorkId = TranscriptionWorker.enqueueEntry(
-            this,
-            folderUri,
-            output,
-            entry.id,
-        )
+        val request = TranscriptionWorker.requestEntry(folderUri, output, entry.id)
+        beginTranscriptionHandoff(request.id, entry.id)
+        TranscriptionWorker.enqueue(this, request)
     }
 
     private fun updateMenu(menu: Menu) {

@@ -10,6 +10,7 @@ import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
 import androidx.work.ForegroundInfo
+import androidx.work.OneTimeWorkRequest
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -276,28 +277,51 @@ class TranscriptionWorker(
         private const val NOTIFICATION_ID = 2109
 
         fun enqueueAll(context: Context, folderUri: Uri?, outputUri: Uri): UUID =
-            enqueue(context, folderUri, outputUri, null)
+            enqueue(context, request(folderUri, outputUri, null))
+
+        fun requestAll(folderUri: Uri?, outputUri: Uri): OneTimeWorkRequest =
+            request(folderUri, outputUri, null)
 
         fun enqueueRetry(
             context: Context,
             folderUri: Uri?,
             outputUri: Uri,
             entryId: Long,
-        ): UUID = enqueue(context, folderUri, outputUri, entryId)
+        ): UUID = enqueue(context, request(folderUri, outputUri, entryId))
+
+        fun requestRetry(
+            folderUri: Uri?,
+            outputUri: Uri,
+            entryId: Long,
+        ): OneTimeWorkRequest = request(folderUri, outputUri, entryId)
 
         fun enqueueEntry(
             context: Context,
             folderUri: Uri?,
             outputUri: Uri,
             entryId: Long,
-        ): UUID = enqueue(context, folderUri, outputUri, entryId)
+        ): UUID = enqueue(context, request(folderUri, outputUri, entryId))
 
-        private fun enqueue(
-            context: Context,
+        fun requestEntry(
+            folderUri: Uri?,
+            outputUri: Uri,
+            entryId: Long,
+        ): OneTimeWorkRequest = request(folderUri, outputUri, entryId)
+
+        fun enqueue(context: Context, request: OneTimeWorkRequest): UUID {
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                UNIQUE_WORK_NAME,
+                ExistingWorkPolicy.KEEP,
+                request,
+            )
+            return request.id
+        }
+
+        private fun request(
             folderUri: Uri?,
             outputUri: Uri,
             retryId: Long?,
-        ): UUID {
+        ): OneTimeWorkRequest {
             val input = androidx.work.Data.Builder()
                 .putString(KEY_OUTPUT_URI, outputUri.toString())
                 .putLong(KEY_RETRY_ID, retryId ?: NO_RETRY_ID)
@@ -305,13 +329,13 @@ class TranscriptionWorker(
                 .build()
             val request = OneTimeWorkRequestBuilder<TranscriptionWorker>()
                 .setInputData(input)
+                .apply {
+                    retryId?.let {
+                        addTag(AndroidTranscriptionHandoffCoordinator.ENTRY_TAG_PREFIX + it)
+                    }
+                }
                 .build()
-            WorkManager.getInstance(context).enqueueUniqueWork(
-                UNIQUE_WORK_NAME,
-                ExistingWorkPolicy.KEEP,
-                request,
-            )
-            return request.id
+            return request
         }
     }
 }
