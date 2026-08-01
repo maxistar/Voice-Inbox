@@ -71,6 +71,27 @@ class SpeechModelRepositoryTest {
     }
 
     @Test
+    fun catalogDescriptorRecognizesExistingProductionLayoutWithoutMigration() {
+        val descriptor = SpeechModelCatalog.defaultModel
+        val root = File(temporaryFolder.root, "models")
+        val installed = File(root, "installed/${descriptor.manifest.version}").apply { mkdirs() }
+        descriptor.manifest.files.forEach { installed.resolve(it.name).createNewFile() }
+        File(root, "active-model").apply {
+            parentFile?.mkdirs()
+            writeText(descriptor.manifest.version)
+        }
+
+        val state = SpeechModelRepository(root, descriptor.manifest).inspectLightweight()
+
+        assertTrue(state is InstalledSpeechModelState.Ready)
+        assertEquals(
+            InstalledSpeechModelState.Ready.Verification.VERIFIED,
+            (state as InstalledSpeechModelState.Ready).verification,
+        )
+        assertEquals(installed.canonicalFile, state.directory.canonicalFile)
+    }
+
+    @Test
     fun corruptAndIncompleteModelsAreRejected() {
         val repository = repository()
         repository.prepareForInstall().getOrThrow()

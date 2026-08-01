@@ -241,7 +241,10 @@ class TranscriptionWorkerInstrumentedTest {
 
     private fun requireModel() {
         assumeTrue(
-            SpeechModelRepository(targetContext.noBackupFilesDir.resolve("models")).inspect()
+            SpeechModelRepository(
+                targetContext.noBackupFilesDir.resolve("models"),
+                SpeechModelCatalog.defaultModel.manifest,
+            ).inspect()
                 is InstalledSpeechModelState.Ready,
         )
     }

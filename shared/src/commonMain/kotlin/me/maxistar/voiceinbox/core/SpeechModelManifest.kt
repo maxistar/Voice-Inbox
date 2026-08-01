@@ -21,8 +21,61 @@ data class SpeechModelManifest(
     }
 }
 
-object EmbeddedSpeechModel {
-    val manifest = SpeechModelManifest(
+enum class SpeechModelBackend {
+    PARAKEET_TDT_ONNX,
+    WHISPER_CPP,
+}
+
+enum class SpeechModelMaturity {
+    STABLE,
+    EXPERIMENTAL,
+}
+
+enum class SpeechModelPlatform {
+    ANDROID,
+    IOS,
+}
+
+data class SpeechModelDistribution(
+    val networkDownloadAvailable: Boolean,
+    val localImportAvailable: Boolean,
+)
+
+data class SpeechModelLanguageCoverage(
+    val summary: String,
+    val languageTags: List<String>,
+)
+
+data class SpeechModelAttribution(
+    val sourceName: String,
+    val sourceUrl: String,
+    val upstreamName: String,
+    val upstreamUrl: String,
+    val licenseName: String,
+    val licenseUrl: String,
+)
+
+data class SpeechModelDescriptor(
+    val catalogId: String,
+    val displayName: String,
+    val backend: SpeechModelBackend,
+    val manifest: SpeechModelManifest,
+    val distribution: SpeechModelDistribution,
+    val languages: SpeechModelLanguageCoverage,
+    val maturity: SpeechModelMaturity,
+    val attribution: SpeechModelAttribution,
+    val supportedPlatforms: Set<SpeechModelPlatform>,
+) {
+    val approximateDownloadBytes: Long = manifest.totalSizeBytes
+    val requiredStorageBytes: Long = manifest.requiredFreeBytes
+}
+
+object SpeechModelCatalog {
+    val parakeetTdt06bV3Int8 = SpeechModelDescriptor(
+        catalogId = "parakeet-tdt-0.6b-v3-int8",
+        displayName = "Parakeet TDT 0.6B v3 INT8",
+        backend = SpeechModelBackend.PARAKEET_TDT_ONNX,
+        manifest = SpeechModelManifest(
         modelId = "istupakov/parakeet-tdt-0.6b-v3-onnx",
         version = "parakeet-tdt-0.6b-v3-int8-r1",
         repositoryRevision = "8f23f0c03c8761650bdb5b40aaf3e40d2c15f1ce",
@@ -54,5 +107,30 @@ object EmbeddedSpeechModel {
             ),
         ),
         safetyMarginBytes = 64L * 1024L * 1024L,
+        ),
+        distribution = SpeechModelDistribution(
+            networkDownloadAvailable = true,
+            localImportAvailable = true,
+        ),
+        languages = SpeechModelLanguageCoverage(
+            summary = "25 European languages",
+            languageTags = listOf(
+                "bg", "cs", "da", "de", "el", "en", "es", "et", "fi", "fr", "hr", "hu",
+                "it", "lt", "lv", "mt", "nl", "pl", "pt", "ro", "ru", "sk", "sl", "sv", "uk",
+            ),
+        ),
+        maturity = SpeechModelMaturity.STABLE,
+        attribution = SpeechModelAttribution(
+            sourceName = "istupakov/parakeet-tdt-0.6b-v3-onnx",
+            sourceUrl = "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx",
+            upstreamName = "NVIDIA Parakeet TDT 0.6B v3",
+            upstreamUrl = "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
+            licenseName = "CC BY 4.0",
+            licenseUrl = "https://creativecommons.org/licenses/by/4.0/",
+        ),
+        supportedPlatforms = setOf(SpeechModelPlatform.ANDROID, SpeechModelPlatform.IOS),
     )
+
+    val models: List<SpeechModelDescriptor> = listOf(parakeetTdt06bV3Int8)
+    val defaultModel: SpeechModelDescriptor = parakeetTdt06bV3Int8
 }

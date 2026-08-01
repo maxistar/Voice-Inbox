@@ -311,7 +311,7 @@ final class IosSpeechModelStore: ObservableObject {
         }
         let receipt = try? String(contentsOf: receiptFile, encoding: .utf8)
         let state: IosSpeechModelInstallationState = receipt?.trimmingCharacters(in: .whitespacesAndNewlines)
-            == EmbeddedSpeechModel.shared.manifest.version
+            == SpeechModelCatalog.shared.defaultModel.manifest.version
             ? .installedVerified
             : .installedLegacy
         return IosSpeechModelStatus(
@@ -326,7 +326,7 @@ final class IosSpeechModelStore: ObservableObject {
             at: IosSpeechModelPaths.applicationSupportDirectory,
             withIntermediateDirectories: true
         )
-        try? EmbeddedSpeechModel.shared.manifest.version.write(
+        try? SpeechModelCatalog.shared.defaultModel.manifest.version.write(
             to: IosSpeechModelPaths.receiptFile,
             atomically: true,
             encoding: .utf8
@@ -645,7 +645,7 @@ final class IosSpeechModelStore: ObservableObject {
     }
 
     nonisolated private static func manifestFiles() -> [IosSpeechModelManifestFile] {
-        let manifest = EmbeddedSpeechModel.shared.manifest
+        let manifest = SpeechModelCatalog.shared.defaultModel.manifest
         return manifest.files.map { file in
             return IosSpeechModelManifestFile(
                 name: file.name,

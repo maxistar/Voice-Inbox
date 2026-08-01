@@ -25,7 +25,7 @@ sealed interface InstalledSpeechModelState {
 
 class SpeechModelRepository(
     private val root: File,
-    val manifest: SpeechModelManifest = EmbeddedSpeechModel.manifest,
+    val manifest: SpeechModelManifest,
     private val usableSpace: (File) -> Long = { it.usableSpace },
     private val moveDirectory: (File, File) -> Boolean = { source, destination ->
         source.renameTo(destination)

@@ -8,13 +8,16 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import me.maxistar.voiceinbox.core.SpeechModelCatalog
 
 class SpeechModelImportWorker(
     appContext: Context,
     params: WorkerParameters,
 ) : CoroutineWorker(appContext, params) {
+    private val model = SpeechModelCatalog.defaultModel
     private val repository = SpeechModelRepository(
         root = applicationContext.noBackupFilesDir.resolve("models"),
+        manifest = model.manifest,
     )
 
     override suspend fun doWork(): Result {

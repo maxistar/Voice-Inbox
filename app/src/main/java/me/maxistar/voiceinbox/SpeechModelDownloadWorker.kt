@@ -21,8 +21,10 @@ class SpeechModelDownloadWorker(
     appContext: Context,
     params: WorkerParameters,
 ) : CoroutineWorker(appContext, params) {
+    private val model = SpeechModelCatalog.defaultModel
     private val repository = SpeechModelRepository(
         root = applicationContext.noBackupFilesDir.resolve("models"),
+        manifest = model.manifest,
     )
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)

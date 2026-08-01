@@ -40,6 +40,7 @@ class TranscriptionWorker(
             )
             val modelRepository = SpeechModelRepository(
                 applicationContext.noBackupFilesDir.resolve("models"),
+                SpeechModelCatalog.defaultModel.manifest,
             )
             publish("Preparing speech model", null, null, 0, 0, null, null)
             SpeechModelPreparation.prepare(modelRepository) { directory ->

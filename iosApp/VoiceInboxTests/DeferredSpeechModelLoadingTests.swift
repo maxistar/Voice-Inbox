@@ -4,6 +4,25 @@ import XCTest
 @testable import VoiceInbox
 
 final class DeferredSpeechModelLoadingTests: XCTestCase {
+    func testCatalogPreservesProductionParakeetManifest() {
+        let descriptor = SpeechModelCatalog.shared.defaultModel
+        let manifest = descriptor.manifest
+
+        XCTAssertEqual(SpeechModelCatalog.shared.models.count, 1)
+        XCTAssertEqual(descriptor.catalogId, "parakeet-tdt-0.6b-v3-int8")
+        XCTAssertEqual(manifest.modelId, "istupakov/parakeet-tdt-0.6b-v3-onnx")
+        XCTAssertEqual(manifest.version, "parakeet-tdt-0.6b-v3-int8-r1")
+        XCTAssertEqual(manifest.repositoryRevision, "8f23f0c03c8761650bdb5b40aaf3e40d2c15f1ce")
+        XCTAssertEqual(manifest.totalSizeBytes, 670_619_803)
+        XCTAssertEqual(Set(manifest.files.map(\.name)), Set([
+            "encoder-model.int8.onnx",
+            "decoder_joint-model.int8.onnx",
+            "nemo128.onnx",
+            "vocab.txt",
+            "config.json",
+        ]))
+    }
+
     func testLightweightInspectionDistinguishesMissingLegacyVerifiedAndKnownInvalidWithoutReadingPayloads() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -32,7 +51,11 @@ final class DeferredSpeechModelLoadingTests: XCTestCase {
         XCTAssertEqual(legacy.installationState, .installedLegacy)
         XCTAssertTrue(legacy.isReady)
 
-        try EmbeddedSpeechModel.shared.manifest.version.write(to: receipt, atomically: true, encoding: .utf8)
+        try SpeechModelCatalog.shared.defaultModel.manifest.version.write(
+            to: receipt,
+            atomically: true,
+            encoding: .utf8
+        )
         let verified = IosSpeechModelStore.inspectLightweight(
             directory: model,
             receiptFile: receipt,
@@ -80,7 +103,7 @@ final class DeferredSpeechModelLoadingTests: XCTestCase {
             },
             nativeError: { nil },
             recordVerified: {
-                try? EmbeddedSpeechModel.shared.manifest.version.write(
+                try? SpeechModelCatalog.shared.defaultModel.manifest.version.write(
                     to: receipt,
                     atomically: true,
                     encoding: .utf8

@@ -37,6 +37,7 @@ import java.util.concurrent.Executors
 import java.util.UUID
 
 class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listener {
+    private val speechModel = SpeechModelCatalog.defaultModel
     private lateinit var importAudio: FloatingActionButton
     private lateinit var newTab: MaterialButton
     private lateinit var processedTab: MaterialButton
@@ -173,7 +174,9 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         documentAccess = DocumentAccess(contentResolver)
         folderScanner = AudioFolderScanner(contentResolver)
         catalog = AndroidSqlDelightAudioCatalogFactory(this).create()
-        modelReadiness = getSharedModelReadiness(SpeechModelRepository(noBackupFilesDir.resolve("models")))
+        modelReadiness = getSharedModelReadiness(
+            SpeechModelRepository(noBackupFilesDir.resolve("models"), speechModel.manifest),
+        )
         startupPolicyStore = StartupProcessingPolicyStore(
             getSharedPreferences(StartupProcessingPolicyStore.PREFERENCES_NAME, MODE_PRIVATE),
         )
@@ -651,7 +654,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
             runCatching {
                 SpeechModelDirectoryReader(contentResolver).requiredDocuments(
                     uri,
-                    EmbeddedSpeechModel.manifest,
+                    speechModel.manifest,
                 )
             }.onSuccess {
                 runOnUiThread {
@@ -935,7 +938,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                         val bytes = info.progress.getLong(SpeechModelInstallationWork.KEY_BYTES_DOWNLOADED, 0)
                         val total = info.progress.getLong(
                             SpeechModelInstallationWork.KEY_TOTAL_BYTES,
-                            EmbeddedSpeechModel.manifest.totalSizeBytes,
+                            speechModel.approximateDownloadBytes,
                         )
                         modelMessage =
                             info.progress.getString(SpeechModelInstallationWork.KEY_MESSAGE)
