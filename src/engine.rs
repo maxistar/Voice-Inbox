@@ -4,7 +4,10 @@ use std::sync::{Arc, Condvar, Mutex};
 use transcribe_rs::engines::parakeet::{
     ParakeetEngine, ParakeetInferenceParams, ParakeetModelParams, TimestampGranularity,
 };
-#[cfg(all(target_os = "android", feature = "android-dual-backend"))]
+#[cfg(any(
+    all(target_os = "android", feature = "android-dual-backend"),
+    all(target_os = "ios", feature = "ios-dual-backend")
+))]
 use transcribe_rs::engines::whisper::WhisperEngine;
 use transcribe_rs::{TranscriptionEngine, TranscriptionResult};
 
@@ -23,7 +26,10 @@ pub struct ModelConfiguration {
 
 pub enum ActiveSpeechEngine {
     Parakeet(ParakeetEngine),
-    #[cfg(all(target_os = "android", feature = "android-dual-backend"))]
+    #[cfg(any(
+        all(target_os = "android", feature = "android-dual-backend"),
+        all(target_os = "ios", feature = "ios-dual-backend")
+    ))]
     Whisper(WhisperEngine),
 }
 
@@ -38,7 +44,10 @@ impl ActiveSpeechEngine {
                     }),
                 )
                 .map_err(|error| error.to_string()),
-            #[cfg(all(target_os = "android", feature = "android-dual-backend"))]
+            #[cfg(any(
+                all(target_os = "android", feature = "android-dual-backend"),
+                all(target_os = "ios", feature = "ios-dual-backend")
+            ))]
             Self::Whisper(engine) => engine
                 .transcribe_samples(samples, None)
                 .map_err(|error| error.to_string()),
@@ -141,14 +150,20 @@ fn load_configured_engine() -> Result<(), String> {
             ActiveSpeechEngine::Parakeet(engine)
         }
         "WHISPER_CPP" => {
-            #[cfg(all(target_os = "android", feature = "android-dual-backend"))]
+            #[cfg(any(
+                all(target_os = "android", feature = "android-dual-backend"),
+                all(target_os = "ios", feature = "ios-dual-backend")
+            ))]
             {
                 let mut engine = WhisperEngine::new();
                 engine.load_model(&configuration.directory.join(&configuration.primary_file))
                     .map_err(|error| format!("Model error: {error}"))?;
                 ActiveSpeechEngine::Whisper(engine)
             }
-            #[cfg(not(all(target_os = "android", feature = "android-dual-backend")))]
+            #[cfg(not(any(
+                all(target_os = "android", feature = "android-dual-backend"),
+                all(target_os = "ios", feature = "ios-dual-backend")
+            )))]
             return Err("Whisper backend is not available on this platform".to_string());
         }
         backend => return Err(format!("Unsupported speech backend: {backend}")),

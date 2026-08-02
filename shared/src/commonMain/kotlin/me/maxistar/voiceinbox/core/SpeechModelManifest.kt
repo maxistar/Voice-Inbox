@@ -171,7 +171,7 @@ object SpeechModelCatalog {
             licenseName = "MIT",
             licenseUrl = "https://github.com/openai/whisper/blob/main/LICENSE",
         ),
-        supportedPlatforms = setOf(SpeechModelPlatform.ANDROID),
+        supportedPlatforms = setOf(SpeechModelPlatform.ANDROID, SpeechModelPlatform.IOS),
     )
 
     val models: List<SpeechModelDescriptor> = listOf(

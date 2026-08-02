@@ -184,6 +184,18 @@ fn read_model_directory(model_directory: *const c_char) -> Result<String, String
     }
 }
 
+#[cfg(target_os = "ios")]
+fn read_required_c_string(value: *const c_char, label: &str) -> Result<String, String> {
+    if value.is_null() {
+        return Err(format!("{label} was not provided"));
+    }
+    match unsafe { CStr::from_ptr(value) }.to_str() {
+        Ok(text) if !text.is_empty() => Ok(text.to_string()),
+        Ok(_) => Err(format!("{label} was empty")),
+        Err(_) => Err(format!("{label} was not valid UTF-8")),
+    }
+}
+
 #[cfg(all(target_os = "ios", feature = "ios-onnx"))]
 fn validate_ios_model_directory(model_directory: &str) -> Result<(), String> {
     let path = Path::new(model_directory);
@@ -259,6 +271,59 @@ pub unsafe extern "C" fn voiceinbox_transcription_initialize(
 
 #[cfg(all(target_os = "ios", feature = "ios-onnx"))]
 #[no_mangle]
+pub unsafe extern "C" fn voiceinbox_transcription_initialize_configured(
+    backend: *const c_char,
+    installation_identity: *const c_char,
+    model_directory: *const c_char,
+    primary_file: *const c_char,
+) -> bool {
+    let configuration = match (
+        read_required_c_string(backend, "Speech backend"),
+        read_required_c_string(installation_identity, "Installation identity"),
+        read_required_c_string(model_directory, "Model directory"),
+        read_required_c_string(primary_file, "Primary model file"),
+    ) {
+        (Ok(backend), Ok(identity), Ok(directory), Ok(primary_file)) => engine::ModelConfiguration {
+            backend,
+            identity,
+            directory: directory.into(),
+            primary_file,
+        },
+        values => {
+            let error = [values.0.err(), values.1.err(), values.2.err(), values.3.err()]
+                .into_iter().flatten().next()
+                .unwrap_or_else(|| "Invalid speech model configuration".to_string());
+            set_ios_error(error);
+            return false;
+        }
+    };
+
+    let validation = match configuration.backend.as_str() {
+        "PARAKEET_TDT_ONNX" => validate_ios_model_directory(
+            configuration.directory.to_string_lossy().as_ref(),
+        ),
+        "WHISPER_CPP" => {
+            let model = configuration.directory.join(&configuration.primary_file);
+            if model.is_file() { Ok(()) } else { Err(format!("Whisper model file does not exist: {}", model.display())) }
+        }
+        backend => Err(format!("Unsupported speech backend: {backend}")),
+    };
+    let result = validation.and_then(|_| {
+        if configuration.backend == "PARAKEET_TDT_ONNX" {
+            initialize_ios_onnx_runtime()?;
+        }
+        engine::configure_model(configuration);
+        engine::ensure_loaded_without_callback()
+    });
+    if let Err(error) = result {
+        set_ios_error(error);
+        return false;
+    }
+    true
+}
+
+#[cfg(all(target_os = "ios", feature = "ios-onnx"))]
+#[no_mangle]
 pub extern "C" fn voiceinbox_transcription_reset() {
     engine::invalidate_loaded_model();
 }
@@ -283,6 +348,18 @@ pub unsafe extern "C" fn voiceinbox_transcription_initialize(
     set_ios_error(format!(
         "iOS ONNX Runtime backend is not linked yet for model directory: {model_directory}. Set VOICEINBOX_IOS_ONNX_RUNTIME_DIR or ORT_LIB_LOCATION before building the native bridge."
     ));
+    false
+}
+
+#[cfg(all(target_os = "ios", not(feature = "ios-onnx")))]
+#[no_mangle]
+pub unsafe extern "C" fn voiceinbox_transcription_initialize_configured(
+    _backend: *const c_char,
+    _installation_identity: *const c_char,
+    _model_directory: *const c_char,
+    _primary_file: *const c_char,
+) -> bool {
+    set_ios_error("iOS speech runtimes are not linked in this build");
     false
 }
 

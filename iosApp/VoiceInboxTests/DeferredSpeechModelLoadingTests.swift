@@ -4,12 +4,128 @@ import XCTest
 @testable import VoiceInbox
 
 final class DeferredSpeechModelLoadingTests: XCTestCase {
+    func testIosCatalogResolvesStrictParakeetAndWhisperPackageIdentities() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+
+        func write(_ json: String) throws {
+            try Data(json.utf8).write(to: root.appendingPathComponent("voice-inbox-model.json"))
+        }
+
+        try write(#"{"schemaVersion":1,"catalogId":"whisper-tiny-multilingual","modelVersion":"whisper-tiny-ggml-f16-r1"}"#)
+        let whisper = try IosSpeechModelStore.resolvePackage(in: root)
+        XCTAssertEqual(whisper.backend, "WHISPER_CPP")
+        XCTAssertFalse(whisper.networkDownloadAvailable)
+        XCTAssertTrue(whisper.localImportAvailable)
+
+        try write(#"{"schemaVersion":1,"catalogId":"parakeet-tdt-0.6b-v3-int8","modelVersion":"parakeet-tdt-0.6b-v3-int8-r1"}"#)
+        let parakeet = try IosSpeechModelStore.resolvePackage(in: root)
+        XCTAssertEqual(parakeet.backend, "PARAKEET_TDT_ONNX")
+        XCTAssertTrue(parakeet.networkDownloadAvailable)
+
+        for invalid in [
+            #"{"schemaVersion":2,"catalogId":"whisper-tiny-multilingual","modelVersion":"whisper-tiny-ggml-f16-r1"}"#,
+            #"{"schemaVersion":1,"catalogId":"unknown","modelVersion":"unknown"}"#,
+            #"{"schemaVersion":1,"catalogId":"whisper-tiny-multilingual","modelVersion":"whisper-tiny-ggml-f16-r1","backend":"PARAKEET_TDT_ONNX"}"#,
+        ] {
+            try write(invalid)
+            XCTAssertThrowsError(try IosSpeechModelStore.resolvePackage(in: root))
+        }
+    }
+
+    func testIosPackageResolutionAcceptsAndroidCompatibleLegacyParakeetFolder() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+
+        for file in IosSpeechModelDescriptor.defaultModel.files {
+            FileManager.default.createFile(
+                atPath: root.appendingPathComponent(file.name).path,
+                contents: Data()
+            )
+        }
+
+        let descriptor = try IosSpeechModelStore.resolvePackage(in: root)
+        XCTAssertEqual(descriptor.catalogId, IosSpeechModelDescriptor.defaultModel.catalogId)
+
+        FileManager.default.createFile(
+            atPath: root.appendingPathComponent("unexpected.txt").path,
+            contents: Data()
+        )
+        XCTAssertThrowsError(try IosSpeechModelStore.resolvePackage(in: root))
+    }
+
+    @MainActor
+    func testConfirmedCandidateSurvivesAlertBindingDismissal() async {
+        let root = FileManager.default.temporaryDirectory
+        let store = IosSpeechModelStore(
+            directory: root,
+            inspectInstallation: { directory in
+                IosSpeechModelStatus(directory: directory, installationState: .missing, missingFiles: [])
+            },
+            validateInstallation: { _ in [] },
+            prepareNative: { _ in true },
+            nativeError: { nil },
+            recordVerified: {},
+            recordInvalid: { _ in },
+            resetNative: {}
+        )
+        let candidate = IosSpeechModelCandidate(
+            descriptor: .defaultModel,
+            sourceURL: root
+        )
+
+        // SwiftUI clears an alert(item:) binding as it dismisses the alert.
+        store.pendingCandidate = nil
+        store.confirmPendingInstallation(candidate: candidate)
+
+        XCTAssertTrue(store.isInstalling)
+        XCTAssertEqual(store.message, "Installing \(candidate.descriptor.displayName)...")
+
+        while store.isInstalling {
+            await Task.yield()
+        }
+    }
+
+    func testLightweightRestoreUsesVersionedWhisperReceiptWithoutHashingPayload() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let model = root.appendingPathComponent("SpeechModel", isDirectory: true)
+        let receipt = root.appendingPathComponent("SpeechModel.receipt")
+        let invalid = root.appendingPathComponent("SpeechModel.invalid")
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: model, withIntermediateDirectories: true)
+        try Data("not model weights".utf8).write(to: model.appendingPathComponent("ggml-tiny.bin"))
+        let active = IosSpeechModelInstallation(
+            receiptSchemaVersion: 2,
+            packageSchemaVersion: 1,
+            catalogId: "whisper-tiny-multilingual",
+            modelVersion: "whisper-tiny-ggml-f16-r1",
+            backend: "WHISPER_CPP",
+            installationGeneration: "test-generation"
+        )
+        try JSONEncoder().encode(active).write(to: receipt)
+
+        let status = IosSpeechModelStore.inspectLightweight(
+            directory: model,
+            receiptFile: receipt,
+            invalidFile: invalid,
+            requiredFileNames: ["ggml-tiny.bin"]
+        )
+        XCTAssertEqual(status.installationState, .installedVerified)
+        XCTAssertEqual(status.activeInstallation, active)
+        XCTAssertTrue(status.isReady)
+    }
+
     func testCatalogPreservesProductionParakeetManifest() {
         let descriptor = SpeechModelCatalog.shared.defaultModel
         let manifest = descriptor.manifest
 
         XCTAssertEqual(SpeechModelCatalog.shared.models.count, 2)
-        XCTAssertEqual(SpeechModelCatalog.shared.modelsFor(platform: .ios).count, 1)
+        XCTAssertEqual(SpeechModelCatalog.shared.modelsFor(platform: .ios).count, 2)
         XCTAssertEqual(descriptor.catalogId, "parakeet-tdt-0.6b-v3-int8")
         XCTAssertEqual(manifest.modelId, "istupakov/parakeet-tdt-0.6b-v3-onnx")
         XCTAssertEqual(manifest.version, "parakeet-tdt-0.6b-v3-int8-r1")

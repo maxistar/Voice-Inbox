@@ -11,6 +11,7 @@ crate-type = ["cdylib", "staticlib"]
 default = ["native-transcription"]
 native-transcription = ["dep:ort", "dep:transcribe-rs"]
 ios-onnx = ["native-transcription"]
+ios-dual-backend = ["ios-onnx", "transcribe-rs/whisper"]
 android-dual-backend = ["native-transcription", "transcribe-rs/whisper"]
 whisper-mobile-spike = ["dep:sha2", "dep:transcribe-rs", "transcribe-rs/whisper"]
 

@@ -7,7 +7,7 @@ import kotlin.test.Test
 
 class SpeechModelManifestTest {
     @Test
-    fun productionCatalogKeepsStableParakeetDefaultAndAddsLocalAndroidWhisper() {
+    fun productionCatalogKeepsStableParakeetDefaultAndAddsLocalMobileWhisper() {
         val descriptor = SpeechModelCatalog.defaultModel
         val manifest = descriptor.manifest
 
@@ -52,12 +52,15 @@ class SpeechModelManifestTest {
         val whisper = SpeechModelCatalog.whisperTinyMultilingual
         assertEquals(SpeechModelBackend.WHISPER_CPP, whisper.backend)
         assertEquals(SpeechModelMaturity.EXPERIMENTAL, whisper.maturity)
-        assertEquals(setOf(SpeechModelPlatform.ANDROID), whisper.supportedPlatforms)
+        assertEquals(
+            setOf(SpeechModelPlatform.ANDROID, SpeechModelPlatform.IOS),
+            whisper.supportedPlatforms,
+        )
         assertTrue(whisper.distribution.localImportAvailable)
         assertTrue(!whisper.distribution.networkDownloadAvailable)
         assertEquals("ggml-tiny.bin", whisper.manifest.files.single().name)
         assertEquals(77_691_713, whisper.manifest.totalSizeBytes)
-        assertEquals(listOf(descriptor), SpeechModelCatalog.modelsFor(SpeechModelPlatform.IOS))
+        assertEquals(listOf(descriptor, whisper), SpeechModelCatalog.modelsFor(SpeechModelPlatform.IOS))
     }
 
     @Test
@@ -72,7 +75,10 @@ class SpeechModelManifestTest {
             SpeechModelCatalog.whisperTinyMultilingual,
             SpeechModelCatalog.resolvePackage(identity, SpeechModelPlatform.ANDROID),
         )
-        assertEquals(null, SpeechModelCatalog.resolvePackage(identity, SpeechModelPlatform.IOS))
+        assertEquals(
+            SpeechModelCatalog.whisperTinyMultilingual,
+            SpeechModelCatalog.resolvePackage(identity, SpeechModelPlatform.IOS),
+        )
         assertEquals(null, SpeechModelCatalog.resolvePackage(identity.copy(schemaVersion = 2), SpeechModelPlatform.ANDROID))
         assertEquals(null, SpeechModelCatalog.resolvePackage(identity.copy(modelVersion = "latest"), SpeechModelPlatform.ANDROID))
         assertEquals(null, SpeechModelCatalog.resolvePackage(identity.copy(catalogId = "unknown"), SpeechModelPlatform.ANDROID))
