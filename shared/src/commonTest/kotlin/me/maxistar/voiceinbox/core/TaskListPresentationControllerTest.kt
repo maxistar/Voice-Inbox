@@ -244,14 +244,32 @@ class TaskListPresentationControllerTest {
     }
 
     @Test
-    fun orderingUsesImportTimeExceptProcessedUsesTerminalTime() {
+    fun terminalOnlyAllUsesTheSameTerminalTimeOrderAsProcessed() {
         val audio = listOf(
             audio(1, AudioFileState.PROCESSED, importedAt = 300, terminalAt = 100),
             audio(2, AudioFileState.FAILED, importedAt = 100, terminalAt = 400),
         )
 
         assertEquals(listOf("audio:2", "audio:1"), state(TaskListFilter.PROCESSED, audio = audio).tasks.map { it.stableId })
-        assertEquals(listOf("audio:1", "audio:2"), state(TaskListFilter.ALL, audio = audio).tasks.map { it.stableId })
+        assertEquals(listOf("audio:2", "audio:1"), state(TaskListFilter.ALL, audio = audio).tasks.map { it.stableId })
+    }
+
+    @Test
+    fun newKeepsImportTimeOrderWhenAllUsesLifecycleTime() {
+        val audio = listOf(
+            audio(1, AudioFileState.PENDING, importedAt = 300),
+            audio(2, AudioFileState.PENDING, importedAt = 100),
+            audio(3, AudioFileState.PROCESSED, importedAt = 50, terminalAt = 400),
+        )
+
+        assertEquals(
+            listOf("audio:1", "audio:2"),
+            state(TaskListFilter.NEW, audio = audio).tasks.map { it.stableId },
+        )
+        assertEquals(
+            listOf("audio:3", "audio:1", "audio:2"),
+            state(TaskListFilter.ALL, audio = audio).tasks.map { it.stableId },
+        )
     }
 
     @Test

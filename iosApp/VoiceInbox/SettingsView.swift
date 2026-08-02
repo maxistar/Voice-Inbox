@@ -63,8 +63,9 @@ struct SettingsView: View {
     let selectOutputFile: () -> Void
     let installModelPackage: () -> Void
 
-    private let websiteURL = URL(string: "https://projects.maxistar.me/Voice-Inbox/")!
-    private let legalURL = URL(string: "https://projects.maxistar.me/Voice-Inbox/legal/")!
+    private let websiteURL = URL(string: "https://voiceinbox.simpleditor.org/")!
+    private let documentationURL = URL(string: "https://voiceinbox.simpleditor.org/docs/")!
+    private let legalURL = URL(string: "https://voiceinbox.simpleditor.org/legal/")!
 
     var body: some View {
         Form {
@@ -146,6 +147,7 @@ struct SettingsView: View {
             Section("About") {
                 LabeledContent("Version", value: appVersion)
                 Link("Website", destination: websiteURL)
+                Link("Documentation", destination: documentationURL)
                 Link("Legal information", destination: legalURL)
             }
         }

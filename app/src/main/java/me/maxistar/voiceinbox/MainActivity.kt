@@ -45,6 +45,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private lateinit var taskFilters: MaterialButtonToggleGroup
     private lateinit var taskList: RecyclerView
     private lateinit var taskAdapter: TaskListAdapter
+    private var taskListItemAnimator: RecyclerView.ItemAnimator? = null
+    private var taskListAnimatorSuppressed = false
     private lateinit var taskActionRouter: AndroidTaskActionRouter
     private val taskStateHost: AndroidMainScreenStateHost by viewModels()
 
@@ -287,6 +289,10 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                 startActivity(Intent(this, SettingsActivity::class.java))
                 true
             }
+            R.id.menuDocumentation -> {
+                openDocumentation()
+                true
+            }
             else -> super.onOptionsItemSelected(item)
         }
 
@@ -312,6 +318,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         taskList.layoutManager = LinearLayoutManager(this)
         taskList.adapter = taskAdapter
         (taskList.itemAnimator as? SimpleItemAnimator)?.supportsChangeAnimations = false
+        taskListItemAnimator = taskList.itemAnimator
     }
 
     private fun restoreRetainedPresentation() {
@@ -1430,12 +1437,37 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         )
         renderingFilter = false
         importAudio.isEnabled = state.importEnabled
+        updateTaskListAnimation(state.transcriptionActive)
         taskAdapter.submitList(TaskListDisplayItems.from(state.taskList, state.onboardingHint))
         invalidateOptionsMenu()
     }
 
+    private fun updateTaskListAnimation(transcriptionActive: Boolean) {
+        val suppress = AndroidTaskListAnimationPolicy.suppressStructuralAnimations(transcriptionActive)
+        if (suppress == taskListAnimatorSuppressed) return
+        taskListAnimatorSuppressed = suppress
+        if (suppress) {
+            taskList.itemAnimator?.endAnimations()
+            taskList.itemAnimator = null
+        } else {
+            taskList.itemAnimator = taskListItemAnimator
+        }
+    }
+
     private fun handleTaskAction(request: AndroidTaskActionRequest) {
         taskActionRouter.route(request)
+    }
+
+    private fun openDocumentation() {
+        runCatching {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(VoiceInboxPublicLinks.DOCUMENTATION)))
+        }.onFailure { error ->
+            if (error is android.content.ActivityNotFoundException) {
+                Toast.makeText(this, R.string.settings_about_link_error, Toast.LENGTH_LONG).show()
+            } else {
+                throw error
+            }
+        }
     }
 
     private fun dismissOnboardingHint() {

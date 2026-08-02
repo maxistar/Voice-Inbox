@@ -23,6 +23,7 @@ import java.util.concurrent.Executors
 
 internal object VoiceInboxPublicLinks {
     const val WEBSITE = "https://voiceinbox.simpleditor.org/"
+    const val DOCUMENTATION = "https://voiceinbox.simpleditor.org/docs/"
     const val LEGAL = "https://voiceinbox.simpleditor.org/legal/"
 }
 

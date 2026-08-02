@@ -468,12 +468,13 @@ object TaskListPresentationController {
     }
 
     private fun audioComparator(filter: TaskListFilter): Comparator<AudioTaskSnapshot> = when (filter) {
-        TaskListFilter.PROCESSED -> compareByDescending<AudioTaskSnapshot> {
-            it.terminalAtMillis ?: it.importedAtMillis
-        }.thenByDescending { it.importedAtMillis }.thenByDescending { it.entryId }
-        TaskListFilter.NEW,
+        TaskListFilter.PROCESSED,
         TaskListFilter.ALL,
-        -> compareByDescending<AudioTaskSnapshot> { it.importedAtMillis }.thenByDescending { it.entryId }
+        -> compareByDescending<AudioTaskSnapshot> { it.terminalAtMillis ?: it.importedAtMillis }
+            .thenByDescending { it.importedAtMillis }
+            .thenByDescending { it.entryId }
+        TaskListFilter.NEW -> compareByDescending<AudioTaskSnapshot> { it.importedAtMillis }
+            .thenByDescending { it.entryId }
     }
 
     private fun emptyMessage(filter: TaskListFilter): String = when (filter) {
