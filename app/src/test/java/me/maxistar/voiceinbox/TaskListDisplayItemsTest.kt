@@ -22,6 +22,12 @@ import org.junit.Test
 
 class TaskListDisplayItemsTest {
     @Test
+    fun activeBatchSuppressesStructuralRecyclerViewAnimationsOnlyWhileActive() {
+        assertTrue(AndroidTaskListAnimationPolicy.suppressStructuralAnimations(true))
+        assertFalse(AndroidTaskListAnimationPolicy.suppressStructuralAnimations(false))
+    }
+
+    @Test
     fun setupBatchAndAudioItemsHaveStableKindsAndPlacement() {
         val items = items(
             filter = TaskListFilter.NEW,

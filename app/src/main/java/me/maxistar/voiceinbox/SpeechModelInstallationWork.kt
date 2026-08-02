@@ -1,5 +1,6 @@
 package me.maxistar.voiceinbox
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
@@ -31,6 +32,7 @@ object SpeechModelInstallationWork {
     ) {
         NETWORK_DOWNLOAD("network-download", "model download"),
         LOCAL_IMPORT("local-import", "local model import"),
+        TRANSCRIPTION("transcription", "transcription"),
     }
 
     fun foregroundInfo(context: Context, progress: Int, message: String): ForegroundInfo {
@@ -52,11 +54,15 @@ object SpeechModelInstallationWork {
             .setOngoing(true)
             .setProgress(100, progress, false)
             .build()
+        return foregroundInfo(NOTIFICATION_ID, notification)
+    }
+
+    fun foregroundInfo(notificationId: Int, notification: Notification): ForegroundInfo {
         val serviceType = foregroundServiceTypeForSdk(Build.VERSION.SDK_INT)
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            ForegroundInfo(NOTIFICATION_ID, notification, serviceType)
+            ForegroundInfo(notificationId, notification, serviceType)
         } else {
-            ForegroundInfo(NOTIFICATION_ID, notification)
+            ForegroundInfo(notificationId, notification)
         }
     }
 
@@ -67,26 +73,43 @@ object SpeechModelInstallationWork {
         message: String,
         source: Source,
     ) {
+        promote(
+            worker = worker,
+            foregroundInfo = foregroundInfo(context, progress, message),
+            source = source,
+        )
+    }
+
+    suspend fun promote(
+        worker: CoroutineWorker,
+        foregroundInfo: ForegroundInfo,
+        source: Source,
+    ) {
         try {
-            worker.setForeground(foregroundInfo(context, progress, message))
+            worker.setForeground(foregroundInfo)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {
-            Log.e(
-                LOG_TAG,
-                foregroundFailureDiagnostic(
-                    source = source,
-                    sdkInt = Build.VERSION.SDK_INT,
-                    manufacturer = Build.MANUFACTURER,
-                    model = Build.MODEL,
-                    error = error,
-                ),
-                error,
-            )
-            throw ForegroundPromotionException(
-                userMessage = "Could not keep ${source.userFacingName} running in the foreground. Please try again.",
-                cause = error,
-            )
+            throw promotionFailure(source, error)
+        }
+    }
+
+    fun promoteAsync(
+        worker: CoroutineWorker,
+        foregroundInfo: ForegroundInfo,
+        source: Source,
+    ) {
+        try {
+            worker.setForegroundAsync(foregroundInfo).get()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (interrupted: InterruptedException) {
+            Thread.currentThread().interrupt()
+            throw CancellationException("Foreground promotion was interrupted").apply {
+                initCause(interrupted)
+            }
+        } catch (error: Exception) {
+            throw promotionFailure(source, error.cause ?: error)
         }
     }
 
@@ -104,11 +127,29 @@ object SpeechModelInstallationWork {
         sdkInt: Int,
         manufacturer: String,
         model: String,
-        error: Exception,
+        error: Throwable,
     ): String =
         "Foreground promotion failed: source=${source.diagnosticName}, " +
             "sdk=$sdkInt, device=$manufacturer $model, " +
             "exception=${error.javaClass.name}: ${error.message ?: "no message"}"
+
+    private fun promotionFailure(source: Source, error: Throwable): ForegroundPromotionException {
+        Log.e(
+            LOG_TAG,
+            foregroundFailureDiagnostic(
+                source = source,
+                sdkInt = Build.VERSION.SDK_INT,
+                manufacturer = Build.MANUFACTURER,
+                model = Build.MODEL,
+                error = error,
+            ),
+            error,
+        )
+        return ForegroundPromotionException(
+            userMessage = "Could not keep ${source.userFacingName} running in the foreground. Please try again.",
+            cause = error,
+        )
+    }
 }
 
 class ForegroundPromotionException(

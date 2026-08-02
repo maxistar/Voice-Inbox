@@ -29,7 +29,16 @@ class SpeechModelLocalImporterInstrumentedTest {
             )
             val progress = mutableListOf<SpeechModelImportProgress>()
 
-            val installed = SpeechModelLocalImporter(context.contentResolver, repository)
+            val installed = SpeechModelLocalImporter(
+                repository = repository,
+                requiredDocuments = { _, _ ->
+                    mapOf(
+                        "recording.wav" to DocumentsContract.buildDocumentUriUsingTree(tree, "wav").toString(),
+                        "recording.m4a" to DocumentsContract.buildDocumentUriUsingTree(tree, "m4a").toString(),
+                    )
+                },
+                openInputStream = { context.contentResolver.openInputStream(Uri.parse(it)) },
+            )
                 .import(tree.toString()) { progress += it }
                 .getOrThrow()
 

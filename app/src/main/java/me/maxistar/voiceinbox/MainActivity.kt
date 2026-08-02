@@ -12,6 +12,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.widget.Toast
+import android.widget.TextView
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -30,11 +31,13 @@ import androidx.work.WorkManager
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.floatingactionbutton.FloatingActionButton
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
 import java.util.UUID
 
 class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listener {
+    private val speechModel = SpeechModelCatalog.defaultModel
     private lateinit var importAudio: FloatingActionButton
     private lateinit var newTab: MaterialButton
     private lateinit var processedTab: MaterialButton
@@ -42,6 +45,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private lateinit var taskFilters: MaterialButtonToggleGroup
     private lateinit var taskList: RecyclerView
     private lateinit var taskAdapter: TaskListAdapter
+    private var taskListItemAnimator: RecyclerView.ItemAnimator? = null
+    private var taskListAnimatorSuppressed = false
     private lateinit var taskActionRouter: AndroidTaskActionRouter
     private val taskStateHost: AndroidMainScreenStateHost by viewModels()
 
@@ -75,15 +80,18 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private var lastCatalogWorkState: CatalogWorkRefreshKey? = null
     private var currentSessionTranscriptionWorkId: UUID? = null
     private var currentSessionObservedActiveTranscription = false
+    private val transcriptionHandoff = AndroidTranscriptionHandoffCoordinator()
     private var modelMessage = "Checking speech model"
     private var modelDownloadAvailable = false
     private var modelDownloadProgress: Int? = null
     private var modelInstallCanCancel = false
+    private var selectedDownloadModel = SpeechModelCatalog.defaultModel
     private var scanMessage: String? = null
     private var transcriptionFinished = false
     private var transcriptionPhase: String? = null
     private var transcriptionFilename: String? = null
     private var transcriptionEntryId: Long? = null
+    private var transcriptionPreparationOwnerEntryId: Long? = null
     private var transcriptionIndeterminate = true
     private var transcriptionProgressValue = 0
     private var processedUs = -1L
@@ -119,6 +127,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private val stopRefreshIndicator = Runnable(::stopRefreshIndicatorAnimation)
     private val queuedImportUris = mutableListOf<Uri>()
     private var onboardingHintLifecycle = AndroidOnboardingHintLifecycle.DISMISSED
+    private var pendingModelPackageUri: Uri? = null
+    private var pendingModelPackageCatalogId: String? = null
 
     private val outputPicker = registerForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -169,7 +179,9 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         documentAccess = DocumentAccess(contentResolver)
         folderScanner = AudioFolderScanner(contentResolver)
         catalog = AndroidSqlDelightAudioCatalogFactory(this).create()
-        modelReadiness = getSharedModelReadiness(SpeechModelRepository(noBackupFilesDir.resolve("models")))
+        modelReadiness = getSharedModelReadiness {
+            SpeechModelRepository.forActive(noBackupFilesDir.resolve("models"))
+        }
         startupPolicyStore = StartupProcessingPolicyStore(
             getSharedPreferences(StartupProcessingPolicyStore.PREFERENCES_NAME, MODE_PRIVATE),
         )
@@ -180,6 +192,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         startupCoordinator = StartupProcessingCoordinator.restore(
             savedInstanceState?.getString(STATE_STARTUP_PROCESSING_STAGE),
         )
+        pendingModelPackageUri = savedInstanceState?.getString(STATE_PENDING_MODEL_URI)?.let(Uri::parse)
+        pendingModelPackageCatalogId = savedInstanceState?.getString(STATE_PENDING_MODEL_CATALOG_ID)
         restoreRetainedPresentation()
         taskActionRouter = AndroidTaskActionRouter(
             currentState = { taskStateHost.state.value },
@@ -218,6 +232,11 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         cleanupImportedAudio()
         handleShareIntent(intent)
         refreshModel()
+        restorePendingModelConfirmation()
+        if (intent.getBooleanExtra(EXTRA_OPEN_MODEL_FOLDER_PICKER, false)) {
+            intent.removeExtra(EXTRA_OPEN_MODEL_FOLDER_PICKER)
+            modelFolderPicker.launch(null)
+        }
     }
 
     override fun onStart() {
@@ -237,6 +256,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString(STATE_STARTUP_PROCESSING_STAGE, startupCoordinator.savedStage())
+        outState.putString(STATE_PENDING_MODEL_URI, pendingModelPackageUri?.toString())
+        outState.putString(STATE_PENDING_MODEL_CATALOG_ID, pendingModelPackageCatalogId)
         super.onSaveInstanceState(outState)
     }
 
@@ -268,6 +289,10 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                 startActivity(Intent(this, SettingsActivity::class.java))
                 true
             }
+            R.id.menuDocumentation -> {
+                openDocumentation()
+                true
+            }
             else -> super.onOptionsItemSelected(item)
         }
 
@@ -293,6 +318,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         taskList.layoutManager = LinearLayoutManager(this)
         taskList.adapter = taskAdapter
         (taskList.itemAnimator as? SimpleItemAnimator)?.supportsChangeAnimations = false
+        taskListItemAnimator = taskList.itemAnimator
     }
 
     private fun restoreRetainedPresentation() {
@@ -638,21 +664,15 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
             return
         }
         if (!alreadyPersisted) SpeechModelImportPermission.recordOwned(this, uri)
-        modelPresentationKnown = true
-        modelReady = false
-        modelSetupState = ModelSetupSnapshotState.INSTALLING
-        setModelUi("Checking local speech model", canDownload = false)
-        updateControls()
         importExecutor.execute {
             runCatching {
-                SpeechModelDirectoryReader(contentResolver).requiredDocuments(
-                    uri,
-                    EmbeddedSpeechModel.manifest,
-                )
-            }.onSuccess {
+                SpeechModelDirectoryReader(contentResolver).inspectPackage(uri)
+            }.onSuccess { source ->
                 runOnUiThread {
                     if (activityDestroyed) return@runOnUiThread
-                    SpeechModelImportWorker.enqueue(this, uri)
+                    pendingModelPackageUri = uri
+                    pendingModelPackageCatalogId = source.descriptor.catalogId
+                    showModelPackageConfirmation(source.descriptor)
                 }
             }.onFailure { error ->
                 SpeechModelImportPermission.releaseOwnedIfUnused(this)
@@ -669,6 +689,46 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                 }
             }
         }
+    }
+
+    private fun restorePendingModelConfirmation() {
+        val descriptor = pendingModelPackageCatalogId?.let { catalogId ->
+            SpeechModelCatalog.models.singleOrNull { it.catalogId == catalogId }
+        } ?: return
+        showModelPackageConfirmation(descriptor)
+    }
+
+    private fun showModelPackageConfirmation(descriptor: SpeechModelDescriptor) {
+        val uri = pendingModelPackageUri ?: return
+        val size = SpeechModelRepository.formatBytes(descriptor.approximateDownloadBytes)
+        val maturity = descriptor.maturity.name.lowercase().replaceFirstChar(Char::uppercase)
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle("Install ${descriptor.displayName}?")
+            .setMessage("$maturity model · ${descriptor.languages.summary} · approximately $size")
+            .setNegativeButton(android.R.string.cancel) { _, _ ->
+                pendingModelPackageUri = null
+                pendingModelPackageCatalogId = null
+                SpeechModelImportPermission.releaseOwnedIfUnused(this)
+            }
+            .setPositiveButton("Install", null)
+            .create()
+        dialog.setOnShowListener {
+            val confirm = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            confirm.isEnabled = !transcriptionActive()
+            confirm.setOnClickListener {
+                if (transcriptionActive()) return@setOnClickListener
+                pendingModelPackageUri = null
+                pendingModelPackageCatalogId = null
+                modelPresentationKnown = true
+                modelReady = false
+                modelSetupState = ModelSetupSnapshotState.INSTALLING
+                setModelUi("Installing ${descriptor.displayName}", canDownload = false)
+                updateControls()
+                SpeechModelImportWorker.enqueue(this, uri, descriptor)
+                dialog.dismiss()
+            }
+        }
+        dialog.show()
     }
 
     private fun scanFolder(
@@ -833,21 +893,27 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private fun retryEntry(entry: AudioCatalogEntry) {
         val output = outputUri ?: return
         stopPreviewPlayback(render = true)
-        currentSessionTranscriptionWorkId = TranscriptionWorker.enqueueRetry(
-            this,
-            folderUri,
-            output,
-            entry.id,
-        )
+        val request = TranscriptionWorker.requestRetry(folderUri, output, entry.id)
+        beginTranscriptionHandoff(request.id, entry.id)
+        TranscriptionWorker.enqueue(this, request)
     }
 
     private fun showTranscriptText(entry: AudioCatalogEntry) {
-        val transcript = entry.transcriptText?.takeIf { it.isNotBlank() } ?: return
-        AlertDialog.Builder(this)
-            .setTitle(entry.displayName)
-            .setMessage(transcript)
-            .setPositiveButton(android.R.string.ok, null)
-            .show()
+        val review = AndroidTranscriptReview.from(entry) ?: return
+        val content = layoutInflater.inflate(R.layout.dialog_transcript, null)
+        content.findViewById<TextView>(R.id.transcriptText).text = review.text
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(review.filename)
+            .setView(content)
+            .setNegativeButton(R.string.transcript_close, null)
+            .setPositiveButton(R.string.transcript_share, null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                startActivity(AndroidTranscriptShareIntent.chooser(review))
+            }
+        }
+        dialog.show()
     }
 
     private fun refreshModel() {
@@ -925,7 +991,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                         val bytes = info.progress.getLong(SpeechModelInstallationWork.KEY_BYTES_DOWNLOADED, 0)
                         val total = info.progress.getLong(
                             SpeechModelInstallationWork.KEY_TOTAL_BYTES,
-                            EmbeddedSpeechModel.manifest.totalSizeBytes,
+                            speechModel.approximateDownloadBytes,
                         )
                         modelMessage =
                             info.progress.getString(SpeechModelInstallationWork.KEY_MESSAGE)
@@ -974,6 +1040,12 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         WorkManager.getInstance(this)
             .getWorkInfosForUniqueWorkLiveData(TranscriptionWorker.UNIQUE_WORK_NAME)
             .observe(this) { infos ->
+                transcriptionHandoff.reconcile(infos.map { info ->
+                    AndroidTranscriptionWorkObservation(
+                        workId = info.id.toString(),
+                        active = info.state in ACTIVE_WORK_STATES,
+                    )
+                })
                 transcriptionState = classifyTranscriptionState(infos)
                 startupCoordinator.setTranscriptionState(
                     known = true,
@@ -994,7 +1066,9 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                 } else {
                     null
                 } ?: run {
-                    clearTranscriptionProgress()
+                    if (transcriptionHandoff.handoff == null) {
+                        clearTranscriptionProgress()
+                    }
                     publishTaskState()
                     updateControls()
                     return@observe
@@ -1008,19 +1082,27 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                 }
                 transcriptionFinished = transcriptionState == TranscriptionObservationState.FINISHED
                 val data = if (info.state.isFinished) info.outputData else info.progress
-                transcriptionPhase = data.getString(TranscriptionWorker.KEY_PHASE)
-                    ?: when (info.state) {
-                        WorkInfo.State.ENQUEUED -> "Queued"
-                        WorkInfo.State.RUNNING -> "Transcribing"
-                        WorkInfo.State.SUCCEEDED -> "Completed"
-                        WorkInfo.State.FAILED ->
-                            data.getString(TranscriptionWorker.KEY_ERROR) ?: "Failed"
-                        else -> info.state.name
-                    }
                 transcriptionFilename = data.getString(TranscriptionWorker.KEY_FILENAME)
                 transcriptionEntryId = data
                     .getLong(TranscriptionWorker.KEY_ACTIVE_ENTRY_ID, TranscriptionWorker.NO_ENTRY_ID)
                     .takeIf { it != TranscriptionWorker.NO_ENTRY_ID }
+                val workActive = info.state in ACTIVE_WORK_STATES
+                val requestedEntryId = transcriptionHandoff.requestedEntryId(info.tags)
+                transcriptionPreparationOwnerEntryId = transcriptionHandoff.preparationOwnerEntryId(
+                    observedActive = workActive,
+                    activeEntryId = transcriptionEntryId,
+                    requestedEntryId = requestedEntryId,
+                )
+                transcriptionPhase = transcriptionHandoff.phase(
+                    observedPhase = data.getString(TranscriptionWorker.KEY_PHASE),
+                    observedActive = workActive,
+                    activeEntryId = transcriptionEntryId,
+                ) ?: when (info.state) {
+                    WorkInfo.State.SUCCEEDED -> "Completed"
+                    WorkInfo.State.FAILED ->
+                        data.getString(TranscriptionWorker.KEY_ERROR) ?: "Failed"
+                    else -> info.state.name
+                }
                 transcriptionIndeterminate =
                     transcriptionActive() && data.getBoolean(TranscriptionWorker.KEY_INDETERMINATE, true)
                 transcriptionProgressValue = data.getInt(TranscriptionWorker.KEY_PROGRESS, 0)
@@ -1095,7 +1177,9 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         val output = outputUri ?: return
         if (!outputAccessReady || (folderUri != null && !folderAccessReady)) return
         stopPreviewPlayback(render = true)
-        currentSessionTranscriptionWorkId = TranscriptionWorker.enqueueAll(this, folderUri, output)
+        val request = TranscriptionWorker.requestAll(folderUri, output)
+        beginTranscriptionHandoff(request.id, requestedEntryId = null)
+        TranscriptionWorker.enqueue(this, request)
     }
 
     private fun evaluateStartupProcessing() {
@@ -1132,10 +1216,24 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         updateControls()
     }
 
-    private fun transcriptionActive(): Boolean = transcriptionState == TranscriptionObservationState.ACTIVE
+    private fun beginTranscriptionHandoff(workId: UUID, requestedEntryId: Long?) {
+        currentSessionTranscriptionWorkId = workId
+        currentSessionObservedActiveTranscription = false
+        transcriptionHandoff.begin(workId.toString(), requestedEntryId)
+        clearTranscriptionProgress()
+        transcriptionState = TranscriptionObservationState.ACTIVE
+        transcriptionPhase = AndroidTranscriptionHandoffCoordinator.PREPARATION_PHASE
+        transcriptionPreparationOwnerEntryId = requestedEntryId
+        startupCoordinator.setTranscriptionState(known = true, active = true)
+        updateControls()
+    }
+
+    private fun transcriptionActive(): Boolean = transcriptionHandoff.active(
+        transcriptionState == TranscriptionObservationState.ACTIVE,
+    )
 
     private fun classifyTranscriptionState(infos: List<WorkInfo>): TranscriptionObservationState {
-        val active = infos.any { it.state in ACTIVE_WORK_STATES }
+        val active = transcriptionHandoff.active(infos.any { it.state in ACTIVE_WORK_STATES })
         val currentSessionFinished = infos.any { info ->
             info.state.isFinished &&
                 (info.id == currentSessionTranscriptionWorkId || currentSessionObservedActiveTranscription)
@@ -1153,6 +1251,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         transcriptionPhase = null
         transcriptionFilename = null
         transcriptionEntryId = null
+        transcriptionPreparationOwnerEntryId = null
         transcriptionIndeterminate = true
         transcriptionProgressValue = 0
         processedUs = -1L
@@ -1239,12 +1338,11 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         val eligible = modelReady &&
             outputAccessReady &&
             audioInputAvailable &&
-            !folderBusy() &&
-            !transcriptionActive()
+            !folderBusy()
         val transcription = TranscriptionTaskSnapshot(
             active = transcriptionActive(),
             activeEntryId = transcriptionEntryId,
-            preparationOwnerEntryId = null,
+            preparationOwnerEntryId = transcriptionPreparationOwnerEntryId,
             phase = transcriptionPhase,
             percent = transcriptionProgressValue.takeUnless { transcriptionIndeterminate },
             processedUs = processedUs.takeIf { it >= 0 },
@@ -1265,6 +1363,12 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
             progressPercent = modelDownloadProgress,
             downloadAvailable = modelDownloadAvailable,
             canCancel = modelInstallCanCancel,
+            selectedModel = SpeechModelPackageIdentity(
+                schemaVersion = SpeechModelCatalog.PACKAGE_SCHEMA_VERSION,
+                catalogId = selectedDownloadModel.catalogId,
+                modelVersion = selectedDownloadModel.manifest.version,
+            ),
+            downloadChoices = SpeechModelCatalog.networkDownloadChoices(SpeechModelPlatform.ANDROID),
         )
         val outputSnapshot = OutputSetupSnapshot(
             state = outputState,
@@ -1333,12 +1437,37 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         )
         renderingFilter = false
         importAudio.isEnabled = state.importEnabled
+        updateTaskListAnimation(state.transcriptionActive)
         taskAdapter.submitList(TaskListDisplayItems.from(state.taskList, state.onboardingHint))
         invalidateOptionsMenu()
     }
 
+    private fun updateTaskListAnimation(transcriptionActive: Boolean) {
+        val suppress = AndroidTaskListAnimationPolicy.suppressStructuralAnimations(transcriptionActive)
+        if (suppress == taskListAnimatorSuppressed) return
+        taskListAnimatorSuppressed = suppress
+        if (suppress) {
+            taskList.itemAnimator?.endAnimations()
+            taskList.itemAnimator = null
+        } else {
+            taskList.itemAnimator = taskListItemAnimator
+        }
+    }
+
     private fun handleTaskAction(request: AndroidTaskActionRequest) {
         taskActionRouter.route(request)
+    }
+
+    private fun openDocumentation() {
+        runCatching {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(VoiceInboxPublicLinks.DOCUMENTATION)))
+        }.onFailure { error ->
+            if (error is android.content.ActivityNotFoundException) {
+                Toast.makeText(this, R.string.settings_about_link_error, Toast.LENGTH_LONG).show()
+            } else {
+                throw error
+            }
+        }
     }
 
     private fun dismissOnboardingHint() {
@@ -1352,7 +1481,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         when (kind) {
             TaskActionKind.DOWNLOAD_MODEL,
             TaskActionKind.RETRY_MODEL_DOWNLOAD,
-            -> SpeechModelDownloadWorker.enqueue(this)
+            -> SpeechModelDownloadWorker.enqueue(this, selectedDownloadModel)
+            TaskActionKind.SELECT_DOWNLOAD_MODEL -> chooseDownloadModel()
             TaskActionKind.IMPORT_MODEL -> modelFolderPicker.launch(null)
             TaskActionKind.CANCEL_MODEL_DOWNLOAD -> SpeechModelDownloadWorker.cancel(this)
             TaskActionKind.CREATE_OUTPUT -> launchOutputCreatorIfEnabled()
@@ -1371,16 +1501,30 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         }
     }
 
+    private fun chooseDownloadModel() {
+        if (modelSetupState == ModelSetupSnapshotState.INSTALLING) return
+        val choices = SpeechModelCatalog.modelsFor(SpeechModelPlatform.ANDROID)
+            .filter { it.distribution.networkDownloadAvailable }
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Download speech model")
+            .setSingleChoiceItems(
+                choices.map { it.displayName }.toTypedArray(),
+                choices.indexOfFirst { it.catalogId == selectedDownloadModel.catalogId },
+            ) { dialog, which ->
+                selectedDownloadModel = choices[which]
+                publishTaskState()
+                dialog.dismiss()
+            }
+            .show()
+    }
+
     private fun transcribeEntry(entry: AudioCatalogEntry) {
         val output = outputUri ?: return
         if (entry.state != AudioFileState.PENDING || !outputAccessReady) return
         stopPreviewPlayback(render = true)
-        currentSessionTranscriptionWorkId = TranscriptionWorker.enqueueEntry(
-            this,
-            folderUri,
-            output,
-            entry.id,
-        )
+        val request = TranscriptionWorker.requestEntry(folderUri, output, entry.id)
+        beginTranscriptionHandoff(request.id, entry.id)
+        TranscriptionWorker.enqueue(this, request)
     }
 
     private fun updateMenu(menu: Menu) {
@@ -1547,6 +1691,9 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
 
     private companion object {
         const val STATE_STARTUP_PROCESSING_STAGE = "startup-processing-stage"
+        const val STATE_PENDING_MODEL_URI = "pending-model-uri"
+        const val STATE_PENDING_MODEL_CATALOG_ID = "pending-model-catalog-id"
+        const val EXTRA_OPEN_MODEL_FOLDER_PICKER = "open-model-folder-picker"
         const val REFRESH_SHOW_DELAY_MS = 180L
         const val REFRESH_MIN_VISIBLE_MS = 450L
         const val REFRESH_ROTATION_MS = 800L
@@ -1561,7 +1708,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         private val handledModelInstallSuccessIds = mutableSetOf<String>()
         private val handledTranscriptionFailureIds = mutableSetOf<String>()
 
-        fun getSharedModelReadiness(repository: SpeechModelRepository): SpeechModelReadinessManager =
+        fun getSharedModelReadiness(repository: () -> SpeechModelRepository): SpeechModelReadinessManager =
             sharedModelReadiness ?: synchronized(this) {
                 sharedModelReadiness ?: SpeechModelReadinessManager(
                     repository = repository,

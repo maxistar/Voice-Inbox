@@ -67,6 +67,83 @@ struct IosOutputDocumentPicker: UIViewControllerRepresentable {
     }
 }
 
+struct IosOutputDocumentCreator: UIViewControllerRepresentable {
+    let onPick: (URL) -> Void
+    let onCancel: () -> Void
+
+    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+        context.coordinator.makeDocumentPicker()
+    }
+
+    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onPick: onPick, onCancel: onCancel)
+    }
+
+    final class Coordinator: NSObject, UIDocumentPickerDelegate {
+        private let onPick: (URL) -> Void
+        private let onCancel: () -> Void
+
+        init(onPick: @escaping (URL) -> Void, onCancel: @escaping () -> Void) {
+            self.onPick = onPick
+            self.onCancel = onCancel
+        }
+
+        func makeDocumentPicker() -> UIDocumentPickerViewController {
+            let temporaryDirectory = FileManager.default.temporaryDirectory
+                .appendingPathComponent("VoiceInboxOutput-\(UUID().uuidString)", isDirectory: true)
+            let sourceURL = temporaryDirectory.appendingPathComponent("Voice Inbox Transcripts.md")
+            do {
+                try FileManager.default.createDirectory(
+                    at: temporaryDirectory,
+                    withIntermediateDirectories: true
+                )
+                try Data().write(to: sourceURL, options: .atomic)
+                self.temporaryDirectory = temporaryDirectory
+                let controller = UIDocumentPickerViewController(forExporting: [sourceURL], asCopy: true)
+                controller.delegate = self
+                return controller
+            } catch {
+                onCancel()
+                let controller = UIDocumentPickerViewController(
+                    forOpeningContentTypes: [.plainText],
+                    asCopy: false
+                )
+                controller.delegate = self
+                return controller
+            }
+        }
+
+        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+            guard let url = urls.first else {
+                finishCancelled()
+                return
+            }
+            cleanUpTemporarySource()
+            onPick(url)
+        }
+
+        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+            finishCancelled()
+        }
+
+        private var temporaryDirectory: URL?
+
+        private func finishCancelled() {
+            cleanUpTemporarySource()
+            onCancel()
+        }
+
+        private func cleanUpTemporarySource() {
+            guard let temporaryDirectory else { return }
+            try? FileManager.default.removeItem(at: temporaryDirectory)
+            self.temporaryDirectory = nil
+        }
+    }
+}
+
 struct IosSelectedOutputDocument {
     let id: String
     let url: URL

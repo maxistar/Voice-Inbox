@@ -1,8 +1,10 @@
+import Foundation
 import Shared
 import SwiftUI
 
 struct ContentView: View {
     private let shellState = IosMainScreenShellState()
+    private let onboardingStore: IosOnboardingHintStore
 
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var importStore = IosAudioImportStore()
@@ -13,37 +15,21 @@ struct ContentView: View {
     @StateObject private var startupPolicyStore = IosStartupProcessingPolicyStore()
     @State private var selectedTab = IosShellCatalogSelection.new
     @State private var presentedPicker: IosPresentedPicker?
-    @State private var shownTranscript: String?
+    @State private var shownTranscript: IosDisplayedTranscript?
     @State private var startupProcessingChecked = false
     @State private var startupFolderRefreshChecked = false
     @State private var startupProcessingPrompt: IosStartupProcessingPrompt?
+    @State private var onboardingLifecycle: IosOnboardingHintLifecycle
+    @State private var setupHydration = IosSetupHydration.pending
+
+    init(onboardingDefaults: UserDefaults = .standard) {
+        let store = IosOnboardingHintStore(defaults: onboardingDefaults)
+        onboardingStore = store
+        _onboardingLifecycle = State(initialValue: store.load())
+    }
 
     var body: some View {
-        let transcriptionBackendConfigured = transcriber.backendConfigured
-        let speechModelReady = speechModelStore.isReady
-        let outputReady = outputStore.isReady
-        let transcriptionReady = transcriptionBackendConfigured && speechModelReady && !speechModelStore.isBusy && outputReady
-        let modelDownloadAvailable = !speechModelReady && !speechModelStore.isBusy
-        let screen = shellState.screen(
-            selection: selectedTab,
-            importedFiles: importStore.files,
-            modelStatus: speechModelStore.status,
-            modelMessage: speechModelStore.message,
-            modelInstalling: speechModelStore.isInstalling,
-            modelInstallationPhase: speechModelStore.downloadProgress?.message ?? speechModelStore.message,
-            modelDownloadAvailable: modelDownloadAvailable,
-            modelDownloadProgress: speechModelStore.downloadProgress?.percent,
-            modelCanCancel: speechModelStore.canCancelDownload,
-            outputStatus: outputStore.status,
-            folderStatus: importStore.inboxFolderStatus,
-            folderScanning: importStore.isScanningFolder,
-            activePreviewEntryId: previewPlayer.playingFileId,
-            previewState: previewPlayer.playingFileId == nil ? PreviewPlaybackState.idle : PreviewPlaybackState.playing,
-            transcription: transcriber.state,
-            preparationOwnerEntryId: transcriber.preparationOwnerFileId,
-            prerequisiteError: transcriber.prerequisiteError,
-            actionsEnabled: transcriptionReady && !transcriber.isActive && !importStore.isScanningFolder
-        )
+        let screen = currentScreen()
 
         NavigationStack {
             List {
@@ -57,7 +43,130 @@ struct ContentView: View {
                     .accessibilityIdentifier("task-list-filter")
                 }
 
+                if let candidate = speechModelStore.pendingCandidate {
+                    Section("Detected Speech Model") {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(candidate.descriptor.displayName)
+                                .font(.headline)
+                            Text(
+                                "\(candidate.descriptor.languageSummary) · " +
+                                "\(candidate.descriptor.maturity) · " +
+                                ByteCountFormatter.string(
+                                    fromByteCount: candidate.descriptor.totalSizeBytes,
+                                    countStyle: .file
+                                )
+                            )
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            Text("Installing this model replaces the currently installed model.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        HStack {
+                            Button("Install") {
+                                speechModelStore.confirmPendingInstallation(
+                                    candidate: candidate,
+                                    replacementAllowed: !transcriber.isActive
+                                )
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(speechModelStore.isBusy || transcriber.isActive)
+
+                            Button("Cancel", role: .cancel) {
+                                speechModelStore.cancelPendingInstallation()
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+                }
+
+
+                if !speechModelStore.isReady {
+                    Section("Download Speech Model") {
+                        Picker("Model", selection: $speechModelStore.selectedDownloadModel) {
+                            ForEach(speechModelStore.availableModels.filter(\.networkDownloadAvailable)) { model in
+                                Text(model.displayName).tag(model)
+                            }
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            let model = speechModelStore.selectedDownloadModel
+                            Text(model.languageSummary).font(.subheadline)
+                            Text("\(model.maturity) · \(ByteCountFormatter.string(fromByteCount: model.totalSizeBytes, countStyle: .file)) download · \(ByteCountFormatter.string(fromByteCount: model.totalSizeBytes + model.safetyMarginBytes, countStyle: .file)) free")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            if speechModelStore.activeDescriptor != nil {
+                                Text("Downloading this model replaces the currently installed model.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        Button("Download") {
+                            speechModelStore.downloadModel(speechModelStore.selectedDownloadModel)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(speechModelStore.isBusy)
+
+                        let modelTask = screen.state.tasks
+                            .compactMap({ $0 as? SetupTaskPresentation })
+                            .first(where: { $0.kind == .model })
+                        if let error = modelTask?.errorMessage, !error.isEmpty {
+                            Text(error)
+                                .font(.footnote)
+                                .foregroundStyle(.red)
+                        }
+                        if let modelTask, modelTask.state == .active {
+                            TaskListRow(task: modelTask) { action in
+                                perform(action: action, task: modelTask, screen: screen)
+                            }
+                        }
+                    }
+                }
+
                 Section {
+                    ForEach(screen.state.tasks.filter {
+                        guard let setup = $0 as? SetupTaskPresentation else { return false }
+                        return setup.kind != .model
+                    }, id: \.stableId) { task in
+                        TaskListRow(task: task) { action in
+                            perform(action: action, task: task, screen: screen)
+                        }
+                        .id(task.stableId)
+                        .accessibilityIdentifier("task-row-\(task.stableId)")
+                    }
+
+                    if screen.onboardingHint.visible {
+                        IosInlineOnboardingRow(
+                            presentation: screen.onboardingHint,
+                            onDismiss: dismissOnboarding,
+                            onAction: { action in
+                                performOnboarding(action: action)
+                            }
+                        )
+                        .id(IosOnboardingHintPresentation.stableId)
+                    }
+
+                    if screen.state.batchAction.visible {
+                        Button {
+                            transcribeAll()
+                        } label: {
+                            Label(
+                                "Transcribe All (\(screen.state.batchAction.eligibleCount))",
+                                systemImage: "text.badge.checkmark"
+                            )
+                        }
+                        .disabled(!screen.state.batchAction.enabled)
+                        .accessibilityIdentifier("transcribe-all")
+                    }
+
+                    ForEach(screen.state.tasks.filter { $0 is AudioTaskPresentation }, id: \.stableId) { task in
+                        TaskListRow(task: task) { action in
+                            perform(action: action, task: task, screen: screen)
+                        }
+                        .id(task.stableId)
+                        .accessibilityIdentifier("task-row-\(task.stableId)")
+                    }
+
                     if let emptyMessage = screen.state.emptyMessage {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(emptyMessage)
@@ -69,35 +178,6 @@ struct ContentView: View {
                                 .buttonStyle(.borderless)
                                 .disabled(!action.enabled)
                             }
-                        }
-                    } else {
-                        ForEach(screen.state.tasks.filter { $0 is SetupTaskPresentation }, id: \.stableId) { task in
-                            TaskListRow(task: task) { action in
-                                perform(action: action, task: task, screen: screen)
-                            }
-                            .id(task.stableId)
-                            .accessibilityIdentifier("task-row-\(task.stableId)")
-                        }
-
-                        if screen.state.batchAction.visible {
-                            Button {
-                                transcribeAll()
-                            } label: {
-                                Label(
-                                    "Transcribe All (\(screen.state.batchAction.eligibleCount))",
-                                    systemImage: "text.badge.checkmark"
-                                )
-                            }
-                            .disabled(!screen.state.batchAction.enabled)
-                            .accessibilityIdentifier("transcribe-all")
-                        }
-
-                        ForEach(screen.state.tasks.filter { $0 is AudioTaskPresentation }, id: \.stableId) { task in
-                            TaskListRow(task: task) { action in
-                                perform(action: action, task: task, screen: screen)
-                            }
-                            .id(task.stableId)
-                            .accessibilityIdentifier("task-row-\(task.stableId)")
                         }
                     }
                 }
@@ -128,11 +208,19 @@ struct ContentView: View {
                             importStore: importStore,
                             outputStore: outputStore,
                             startupPolicyStore: startupPolicyStore,
+                            speechModelStore: speechModelStore,
                             selectInboxFolder: {
                                 presentPicker(.audioFolder)
                             },
                             selectOutputFile: {
                                 presentPicker(.outputFile)
+                            },
+                            installModelPackage: {
+                                guard !transcriber.isActive else {
+                                    speechModelStore.message = "Wait for transcription to finish before replacing the speech model."
+                                    return
+                                }
+                                presentPicker(.speechModelFolder)
                             }
                         )
                     } label: {
@@ -160,9 +248,19 @@ struct ContentView: View {
                         outputStore.selectOutputFile(url)
                         presentedPicker = nil
                     }
+                case .outputCreation:
+                    IosOutputDocumentCreator(
+                        onPick: { url in
+                            outputStore.selectOutputFile(url)
+                            presentedPicker = nil
+                        },
+                        onCancel: {
+                            presentedPicker = nil
+                        }
+                    )
                 case .speechModelFolder:
                     IosSpeechModelDirectoryPicker { url in
-                        speechModelStore.installModel(from: url)
+                        speechModelStore.inspectModelPackage(from: url)
                         presentedPicker = nil
                     }
                 }
@@ -172,28 +270,23 @@ struct ContentView: View {
             }
             .onAppear {
                 refreshStartupSources()
+                setupHydration = .known
+                completeOnboardingIfNeeded()
                 evaluateStartupProcessingIfNeeded()
+            }
+            .onChange(of: screen.onboardingShouldComplete) { shouldComplete in
+                guard shouldComplete else { return }
+                completeOnboardingIfNeeded()
             }
             .onChange(of: scenePhase) { phase in
                 guard phase == .active else { return }
                 refreshStartupSources()
+                completeOnboardingIfNeeded()
                 evaluateStartupProcessingIfNeeded()
             }
-            .sheet(item: transcriptBinding) { transcript in
-                NavigationStack {
-                    ScrollView {
-                        Text(transcript.text)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding()
-                    }
-                    .navigationTitle("Transcript")
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("Done") {
-                                shownTranscript = nil
-                            }
-                        }
-                    }
+            .sheet(item: $shownTranscript) { transcript in
+                IosTranscriptViewer(transcript: transcript) {
+                    shownTranscript = nil
                 }
             }
             .sheet(item: $startupProcessingPrompt) { prompt in
@@ -224,14 +317,34 @@ struct ContentView: View {
         }
     }
 
-    private var transcriptBinding: Binding<IosDisplayedTranscript?> {
-        Binding(
-            get: {
-                shownTranscript.map(IosDisplayedTranscript.init(text:))
-            },
-            set: { value in
-                shownTranscript = value?.text
-            }
+    private func currentScreen() -> IosTaskListScreen {
+        let speechModelReady = speechModelStore.isReady
+        let outputReady = outputStore.isReady
+        let transcriptionReady = transcriber.backendConfigured &&
+            speechModelReady &&
+            !speechModelStore.isBusy &&
+            outputReady
+        return shellState.screen(
+            selection: selectedTab,
+            importedFiles: importStore.files,
+            modelStatus: speechModelStore.status,
+            modelMessage: speechModelStore.message,
+            modelInstalling: speechModelStore.isInstalling,
+            modelInstallationPhase: speechModelStore.downloadProgress?.message ?? speechModelStore.message,
+            modelDownloadAvailable: !speechModelReady && !speechModelStore.isBusy,
+            modelDownloadProgress: speechModelStore.downloadProgress?.percent,
+            modelCanCancel: speechModelStore.canCancelDownload,
+            outputStatus: outputStore.status,
+            folderStatus: importStore.inboxFolderStatus,
+            folderScanning: importStore.isScanningFolder,
+            activePreviewEntryId: previewPlayer.playingFileId,
+            previewState: previewPlayer.playingFileId == nil ? .idle : .playing,
+            transcription: transcriber.state,
+            preparationOwnerEntryId: transcriber.preparationOwnerFileId,
+            prerequisiteError: transcriber.prerequisiteError,
+            actionsEnabled: transcriptionReady && !transcriber.isActive && !importStore.isScanningFolder,
+            onboardingLifecycle: onboardingLifecycle,
+            setupHydration: setupHydration
         )
     }
 
@@ -244,14 +357,61 @@ struct ContentView: View {
                 if let message = importStore.importMessage {
                     return IosGlobalMessage(title: "Voice Inbox", text: message)
                 }
+                if let message = speechModelStore.actionableErrorMessage {
+                    return IosGlobalMessage(title: "Speech Model", text: message)
+                }
                 return nil
             },
             set: { value in
                 guard value == nil else { return }
                 previewPlayer.clearError()
                 importStore.importMessage = nil
+                speechModelStore.clearActionableError()
             }
         )
+    }
+
+    private func dismissOnboarding() {
+        guard onboardingLifecycle == .active else { return }
+        onboardingLifecycle = .dismissed
+        onboardingStore.save(.dismissed)
+    }
+
+    private func completeOnboardingIfNeeded() {
+        guard onboardingLifecycle == .active else { return }
+        let screen = currentScreen()
+        guard screen.onboardingShouldComplete else { return }
+        onboardingLifecycle = .completed
+        onboardingStore.save(.completed)
+    }
+
+    private func performOnboarding(action: IosOnboardingHintAction) {
+        let current = currentScreen()
+        let request = IosOnboardingActionRequest(
+            stableId: IosOnboardingHintPresentation.stableId,
+            kind: action.kind
+        )
+        guard let route = IosOnboardingActionAuthorizer.route(
+            request: request,
+            presentation: current.onboardingHint
+        ) else { return }
+
+        switch route {
+        case .modelDownload:
+            speechModelStore.downloadModel(speechModelStore.selectedDownloadModel)
+        case .modelImport:
+            guard !transcriber.isActive else {
+                speechModelStore.message = "Wait for transcription to finish before replacing the speech model."
+                return
+            }
+            presentPicker(.speechModelFolder)
+        case .outputSelection:
+            presentPicker(.outputFile)
+        case .folderSelection:
+            presentPicker(.audioFolder)
+        default:
+            break
+        }
     }
 
     private func perform(
@@ -262,11 +422,17 @@ struct ContentView: View {
         guard action.enabled, let route = IosTaskActionRouter.route(action.kind) else { return }
         switch route {
         case .modelDownload:
-            speechModelStore.downloadModel()
+            speechModelStore.downloadModel(speechModelStore.selectedDownloadModel)
         case .modelImport:
+            guard !transcriber.isActive else {
+                speechModelStore.message = "Wait for transcription to finish before replacing the speech model."
+                return
+            }
             presentPicker(.speechModelFolder)
         case .modelCancel:
             speechModelStore.cancelDownload()
+        case .outputCreation:
+            presentPicker(.outputCreation)
         case .outputSelection:
             presentPicker(.outputFile)
         case .folderSelection:
@@ -295,7 +461,10 @@ struct ContentView: View {
         case .stop:
             previewPlayer.stop()
         case .showText:
-            shownTranscript = file.transcriptText
+            shownTranscript = IosTranscriptReview.presentation(
+                entryId: file.id,
+                files: importStore.files
+            )
         case .transcribe, .retryTranscription:
             guard let outputDocument = outputStore.currentDocument() else {
                 outputStore.refreshAccess()
@@ -303,7 +472,15 @@ struct ContentView: View {
             }
             previewPlayer.stop()
             let onSuccess: (String) -> Void = { transcript in
-                shownTranscript = transcript
+                shownTranscript = IosTranscriptReview.presentation(
+                    entryId: file.id,
+                    files: importStore.files
+                )
+                    ?? IosDisplayedTranscript(
+                        entryId: file.id,
+                        filename: file.displayName,
+                        text: transcript
+                    )
                 selectedTab = .processed
             }
             if action == .retryTranscription {
@@ -420,6 +597,7 @@ struct ContentView: View {
 private enum IosPresentedPicker: String, Identifiable {
     case audioFiles
     case audioFolder
+    case outputCreation
     case outputFile
     case speechModelFolder
 
@@ -504,11 +682,6 @@ private struct TaskListRow: View {
 private struct IosGlobalMessage: Identifiable {
     let id = UUID()
     let title: String
-    let text: String
-}
-
-private struct IosDisplayedTranscript: Identifiable {
-    let id = UUID()
     let text: String
 }
 

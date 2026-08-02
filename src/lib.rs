@@ -1,6 +1,9 @@
 #[cfg(any(not(target_os = "ios"), all(target_os = "ios", feature = "ios-onnx")))]
 pub mod engine;
 
+#[cfg(feature = "whisper-mobile-spike")]
+mod whisper_mobile_spike;
+
 #[cfg(target_os = "ios")]
 use once_cell::sync::Lazy;
 #[cfg(target_os = "ios")]
@@ -12,6 +15,26 @@ use std::path::Path;
 #[cfg(target_os = "ios")]
 use std::sync::Mutex;
 
+#[cfg(feature = "whisper-mobile-spike")]
+fn run_whisper_spike_operation(
+    operation: &str,
+    action: impl FnOnce() -> String + std::panic::UnwindSafe,
+) -> String {
+    std::panic::catch_unwind(action).unwrap_or_else(|_| {
+        serde_json::json!({
+            "schema_version": 1,
+            "backend": "whisper.cpp",
+            "operation": operation,
+            "status": "error",
+            "error": "Whisper spike operation panicked",
+        })
+        .to_string()
+    })
+}
+
+#[cfg(all(target_os = "ios", feature = "whisper-mobile-spike"))]
+use std::path::PathBuf;
+
 #[cfg(target_os = "android")]
 use jni::objects::{JClass, JFloatArray, JString};
 #[cfg(target_os = "android")]
@@ -20,8 +43,6 @@ use jni::sys::{jboolean, jstring, JNI_FALSE, JNI_TRUE};
 use jni::JNIEnv;
 #[cfg(target_os = "android")]
 use std::path::PathBuf;
-#[cfg(any(target_os = "android", all(target_os = "ios", feature = "ios-onnx")))]
-use transcribe_rs::TranscriptionEngine;
 
 #[cfg(any(not(target_os = "ios"), all(target_os = "ios", feature = "ios-onnx")))]
 fn serialize_chunk_result(result: transcribe_rs::TranscriptionResult) -> String {
@@ -49,22 +70,30 @@ fn serialize_chunk_result(result: transcribe_rs::TranscriptionResult) -> String 
 pub unsafe extern "system" fn Java_me_maxistar_voiceinbox_NativeTranscriptionBridge_initialize(
     mut env: JNIEnv,
     _class: JClass,
+    backend: JString,
+    installation_identity: JString,
     model_directory: JString,
+    primary_file: JString,
 ) -> jboolean {
     android_logger::init_once(
         android_logger::Config::default().with_max_level(log::LevelFilter::Info),
     );
     let _ = ort::init().commit();
 
-    let model_directory: String = match env.get_string(&model_directory) {
-        Ok(path) => path.into(),
-        Err(error) => {
-            log::error!("Failed to read model directory from JNI: {error}");
-            return JNI_FALSE;
-        }
+    let read = |env: &mut JNIEnv, value: &JString| -> Result<String, String> {
+        env.get_string(value).map(Into::into).map_err(|error| error.to_string())
+    };
+    let configuration = match (
+        read(&mut env, &backend), read(&mut env, &installation_identity),
+        read(&mut env, &model_directory), read(&mut env, &primary_file),
+    ) {
+        (Ok(backend), Ok(identity), Ok(directory), Ok(primary_file)) => engine::ModelConfiguration {
+            backend, identity, directory: PathBuf::from(directory), primary_file,
+        },
+        _ => return JNI_FALSE,
     };
 
-    engine::configure_model_directory(PathBuf::from(model_directory));
+    engine::configure_model(configuration);
     match engine::ensure_loaded_without_callback() {
         Ok(()) => JNI_TRUE,
         Err(error) => {
@@ -105,18 +134,8 @@ pub unsafe extern "system" fn Java_me_maxistar_voiceinbox_NativeTranscriptionBri
     let result = engine::get_engine()
         .ok_or_else(|| "Model is not loaded".to_string())
         .and_then(|engine| {
-            engine
-                .lock()
-                .unwrap()
-                .transcribe_samples(
-                    buffer,
-                    Some(transcribe_rs::engines::parakeet::ParakeetInferenceParams {
-                        timestamp_granularity:
-                            transcribe_rs::engines::parakeet::TimestampGranularity::Word,
-                    }),
-                )
+            engine.lock().unwrap().transcribe_samples(buffer)
                 .map(serialize_chunk_result)
-                .map_err(|error| error.to_string())
         });
 
     match result.and_then(|text| env.new_string(text).map_err(|error| error.to_string())) {
@@ -162,6 +181,18 @@ fn read_model_directory(model_directory: *const c_char) -> Result<String, String
         Ok(path) if !path.is_empty() => Ok(path.to_string()),
         Ok(_) => Err("Model directory was empty".to_string()),
         Err(_) => Err("Model directory was not valid UTF-8".to_string()),
+    }
+}
+
+#[cfg(target_os = "ios")]
+fn read_required_c_string(value: *const c_char, label: &str) -> Result<String, String> {
+    if value.is_null() {
+        return Err(format!("{label} was not provided"));
+    }
+    match unsafe { CStr::from_ptr(value) }.to_str() {
+        Ok(text) if !text.is_empty() => Ok(text.to_string()),
+        Ok(_) => Err(format!("{label} was empty")),
+        Err(_) => Err(format!("{label} was not valid UTF-8")),
     }
 }
 
@@ -240,6 +271,59 @@ pub unsafe extern "C" fn voiceinbox_transcription_initialize(
 
 #[cfg(all(target_os = "ios", feature = "ios-onnx"))]
 #[no_mangle]
+pub unsafe extern "C" fn voiceinbox_transcription_initialize_configured(
+    backend: *const c_char,
+    installation_identity: *const c_char,
+    model_directory: *const c_char,
+    primary_file: *const c_char,
+) -> bool {
+    let configuration = match (
+        read_required_c_string(backend, "Speech backend"),
+        read_required_c_string(installation_identity, "Installation identity"),
+        read_required_c_string(model_directory, "Model directory"),
+        read_required_c_string(primary_file, "Primary model file"),
+    ) {
+        (Ok(backend), Ok(identity), Ok(directory), Ok(primary_file)) => engine::ModelConfiguration {
+            backend,
+            identity,
+            directory: directory.into(),
+            primary_file,
+        },
+        values => {
+            let error = [values.0.err(), values.1.err(), values.2.err(), values.3.err()]
+                .into_iter().flatten().next()
+                .unwrap_or_else(|| "Invalid speech model configuration".to_string());
+            set_ios_error(error);
+            return false;
+        }
+    };
+
+    let validation = match configuration.backend.as_str() {
+        "PARAKEET_TDT_ONNX" => validate_ios_model_directory(
+            configuration.directory.to_string_lossy().as_ref(),
+        ),
+        "WHISPER_CPP" => {
+            let model = configuration.directory.join(&configuration.primary_file);
+            if model.is_file() { Ok(()) } else { Err(format!("Whisper model file does not exist: {}", model.display())) }
+        }
+        backend => Err(format!("Unsupported speech backend: {backend}")),
+    };
+    let result = validation.and_then(|_| {
+        if configuration.backend == "PARAKEET_TDT_ONNX" {
+            initialize_ios_onnx_runtime()?;
+        }
+        engine::configure_model(configuration);
+        engine::ensure_loaded_without_callback()
+    });
+    if let Err(error) = result {
+        set_ios_error(error);
+        return false;
+    }
+    true
+}
+
+#[cfg(all(target_os = "ios", feature = "ios-onnx"))]
+#[no_mangle]
 pub extern "C" fn voiceinbox_transcription_reset() {
     engine::invalidate_loaded_model();
 }
@@ -267,6 +351,18 @@ pub unsafe extern "C" fn voiceinbox_transcription_initialize(
     false
 }
 
+#[cfg(all(target_os = "ios", not(feature = "ios-onnx")))]
+#[no_mangle]
+pub unsafe extern "C" fn voiceinbox_transcription_initialize_configured(
+    _backend: *const c_char,
+    _installation_identity: *const c_char,
+    _model_directory: *const c_char,
+    _primary_file: *const c_char,
+) -> bool {
+    set_ios_error("iOS speech runtimes are not linked in this build");
+    false
+}
+
 #[cfg(all(target_os = "ios", feature = "ios-onnx"))]
 #[no_mangle]
 pub unsafe extern "C" fn voiceinbox_transcription_transcribe_chunk_json(
@@ -282,18 +378,8 @@ pub unsafe extern "C" fn voiceinbox_transcription_transcribe_chunk_json(
     let result = engine::get_engine()
         .ok_or_else(|| "Model is not loaded".to_string())
         .and_then(|engine| {
-            engine
-                .lock()
-                .unwrap()
-                .transcribe_samples(
-                    buffer,
-                    Some(transcribe_rs::engines::parakeet::ParakeetInferenceParams {
-                        timestamp_granularity:
-                            transcribe_rs::engines::parakeet::TimestampGranularity::Word,
-                    }),
-                )
+            engine.lock().unwrap().transcribe_samples(buffer)
                 .map(serialize_chunk_result)
-                .map_err(|error| error.to_string())
         });
 
     match result {
@@ -332,6 +418,80 @@ pub unsafe extern "C" fn voiceinbox_transcription_string_free(value: *mut c_char
     if !value.is_null() {
         drop(CString::from_raw(value));
     }
+}
+
+#[cfg(all(target_os = "ios", feature = "whisper-mobile-spike"))]
+#[no_mangle]
+pub unsafe extern "C" fn voiceinbox_whisper_spike_initialize_json(
+    model_path: *const c_char,
+) -> *mut c_char {
+    let path = match read_model_directory(model_path) {
+        Ok(path) => PathBuf::from(path),
+        Err(error) => {
+            return into_c_string(
+                serde_json::json!({
+                    "schema_version": 1,
+                    "backend": "whisper.cpp",
+                    "operation": "initialize",
+                    "status": "error",
+                    "error": error,
+                })
+                .to_string(),
+            )
+        }
+    };
+    into_c_string(run_whisper_spike_operation("initialize", || {
+        whisper_mobile_spike::initialize(&path)
+    }))
+}
+
+#[cfg(all(target_os = "ios", feature = "whisper-mobile-spike"))]
+#[no_mangle]
+pub unsafe extern "C" fn voiceinbox_whisper_spike_transcribe_json(
+    samples: *const c_float,
+    sample_count: usize,
+    language: *const c_char,
+) -> *mut c_char {
+    if samples.is_null() || sample_count == 0 {
+        return into_c_string(
+            serde_json::json!({
+                "schema_version": 1,
+                "backend": "whisper.cpp",
+                "operation": "transcribe",
+                "status": "error",
+                "error": "No PCM samples were provided",
+            })
+            .to_string(),
+        );
+    }
+    let buffer = std::slice::from_raw_parts(samples, sample_count).to_vec();
+    let language = if language.is_null() {
+        None
+    } else {
+        CStr::from_ptr(language)
+            .to_str()
+            .ok()
+            .map(str::to_owned)
+            .filter(|value| !value.is_empty())
+    };
+    into_c_string(run_whisper_spike_operation("transcribe", || {
+        whisper_mobile_spike::transcribe(buffer, language)
+    }))
+}
+
+#[cfg(all(target_os = "ios", feature = "whisper-mobile-spike"))]
+#[no_mangle]
+pub extern "C" fn voiceinbox_whisper_spike_diagnostics_json() -> *mut c_char {
+    into_c_string(run_whisper_spike_operation(
+        "diagnostics",
+        whisper_mobile_spike::diagnostics,
+    ))
+}
+
+#[cfg(all(target_os = "ios", feature = "whisper-mobile-spike"))]
+#[no_mangle]
+pub extern "C" fn voiceinbox_whisper_spike_reset() {
+    let _ = std::panic::catch_unwind(whisper_mobile_spike::reset);
 }
 
 #[cfg(test)]

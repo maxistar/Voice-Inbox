@@ -9,6 +9,35 @@ import kotlin.test.assertTrue
 
 class TaskListPresentationControllerTest {
     @Test
+    fun modelTaskShowsSelectedDownloadDescriptorAndLocksChoiceDuringInstall() {
+        val whisper = SpeechModelCatalog.networkDownloadChoices(SpeechModelPlatform.ANDROID)
+            .single { it.identity.catalogId == "whisper-tiny-multilingual" }
+        val required = assertIs<SetupTaskPresentation>(
+            state(
+                model = ModelSetupSnapshot(
+                    state = ModelSetupSnapshotState.REQUIRED,
+                    downloadAvailable = true,
+                    selectedModel = whisper.identity,
+                    downloadChoices = SpeechModelCatalog.networkDownloadChoices(SpeechModelPlatform.ANDROID),
+                ),
+            ).tasks.single(),
+        )
+        assertTrue(required.detail?.contains("Whisper Tiny Multilingual") == true)
+        assertTrue(required.actions.any { it.kind == TaskActionKind.SELECT_DOWNLOAD_MODEL })
+
+        val installing = assertIs<SetupTaskPresentation>(
+            state(
+                model = ModelSetupSnapshot(
+                    state = ModelSetupSnapshotState.INSTALLING,
+                    selectedModel = whisper.identity,
+                    downloadChoices = SpeechModelCatalog.networkDownloadChoices(SpeechModelPlatform.ANDROID),
+                ),
+            ).tasks.single(),
+        )
+        assertFalse(installing.actions.any { it.kind == TaskActionKind.SELECT_DOWNLOAD_MODEL })
+    }
+
+    @Test
     fun setupTasksAreSynthesizedInKindOrderAndCompletedTasksDisappear() {
         val state = state(
             filter = TaskListFilter.NEW,
@@ -111,7 +140,7 @@ class TaskListPresentationControllerTest {
 
         assertEquals("Verification failed", task.errorMessage)
         assertFalse(task.actions.single { it.kind == TaskActionKind.RETRY_MODEL_DOWNLOAD }.enabled)
-        assertTrue(task.actions.single { it.kind == TaskActionKind.IMPORT_MODEL }.enabled)
+        assertFalse(task.actions.any { it.kind == TaskActionKind.IMPORT_MODEL })
     }
 
     @Test
@@ -215,14 +244,32 @@ class TaskListPresentationControllerTest {
     }
 
     @Test
-    fun orderingUsesImportTimeExceptProcessedUsesTerminalTime() {
+    fun terminalOnlyAllUsesTheSameTerminalTimeOrderAsProcessed() {
         val audio = listOf(
             audio(1, AudioFileState.PROCESSED, importedAt = 300, terminalAt = 100),
             audio(2, AudioFileState.FAILED, importedAt = 100, terminalAt = 400),
         )
 
         assertEquals(listOf("audio:2", "audio:1"), state(TaskListFilter.PROCESSED, audio = audio).tasks.map { it.stableId })
-        assertEquals(listOf("audio:1", "audio:2"), state(TaskListFilter.ALL, audio = audio).tasks.map { it.stableId })
+        assertEquals(listOf("audio:2", "audio:1"), state(TaskListFilter.ALL, audio = audio).tasks.map { it.stableId })
+    }
+
+    @Test
+    fun newKeepsImportTimeOrderWhenAllUsesLifecycleTime() {
+        val audio = listOf(
+            audio(1, AudioFileState.PENDING, importedAt = 300),
+            audio(2, AudioFileState.PENDING, importedAt = 100),
+            audio(3, AudioFileState.PROCESSED, importedAt = 50, terminalAt = 400),
+        )
+
+        assertEquals(
+            listOf("audio:1", "audio:2"),
+            state(TaskListFilter.NEW, audio = audio).tasks.map { it.stableId },
+        )
+        assertEquals(
+            listOf("audio:3", "audio:1", "audio:2"),
+            state(TaskListFilter.ALL, audio = audio).tasks.map { it.stableId },
+        )
     }
 
     @Test

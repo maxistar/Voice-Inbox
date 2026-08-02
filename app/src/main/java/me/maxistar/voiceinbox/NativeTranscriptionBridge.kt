@@ -20,7 +20,19 @@ object NativeTranscriptionBridge {
         System.loadLibrary("notes_recognition")
     }
 
-    external fun initialize(modelDirectory: String): Boolean
+    external fun initialize(
+        backend: String,
+        installationIdentity: String,
+        modelDirectory: String,
+        primaryFile: String,
+    ): Boolean
+
+    fun initialize(model: InstalledSpeechModelState.Ready): Boolean = initialize(
+        backend = model.descriptor.backend.name,
+        installationIdentity = "${model.descriptor.catalogId}:${model.descriptor.manifest.version}",
+        modelDirectory = model.directory.absolutePath,
+        primaryFile = model.descriptor.manifest.files.first().name,
+    )
 
     external fun reset()
 

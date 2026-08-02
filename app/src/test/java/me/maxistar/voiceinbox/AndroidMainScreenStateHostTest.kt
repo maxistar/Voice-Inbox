@@ -91,7 +91,7 @@ class AndroidMainScreenStateHostTest {
         assertEquals(listOf(5L, 4L, 3L, 2L, 1L), tasks.map { it.entryId })
         assertEquals(AudioTaskState.NO_SPEECH, tasks.single { it.entryId == 4L }.state)
         assertEquals(TaskActionKind.SHOW_TEXT, tasks.single { it.entryId == 3L }.actions.first().kind)
-        assertEquals("1 KiB", tasks.single { it.entryId == 1L }.detail)
+        assertTrue(requireNotNull(tasks.single { it.entryId == 1L }.detail).endsWith(" • 1 KiB"))
     }
 
     @Test
@@ -139,6 +139,31 @@ class AndroidMainScreenStateHostTest {
         val owner = state.taskList.tasks.filterIsInstance<AudioTaskPresentation>().single { it.progress != null }
         assertEquals(2L, owner.entryId)
         assertEquals(AudioTaskState.PROCESSING, owner.state)
+        assertTrue(owner.actions.none { it.enabled })
+        assertFalse(state.taskList.batchAction.enabled)
+    }
+
+    @Test
+    fun explicitPreparationOwnerOverridesOldestEligibleEntry() {
+        val state = AndroidTaskListSnapshotMapper.state(
+            readyInput(
+                entries = listOf(
+                    entry(1, AudioFileState.PENDING, AndroidAudioImportConstants.SOURCE_ID, modified = 50),
+                    entry(2, AudioFileState.PENDING, "content://folder", modified = 100),
+                ),
+                transcription = TranscriptionTaskSnapshot(
+                    active = true,
+                    preparationOwnerEntryId = 2,
+                    phase = "Preparing speech model",
+                ),
+            ),
+        )
+
+        val tasks = state.taskList.tasks.filterIsInstance<AudioTaskPresentation>()
+        assertNull(tasks.single { it.entryId == 1L }.progress)
+        val owner = tasks.single { it.entryId == 2L }
+        assertEquals(AudioTaskState.PROCESSING, owner.state)
+        assertEquals("Preparing speech model", owner.progress?.phase)
     }
 
     @Test
@@ -316,6 +341,7 @@ class AndroidMainScreenStateHostTest {
         processed: Long? = null,
         error: String? = null,
         transcript: String? = null,
+        durationUs: Long? = null,
     ) = AudioCatalogEntry(
         id = id,
         folderUri = source,
@@ -328,5 +354,46 @@ class AndroidMainScreenStateHostTest {
         lastError = error,
         processedAtMillis = processed,
         transcriptText = transcript,
+        durationUs = durationUs,
     )
+
+    companion object {
+        internal fun readyInputForMetadata(
+            filter: TaskListFilter,
+            entries: List<AudioCatalogEntry>,
+        ) = AndroidMainScreenInput(
+            filter = filter,
+            model = ModelSetupSnapshot(ModelSetupSnapshotState.READY),
+            output = OutputSetupSnapshot(OutputSetupSnapshotState.READY),
+            folder = FolderSetupSnapshot(FolderSetupSnapshotState.READY),
+            entries = entries,
+            transcriptionEligible = true,
+            hydration = AndroidMainScreenHydration(
+                modelKnown = true,
+                outputKnown = true,
+                folderKnown = true,
+                catalogKnown = true,
+            ),
+        )
+
+        internal fun entryForMetadata(
+            id: Long,
+            state: AudioFileState,
+            modified: Long,
+            durationUs: Long?,
+        ) = AudioCatalogEntry(
+            id = id,
+            folderUri = AndroidAudioImportConstants.SOURCE_ID,
+            documentUri = "content://audio/$id",
+            displayName = "$id.ogg",
+            mimeType = "audio/ogg",
+            fingerprint = AudioFileFingerprint(sizeBytes = 1024, modifiedMillis = modified),
+            state = state,
+            stateBeforeMissing = null,
+            lastError = null,
+            processedAtMillis = modified + 1,
+            transcriptText = "text",
+            durationUs = durationUs,
+        )
+    }
 }

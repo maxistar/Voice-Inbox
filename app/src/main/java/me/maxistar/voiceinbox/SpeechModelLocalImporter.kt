@@ -23,7 +23,12 @@ class SpeechModelLocalImporter(
     ) : this(
         repository = repository,
         requiredDocuments = { treeUri, manifest ->
-            SpeechModelDirectoryReader(resolver).requiredDocuments(android.net.Uri.parse(treeUri), manifest)
+            val source = SpeechModelDirectoryReader(resolver).inspectPackage(android.net.Uri.parse(treeUri))
+            check(source.descriptor.catalogId == repository.descriptor.catalogId &&
+                source.descriptor.manifest.version == repository.descriptor.manifest.version) {
+                "The selected model package changed before it could be imported"
+            }
+            source.requiredDocuments
         },
         openInputStream = { resolver.openInputStream(android.net.Uri.parse(it)) },
     )

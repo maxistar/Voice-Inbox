@@ -3,9 +3,11 @@ package me.maxistar.voiceinbox
 import android.provider.DocumentsContract
 import me.maxistar.voiceinbox.core.SpeechModelFile
 import me.maxistar.voiceinbox.core.SpeechModelManifest
+import me.maxistar.voiceinbox.core.SpeechModelCatalog
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.ByteArrayInputStream
 
 class SpeechModelDirectoryReaderTest {
     @Test
@@ -55,6 +57,64 @@ class SpeechModelDirectoryReaderTest {
         }.exceptionOrNull()
 
         assertTrue(error?.message?.contains("model.bin") == true)
+    }
+
+    @Test
+    fun packageIdentitySelectsExactCatalogModel() {
+        val descriptor = SpeechModelDirectoryReader.resolvePackageIdentity(
+            """{"schemaVersion":1,"catalogId":"whisper-tiny-multilingual","modelVersion":"whisper-tiny-ggml-f16-r1"}""",
+        )
+
+        assertEquals(SpeechModelCatalog.whisperTinyMultilingual, descriptor)
+    }
+
+    @Test
+    fun malformedUnknownAndUntrustedPackageMetadataAreRejected() {
+        listOf(
+            "not-json",
+            """{"schemaVersion":2,"catalogId":"whisper-tiny-multilingual","modelVersion":"whisper-tiny-ggml-f16-r1"}""",
+            """{"schemaVersion":1,"catalogId":"unknown","modelVersion":"unknown"}""",
+            """{"schemaVersion":1,"catalogId":"whisper-tiny-multilingual","modelVersion":"whisper-tiny-ggml-f16-r1","files":[]}""",
+        ).forEach { json ->
+            assertTrue(runCatching { SpeechModelDirectoryReader.resolvePackageIdentity(json) }.isFailure)
+        }
+    }
+
+    @Test
+    fun legacyLayoutIsRestrictedToExactParakeetFiles() {
+        val files = SpeechModelCatalog.defaultModel.manifest.files.map { document(it.name) }
+        assertEquals(
+            SpeechModelCatalog.defaultModel,
+            SpeechModelDirectoryReader.resolveLegacyParakeet(files),
+        )
+        assertTrue(
+            runCatching {
+                SpeechModelDirectoryReader.resolveLegacyParakeet(files + document("extra.txt"))
+            }.isFailure,
+        )
+        assertTrue(
+            runCatching {
+                SpeechModelDirectoryReader.resolveLegacyParakeet(
+                    SpeechModelCatalog.whisperTinyMultilingual.manifest.files.map { document(it.name) },
+                )
+            }.isFailure,
+        )
+    }
+
+    @Test
+    fun boundedManifestReadingWorksWithoutApi33InputStreamMethods() {
+        val payload = "model package".toByteArray()
+
+        assertTrue(
+            payload.contentEquals(
+                SpeechModelDirectoryReader.readBounded(ByteArrayInputStream(payload), payload.size),
+            ),
+        )
+        assertTrue(
+            runCatching {
+                SpeechModelDirectoryReader.readBounded(ByteArrayInputStream(payload), payload.size - 1)
+            }.exceptionOrNull()?.message?.contains("too large") == true,
+        )
     }
 
     private fun document(name: String, mime: String = "application/octet-stream") =

@@ -25,7 +25,10 @@ class EndToEndTranscriptionInstrumentedTest {
 
     @Test
     fun wavAndM4aBatchAppendSeparateTranscriptEntries() {
-        val model = SpeechModelRepository(targetContext.noBackupFilesDir.resolve("models")).inspect()
+        val model = SpeechModelRepository(
+            targetContext.noBackupFilesDir.resolve("models"),
+            SpeechModelCatalog.defaultModel.manifest,
+        ).inspect()
         assumeTrue(model is InstalledSpeechModelState.Ready)
         targetContext.deleteDatabase(AndroidSqlDelightAudioCatalogFactory.DATABASE_NAME)
 

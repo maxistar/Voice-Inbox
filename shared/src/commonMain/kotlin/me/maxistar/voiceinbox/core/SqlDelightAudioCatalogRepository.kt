@@ -35,6 +35,7 @@ data class SqlDelightAudioCatalogFile(
             lastError = lastError,
             processedAtMillis = processedAtMillis,
             transcriptText = transcriptText,
+            durationUs = durationUs,
         )
 }
 

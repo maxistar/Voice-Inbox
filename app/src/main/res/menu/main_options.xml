@@ -11,4 +11,8 @@
     <item
         android:id="@+id/menuSettings"
         android:title="@string/menu_settings" />
+
+    <item
+        android:id="@+id/menuDocumentation"
+        android:title="@string/menu_documentation" />
 </menu>

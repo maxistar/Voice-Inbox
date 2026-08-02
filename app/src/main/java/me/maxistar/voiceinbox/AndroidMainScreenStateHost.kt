@@ -69,6 +69,7 @@ data class AndroidMainScreenState(
     val importEnabled: Boolean,
     val folderSync: AndroidFolderSyncPresentation,
     val onboardingHint: AndroidOnboardingHintPresentation,
+    val transcriptionActive: Boolean,
 ) {
     val refreshFolderVisible: Boolean get() = folderSync.visible
     val refreshFolderEnabled: Boolean get() = folderSync.enabled
@@ -80,7 +81,11 @@ object AndroidTaskListSnapshotMapper {
             AudioTaskSnapshot(
                 entryId = entry.id,
                 title = entry.displayName,
-                detail = entry.fingerprint.sizeBytes?.let(::formatSize),
+                detail = AndroidAudioMetadataFormatter.format(
+                    timestampMillis = entry.fingerprint.modifiedMillis,
+                    sizeBytes = entry.fingerprint.sizeBytes,
+                    durationUs = entry.durationUs,
+                ),
                 state = entry.state,
                 importedAtMillis = entry.fingerprint.modifiedMillis ?: entry.id,
                 terminalAtMillis = entry.processedAtMillis,
@@ -116,6 +121,7 @@ object AndroidTaskListSnapshotMapper {
             entriesById = input.entries.associateBy(AudioCatalogEntry::id),
             importEnabled = input.importEnabled,
             folderSync = input.folderSync,
+            transcriptionActive = input.transcription.active,
             onboardingHint = AndroidOnboardingHintPresenter.present(
                 lifecycle = input.onboardingLifecycle,
                 filter = input.filter,
@@ -131,12 +137,10 @@ object AndroidTaskListSnapshotMapper {
         message?.contains("no text", ignoreCase = true) == true ||
             message?.contains("no speech", ignoreCase = true) == true
 
-    private fun formatSize(bytes: Long): String =
-        if (bytes < 1024 * 1024) {
-            "${bytes / 1024} KiB"
-        } else {
-            "${bytes / (1024 * 1024)} MiB"
-        }
+}
+
+internal object AndroidTaskListAnimationPolicy {
+    fun suppressStructuralAnimations(transcriptionActive: Boolean): Boolean = transcriptionActive
 }
 
 class AndroidMainScreenStateHost(

@@ -17,6 +17,14 @@ enum IosTranscriptionPreparationGate {
 @_silgen_name("voiceinbox_transcription_initialize")
 private func voiceinbox_transcription_initialize(_ modelDirectory: UnsafePointer<CChar>) -> Bool
 
+@_silgen_name("voiceinbox_transcription_initialize_configured")
+private func voiceinbox_transcription_initialize_configured(
+    _ backend: UnsafePointer<CChar>,
+    _ installationIdentity: UnsafePointer<CChar>,
+    _ modelDirectory: UnsafePointer<CChar>,
+    _ primaryFile: UnsafePointer<CChar>
+) -> Bool
+
 @_silgen_name("voiceinbox_transcription_transcribe_chunk_json")
 private func voiceinbox_transcription_transcribe_chunk_json(
     _ samples: UnsafePointer<Float>?,
@@ -558,6 +566,28 @@ final class IosNativeTranscriber: PlatformNativeTranscriber {
 
     static func prepare(modelDirectory: String) -> Bool {
         modelDirectory.withCString { voiceinbox_transcription_initialize($0) }
+    }
+
+    static func prepare(
+        backend: String,
+        installationIdentity: String,
+        modelDirectory: String,
+        primaryFile: String
+    ) -> Bool {
+        backend.withCString { backendPointer in
+            installationIdentity.withCString { identityPointer in
+                modelDirectory.withCString { directoryPointer in
+                    primaryFile.withCString { primaryPointer in
+                        voiceinbox_transcription_initialize_configured(
+                            backendPointer,
+                            identityPointer,
+                            directoryPointer,
+                            primaryPointer
+                        )
+                    }
+                }
+            }
+        }
     }
 
     static func resetModel() {

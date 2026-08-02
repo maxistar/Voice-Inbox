@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/transcriptScroll"
+    android:layout_width="match_parent"
+    android:layout_height="320dp"
+    android:fillViewport="true"
+    android:paddingStart="24dp"
+    android:paddingTop="8dp"
+    android:paddingEnd="24dp"
+    android:paddingBottom="8dp">
+
+    <TextView
+        android:id="@+id/transcriptText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:contentDescription="@string/transcript_text_accessibility"
+        android:fontFamily="sans"
+        android:lineSpacingExtra="2dp"
+        android:textColor="?android:attr/textColorPrimary"
+        android:textIsSelectable="true"
+        android:textSize="16sp" />
+
+</ScrollView>

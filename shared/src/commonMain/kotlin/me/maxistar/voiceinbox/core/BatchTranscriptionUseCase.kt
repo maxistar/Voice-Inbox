@@ -52,6 +52,47 @@ interface BatchClock {
     fun currentTimeMillis(): Long
 }
 
+/**
+ * Limits decoder-level progress to a cadence presentation layers can draw reliably.
+ * Lifecycle changes bypass the interval so ownership and terminal outcomes remain prompt.
+ */
+class BatchProgressCoalescer(
+    private val clock: BatchClock,
+    private val minimumIntervalMillis: Long = CONTINUOUS_PROGRESS_INTERVAL_MILLIS,
+) {
+    private var lastPublished: BatchTranscriptionProgress? = null
+    private var lastContinuousPublicationMillis: Long? = null
+
+    fun shouldPublish(progress: BatchTranscriptionProgress): Boolean {
+        val previous = lastPublished
+        val lifecycleChanged = previous == null ||
+            previous.phase != progress.phase ||
+            previous.activeEntryId != progress.activeEntryId ||
+            previous.filename != progress.filename ||
+            previous.completed != progress.completed ||
+            previous.total != progress.total ||
+            previous.failed != progress.failed
+        if (lifecycleChanged) {
+            lastPublished = progress
+            lastContinuousPublicationMillis = clock.currentTimeMillis()
+            return true
+        }
+
+        val now = clock.currentTimeMillis()
+        val lastContinuous = lastContinuousPublicationMillis
+        if (lastContinuous == null || now - lastContinuous >= minimumIntervalMillis) {
+            lastPublished = progress
+            lastContinuousPublicationMillis = now
+            return true
+        }
+        return false
+    }
+
+    companion object {
+        const val CONTINUOUS_PROGRESS_INTERVAL_MILLIS = 250L
+    }
+}
+
 class BatchTranscriptionUseCase(
     private val catalog: AudioCatalogQueuePort,
     private val transcriber: BatchEntryTranscriber,
@@ -61,6 +102,10 @@ class BatchTranscriptionUseCase(
         input: BatchTranscriptionInput,
         onProgress: (BatchTranscriptionProgress) -> Unit,
     ): BatchTranscriptionResult {
+        val progressCoalescer = BatchProgressCoalescer(clock)
+        fun publish(progress: BatchTranscriptionProgress) {
+            if (progressCoalescer.shouldPublish(progress)) onProgress(progress)
+        }
         catalog.recoverInterrupted()
         val total = if (input.retryEntryId == null) {
             catalog.pendingCount(input.sourceScope)
@@ -81,7 +126,7 @@ class BatchTranscriptionUseCase(
                         outputId = input.outputId,
                         runId = input.runId,
                     ) { progress ->
-                        onProgress(
+                        publish(
                             BatchTranscriptionProgress(
                                 phase = progress.phase,
                                 activeEntryId = entry.id,
@@ -117,7 +162,7 @@ class BatchTranscriptionUseCase(
                 }
                 completed += 1
                 currentEntry = null
-                onProgress(summaryProgress(completed, total, failed))
+                publish(summaryProgress(completed, total, failed))
                 if (input.retryEntryId != null) break
             }
         } catch (cancelled: CancellationException) {

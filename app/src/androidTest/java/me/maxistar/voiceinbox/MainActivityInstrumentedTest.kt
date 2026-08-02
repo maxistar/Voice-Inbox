@@ -61,6 +61,7 @@ class MainActivityInstrumentedTest {
 
             openActionBarOverflowOrOptionsMenu(InstrumentationRegistry.getInstrumentation().targetContext)
             onView(withText(R.string.menu_settings)).check(matches(isDisplayed()))
+            onView(withText(R.string.menu_documentation)).check(matches(isDisplayed()))
         }
     }
 
