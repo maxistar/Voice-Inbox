@@ -68,6 +68,16 @@
       debugServiceExtension = "internal"
       allowLocationSimulation = "YES"
       queueDebuggingEnableBacktraceRecording = "Yes">
+      <BuildableProductRunnable
+         runnableDebuggingMode = "0">
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "101010101010101010101007"
+            BuildableName = "VoiceInbox.app"
+            BlueprintName = "VoiceInbox"
+            ReferencedContainer = "container:VoiceInbox.xcodeproj">
+         </BuildableReference>
+      </BuildableProductRunnable>
       <EnvironmentVariables>
          <EnvironmentVariable
             key = "WHISPER_MODEL_PATH"
@@ -100,16 +110,6 @@
             isEnabled = "YES">
          </EnvironmentVariable>
       </EnvironmentVariables>
-      <BuildableProductRunnable
-         runnableDebuggingMode = "0">
-         <BuildableReference
-            BuildableIdentifier = "primary"
-            BlueprintIdentifier = "101010101010101010101007"
-            BuildableName = "VoiceInbox.app"
-            BlueprintName = "VoiceInbox"
-            ReferencedContainer = "container:VoiceInbox.xcodeproj">
-         </BuildableReference>
-      </BuildableProductRunnable>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"
