@@ -10,14 +10,14 @@ enum IosSpeechModelInstallationState: Equatable {
     case invalid
 }
 
-struct IosSpeechModelFileDescriptor: Equatable {
+struct IosSpeechModelFileDescriptor: Equatable, Hashable {
     let name: String
     let sizeBytes: Int64
     let sha256: String
     let downloadURL: String
 }
 
-struct IosSpeechModelDescriptor: Equatable, Identifiable {
+struct IosSpeechModelDescriptor: Equatable, Hashable, Identifiable {
     let catalogId: String
     let displayName: String
     let modelVersion: String
@@ -179,6 +179,7 @@ final class IosSpeechModelStore: ObservableObject {
     @Published private(set) var status: IosSpeechModelStatus
     @Published private(set) var isInstalling = false
     @Published private(set) var downloadProgress: IosSpeechModelDownloadProgress?
+    @Published var selectedDownloadModel: IosSpeechModelDescriptor = .defaultModel
     @Published private(set) var runtimeState = SpeechModelRuntimeState.unloaded
     @Published var message: String?
     @Published var pendingCandidate: IosSpeechModelCandidate?
@@ -369,10 +370,17 @@ final class IosSpeechModelStore: ObservableObject {
         inspectModelPackage(from: sourceURL)
     }
 
-    func downloadModel() {
+    func downloadModel(_ requested: IosSpeechModelDescriptor? = nil) {
         guard !isBusy else { return }
 
-        let descriptor = IosSpeechModelDescriptor.defaultModel
+        let descriptor = requested ?? selectedDownloadModel
+        guard IosSpeechModelDescriptor.resolve(
+            catalogId: descriptor.catalogId,
+            modelVersion: descriptor.modelVersion
+        )?.networkDownloadAvailable == true else {
+            message = "Selected speech model is not available for download."
+            return
+        }
         guard descriptor.networkDownloadAvailable else {
             message = "Network download is not available for this model."
             return

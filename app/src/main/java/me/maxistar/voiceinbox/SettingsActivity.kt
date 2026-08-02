@@ -34,6 +34,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var folderScanner: AudioFolderScanner
     private lateinit var folderDetail: TextView
     private lateinit var outputDetail: TextView
+    private lateinit var modelDetail: TextView
     private lateinit var scheduledSwitch: SwitchCompat
     private lateinit var scheduledTime: TextView
     private lateinit var scheduledTimeDetail: TextView
@@ -88,6 +89,7 @@ class SettingsActivity : AppCompatActivity() {
         settings = settingsStore.load()
         folderDetail = findViewById(R.id.settingsFolderDetail)
         outputDetail = findViewById(R.id.settingsOutputDetail)
+        modelDetail = findViewById(R.id.settingsModelDetail)
         scheduledTime = findViewById(R.id.scheduledTime)
         scheduledTimeDetail = findViewById(R.id.scheduledTimeDetail)
         scheduledSwitch = findViewById(R.id.scheduledSwitch)
@@ -240,6 +242,16 @@ class SettingsActivity : AppCompatActivity() {
     private fun renderStorage() {
         renderOutput()
         renderFolder()
+        renderModel()
+    }
+
+    private fun renderModel() {
+        modelDetail.text = when (val state = SpeechModelRepository.forActive(
+            noBackupFilesDir.resolve("models"),
+        ).inspectLightweight()) {
+            is InstalledSpeechModelState.Ready -> "Active: ${state.descriptor.displayName}. Select a supported local model package to replace it."
+            else -> "Select a supported local model package."
+        }
     }
 
     private fun renderOutput() {

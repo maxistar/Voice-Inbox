@@ -25,8 +25,8 @@ class AndroidTaskActionRouterTest {
         val calls = mutableListOf<Pair<TaskActionKind, AudioCatalogEntry?>>()
         val router = AndroidTaskActionRouter({ state }) { kind, entry -> calls += kind to entry }
 
-        assertTrue(router.route(request("setup:model", null, TaskActionKind.IMPORT_MODEL)))
-        assertEquals(TaskActionKind.IMPORT_MODEL, calls.last().first)
+        assertTrue(router.route(request("setup:model", null, TaskActionKind.DOWNLOAD_MODEL)))
+        assertEquals(TaskActionKind.DOWNLOAD_MODEL, calls.last().first)
         assertNull(calls.last().second)
 
         state = state(entries = listOf(entry(9)))
@@ -188,7 +188,10 @@ class AndroidTaskActionRouterTest {
     ) = AndroidTaskListSnapshotMapper.state(
         AndroidMainScreenInput(
             filter = filter,
-            model = ModelSetupSnapshot(if (modelReady) ModelSetupSnapshotState.READY else ModelSetupSnapshotState.REQUIRED),
+            model = ModelSetupSnapshot(
+                if (modelReady) ModelSetupSnapshotState.READY else ModelSetupSnapshotState.REQUIRED,
+                downloadAvailable = !modelReady,
+            ),
             output = OutputSetupSnapshot(OutputSetupSnapshotState.READY),
             folder = FolderSetupSnapshot(FolderSetupSnapshotState.READY),
             entries = entries,

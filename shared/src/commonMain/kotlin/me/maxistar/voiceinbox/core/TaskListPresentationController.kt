@@ -33,6 +33,7 @@ enum class TaskRetention {
 
 enum class TaskActionKind {
     DOWNLOAD_MODEL,
+    SELECT_DOWNLOAD_MODEL,
     IMPORT_MODEL,
     CANCEL_MODEL_DOWNLOAD,
     RETRY_MODEL_DOWNLOAD,
@@ -116,6 +117,17 @@ data class ModelSetupSnapshot(
     val progressPercent: Int? = null,
     val downloadAvailable: Boolean = false,
     val canCancel: Boolean = false,
+    val selectedModel: SpeechModelPackageIdentity? = null,
+    val downloadChoices: List<SpeechModelDownloadChoice> = emptyList(),
+)
+
+data class SpeechModelDownloadChoice(
+    val identity: SpeechModelPackageIdentity,
+    val displayName: String,
+    val languageSummary: String,
+    val maturity: String,
+    val downloadBytes: Long,
+    val requiredStorageBytes: Long,
 )
 
 enum class OutputSetupSnapshotState {
@@ -256,14 +268,16 @@ object TaskListPresentationController {
             )
             active -> emptyList()
             error -> listOf(
+                TaskActionPresentation(TaskActionKind.SELECT_DOWNLOAD_MODEL, "Choose Model", snapshot.downloadChoices.isNotEmpty()),
                 TaskActionPresentation(TaskActionKind.RETRY_MODEL_DOWNLOAD, "Retry Download", snapshot.downloadAvailable),
-                TaskActionPresentation(TaskActionKind.IMPORT_MODEL, "Install Manually"),
             )
             else -> buildList {
+                if (snapshot.downloadChoices.size > 1) {
+                    add(TaskActionPresentation(TaskActionKind.SELECT_DOWNLOAD_MODEL, "Choose Model"))
+                }
                 if (snapshot.downloadAvailable) {
                     add(TaskActionPresentation(TaskActionKind.DOWNLOAD_MODEL, "Download Model"))
                 }
-                add(TaskActionPresentation(TaskActionKind.IMPORT_MODEL, "Install Manually"))
             }
         }
         return SetupTaskPresentation(
@@ -275,7 +289,7 @@ object TaskListPresentationController {
                 else -> SetupTaskState.REQUIRED
             },
             title = "Install Speech Model",
-            detail = snapshot.detail.takeUnless { active },
+            detail = snapshot.detail.takeUnless { active } ?: selectedModelDetail(snapshot),
             badge = if (active) "Installing" else if (error) "Needs attention" else "Required",
             progress = if (active) {
                 TaskProgressPresentation(
@@ -288,6 +302,19 @@ object TaskListPresentationController {
             errorMessage = snapshot.detail.takeIf { error },
             actions = actions,
         )
+    }
+
+    private fun selectedModelDetail(snapshot: ModelSetupSnapshot): String? {
+        val selected = snapshot.selectedModel ?: return null
+        val choice = snapshot.downloadChoices.firstOrNull { it.identity == selected } ?: return null
+        val download = formatBytes(choice.downloadBytes)
+        val storage = formatBytes(choice.requiredStorageBytes)
+        return "${choice.displayName} · ${choice.languageSummary} · ${choice.maturity} · $download download · $storage free"
+    }
+
+    private fun formatBytes(bytes: Long): String = when {
+        bytes >= 1024L * 1024L * 1024L -> "${bytes / (1024L * 1024L * 1024L)} GB"
+        else -> "${bytes / (1024L * 1024L)} MB"
     }
 
     private fun outputTask(snapshot: OutputSetupSnapshot): SetupTaskPresentation? {

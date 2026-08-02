@@ -58,8 +58,10 @@ struct SettingsView: View {
     @ObservedObject var importStore: IosAudioImportStore
     @ObservedObject var outputStore: IosOutputDocumentStore
     @ObservedObject var startupPolicyStore: IosStartupProcessingPolicyStore
+    @ObservedObject var speechModelStore: IosSpeechModelStore
     let selectInboxFolder: () -> Void
     let selectOutputFile: () -> Void
+    let installModelPackage: () -> Void
 
     private let websiteURL = URL(string: "https://projects.maxistar.me/Voice-Inbox/")!
     private let legalURL = URL(string: "https://projects.maxistar.me/Voice-Inbox/legal/")!
@@ -120,6 +122,25 @@ struct SettingsView: View {
                 Text(startupPolicyStore.policy.detail)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+            }
+
+            Section("Speech Model") {
+                if let active = speechModelStore.activeDescriptor {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(active.displayName).font(.headline)
+                        Text("\(active.languageSummary) · \(active.maturity)")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Text("No speech model installed")
+                }
+                Button {
+                    installModelPackage()
+                } label: {
+                    Label("Install model package from folder", systemImage: "folder.badge.plus")
+                }
+                .disabled(speechModelStore.isBusy)
             }
 
             Section("About") {

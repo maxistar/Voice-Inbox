@@ -155,7 +155,7 @@ object SpeechModelCatalog {
             safetyMarginBytes = 64L * 1024L * 1024L,
         ),
         distribution = SpeechModelDistribution(
-            networkDownloadAvailable = false,
+            networkDownloadAvailable = true,
             localImportAvailable = true,
         ),
         languages = SpeechModelLanguageCoverage(
@@ -198,6 +198,33 @@ object SpeechModelCatalog {
 
     fun modelsFor(platform: SpeechModelPlatform): List<SpeechModelDescriptor> =
         models.filter { platform in it.supportedPlatforms }
+
+    fun networkDownloadChoices(platform: SpeechModelPlatform): List<SpeechModelDownloadChoice> =
+        modelsFor(platform)
+            .filter { it.distribution.networkDownloadAvailable }
+            .map { descriptor ->
+                SpeechModelDownloadChoice(
+                    identity = SpeechModelPackageIdentity(
+                        schemaVersion = PACKAGE_SCHEMA_VERSION,
+                        catalogId = descriptor.catalogId,
+                        modelVersion = descriptor.manifest.version,
+                    ),
+                    displayName = descriptor.displayName,
+                    languageSummary = descriptor.languages.summary,
+                    maturity = descriptor.maturity.name.lowercase().replaceFirstChar { it.uppercase() },
+                    downloadBytes = descriptor.approximateDownloadBytes,
+                    requiredStorageBytes = descriptor.requiredStorageBytes,
+                )
+            }
+
+    fun resolveNetworkDownload(
+        identity: SpeechModelPackageIdentity,
+        platform: SpeechModelPlatform,
+    ): SpeechModelDescriptor? = modelsFor(platform).singleOrNull {
+        it.catalogId == identity.catalogId &&
+            it.manifest.version == identity.modelVersion &&
+            it.distribution.networkDownloadAvailable
+    }
 
     const val PACKAGE_SCHEMA_VERSION = 1
     const val PACKAGE_MANIFEST_FILENAME = "voice-inbox-model.json"

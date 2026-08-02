@@ -205,7 +205,9 @@ final class IosMainScreenShellState {
             installationPhase: installing ? installationPhase : nil,
             progressPercent: progress.map { KotlinInt(int: Int32($0)) },
             downloadAvailable: downloadAvailable,
-            canCancel: canCancel
+            canCancel: canCancel,
+            selectedModel: nil,
+            downloadChoices: []
         )
     }
 

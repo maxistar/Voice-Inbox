@@ -7,7 +7,7 @@ import kotlin.test.Test
 
 class SpeechModelManifestTest {
     @Test
-    fun productionCatalogKeepsStableParakeetDefaultAndAddsLocalMobileWhisper() {
+    fun productionCatalogKeepsStableParakeetDefaultAndAddsDownloadableMobileWhisper() {
         val descriptor = SpeechModelCatalog.defaultModel
         val manifest = descriptor.manifest
 
@@ -57,10 +57,16 @@ class SpeechModelManifestTest {
             whisper.supportedPlatforms,
         )
         assertTrue(whisper.distribution.localImportAvailable)
-        assertTrue(!whisper.distribution.networkDownloadAvailable)
+        assertTrue(whisper.distribution.networkDownloadAvailable)
         assertEquals("ggml-tiny.bin", whisper.manifest.files.single().name)
         assertEquals(77_691_713, whisper.manifest.totalSizeBytes)
         assertEquals(listOf(descriptor, whisper), SpeechModelCatalog.modelsFor(SpeechModelPlatform.IOS))
+        assertEquals(
+            listOf(descriptor, whisper),
+            SpeechModelCatalog.networkDownloadChoices(SpeechModelPlatform.ANDROID).map { choice ->
+                SpeechModelCatalog.resolveNetworkDownload(choice.identity, SpeechModelPlatform.ANDROID)
+            },
+        )
     }
 
     @Test

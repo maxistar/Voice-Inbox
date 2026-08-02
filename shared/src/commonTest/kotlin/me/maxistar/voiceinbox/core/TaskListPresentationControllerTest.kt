@@ -9,6 +9,35 @@ import kotlin.test.assertTrue
 
 class TaskListPresentationControllerTest {
     @Test
+    fun modelTaskShowsSelectedDownloadDescriptorAndLocksChoiceDuringInstall() {
+        val whisper = SpeechModelCatalog.networkDownloadChoices(SpeechModelPlatform.ANDROID)
+            .single { it.identity.catalogId == "whisper-tiny-multilingual" }
+        val required = assertIs<SetupTaskPresentation>(
+            state(
+                model = ModelSetupSnapshot(
+                    state = ModelSetupSnapshotState.REQUIRED,
+                    downloadAvailable = true,
+                    selectedModel = whisper.identity,
+                    downloadChoices = SpeechModelCatalog.networkDownloadChoices(SpeechModelPlatform.ANDROID),
+                ),
+            ).tasks.single(),
+        )
+        assertTrue(required.detail?.contains("Whisper Tiny Multilingual") == true)
+        assertTrue(required.actions.any { it.kind == TaskActionKind.SELECT_DOWNLOAD_MODEL })
+
+        val installing = assertIs<SetupTaskPresentation>(
+            state(
+                model = ModelSetupSnapshot(
+                    state = ModelSetupSnapshotState.INSTALLING,
+                    selectedModel = whisper.identity,
+                    downloadChoices = SpeechModelCatalog.networkDownloadChoices(SpeechModelPlatform.ANDROID),
+                ),
+            ).tasks.single(),
+        )
+        assertFalse(installing.actions.any { it.kind == TaskActionKind.SELECT_DOWNLOAD_MODEL })
+    }
+
+    @Test
     fun setupTasksAreSynthesizedInKindOrderAndCompletedTasksDisappear() {
         val state = state(
             filter = TaskListFilter.NEW,
@@ -111,7 +140,7 @@ class TaskListPresentationControllerTest {
 
         assertEquals("Verification failed", task.errorMessage)
         assertFalse(task.actions.single { it.kind == TaskActionKind.RETRY_MODEL_DOWNLOAD }.enabled)
-        assertTrue(task.actions.single { it.kind == TaskActionKind.IMPORT_MODEL }.enabled)
+        assertFalse(task.actions.any { it.kind == TaskActionKind.IMPORT_MODEL })
     }
 
     @Test

@@ -17,13 +17,17 @@ final class DeferredSpeechModelLoadingTests: XCTestCase {
         try write(#"{"schemaVersion":1,"catalogId":"whisper-tiny-multilingual","modelVersion":"whisper-tiny-ggml-f16-r1"}"#)
         let whisper = try IosSpeechModelStore.resolvePackage(in: root)
         XCTAssertEqual(whisper.backend, "WHISPER_CPP")
-        XCTAssertFalse(whisper.networkDownloadAvailable)
+        XCTAssertTrue(whisper.networkDownloadAvailable)
         XCTAssertTrue(whisper.localImportAvailable)
 
         try write(#"{"schemaVersion":1,"catalogId":"parakeet-tdt-0.6b-v3-int8","modelVersion":"parakeet-tdt-0.6b-v3-int8-r1"}"#)
         let parakeet = try IosSpeechModelStore.resolvePackage(in: root)
         XCTAssertEqual(parakeet.backend, "PARAKEET_TDT_ONNX")
         XCTAssertTrue(parakeet.networkDownloadAvailable)
+        XCTAssertEqual(
+            Set(IosSpeechModelDescriptor.supported.filter(\.networkDownloadAvailable).map(\.catalogId)),
+            Set(["parakeet-tdt-0.6b-v3-int8", "whisper-tiny-multilingual"])
+        )
 
         for invalid in [
             #"{"schemaVersion":2,"catalogId":"whisper-tiny-multilingual","modelVersion":"whisper-tiny-ggml-f16-r1"}"#,

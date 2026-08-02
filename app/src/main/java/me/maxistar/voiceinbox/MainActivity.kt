@@ -83,6 +83,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private var modelDownloadAvailable = false
     private var modelDownloadProgress: Int? = null
     private var modelInstallCanCancel = false
+    private var selectedDownloadModel = SpeechModelCatalog.defaultModel
     private var scanMessage: String? = null
     private var transcriptionFinished = false
     private var transcriptionPhase: String? = null
@@ -1355,6 +1356,12 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
             progressPercent = modelDownloadProgress,
             downloadAvailable = modelDownloadAvailable,
             canCancel = modelInstallCanCancel,
+            selectedModel = SpeechModelPackageIdentity(
+                schemaVersion = SpeechModelCatalog.PACKAGE_SCHEMA_VERSION,
+                catalogId = selectedDownloadModel.catalogId,
+                modelVersion = selectedDownloadModel.manifest.version,
+            ),
+            downloadChoices = SpeechModelCatalog.networkDownloadChoices(SpeechModelPlatform.ANDROID),
         )
         val outputSnapshot = OutputSetupSnapshot(
             state = outputState,
@@ -1442,7 +1449,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         when (kind) {
             TaskActionKind.DOWNLOAD_MODEL,
             TaskActionKind.RETRY_MODEL_DOWNLOAD,
-            -> SpeechModelDownloadWorker.enqueue(this)
+            -> SpeechModelDownloadWorker.enqueue(this, selectedDownloadModel)
+            TaskActionKind.SELECT_DOWNLOAD_MODEL -> chooseDownloadModel()
             TaskActionKind.IMPORT_MODEL -> modelFolderPicker.launch(null)
             TaskActionKind.CANCEL_MODEL_DOWNLOAD -> SpeechModelDownloadWorker.cancel(this)
             TaskActionKind.CREATE_OUTPUT -> launchOutputCreatorIfEnabled()
@@ -1459,6 +1467,26 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
             TaskActionKind.STOP -> stopPreviewPlayback(render = true)
             TaskActionKind.SHOW_TEXT -> entry?.let(::showTranscriptText)
         }
+    }
+
+    private fun chooseDownloadModel() {
+        if (modelSetupState == ModelSetupSnapshotState.INSTALLING) return
+        val choices = SpeechModelCatalog.modelsFor(SpeechModelPlatform.ANDROID)
+            .filter { it.distribution.networkDownloadAvailable }
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Download speech model")
+            .setSingleChoiceItems(
+                choices.map { model ->
+                    "${model.displayName}\n${model.languages.summary} · ${model.maturity.name.lowercase()} · " +
+                        "${model.approximateDownloadBytes / (1024 * 1024)} MB"
+                }.toTypedArray(),
+                choices.indexOfFirst { it.catalogId == selectedDownloadModel.catalogId },
+            ) { dialog, which ->
+                selectedDownloadModel = choices[which]
+                publishTaskState()
+                dialog.dismiss()
+            }
+            .show()
     }
 
     private fun transcribeEntry(entry: AudioCatalogEntry) {

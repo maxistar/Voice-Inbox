@@ -21,7 +21,16 @@ class SpeechModelDownloadWorker(
     appContext: Context,
     params: WorkerParameters,
 ) : CoroutineWorker(appContext, params) {
-    private val model = SpeechModelCatalog.defaultModel
+    private val model: SpeechModelDescriptor by lazy {
+        SpeechModelCatalog.resolveNetworkDownload(
+            SpeechModelPackageIdentity(
+                schemaVersion = inputData.getInt(KEY_SCHEMA_VERSION, -1),
+                catalogId = inputData.getString(KEY_CATALOG_ID).orEmpty(),
+                modelVersion = inputData.getString(KEY_MODEL_VERSION).orEmpty(),
+            ),
+            SpeechModelPlatform.ANDROID,
+        ) ?: throw IllegalArgumentException("Selected speech model is unavailable for download")
+    }
     private val repository = SpeechModelRepository(
         root = applicationContext.noBackupFilesDir.resolve("models"),
         descriptor = model,
@@ -35,6 +44,8 @@ class SpeechModelDownloadWorker(
     override suspend fun doWork(): Result {
         return try {
             installModel()
+        } catch (error: IllegalArgumentException) {
+            failure(error.message ?: "Selected speech model is unavailable for download")
         } catch (error: ForegroundPromotionException) {
             failure(error.userMessage)
         }
@@ -167,12 +178,26 @@ class SpeechModelDownloadWorker(
         const val KEY_MESSAGE = SpeechModelInstallationWork.KEY_MESSAGE
         const val KEY_ERROR = SpeechModelInstallationWork.KEY_ERROR
         const val KEY_MODEL_PATH = SpeechModelInstallationWork.KEY_MODEL_PATH
+        const val KEY_SCHEMA_VERSION = "speech-model-schema-version"
+        const val KEY_CATALOG_ID = "speech-model-catalog-id"
+        const val KEY_MODEL_VERSION = "speech-model-version"
 
         private const val MAX_ATTEMPTS = 3
         private const val RETRY_DELAY_MS = 2_000L
         private const val PROGRESS_STEP_BYTES = 2L * 1024L * 1024L
-        fun enqueue(context: Context) {
-            val request = OneTimeWorkRequestBuilder<SpeechModelDownloadWorker>().build()
+        fun enqueue(context: Context, descriptor: SpeechModelDescriptor = SpeechModelCatalog.defaultModel) {
+            require(descriptor.distribution.networkDownloadAvailable) {
+                "Selected speech model is unavailable for download"
+            }
+            val request = OneTimeWorkRequestBuilder<SpeechModelDownloadWorker>()
+                .setInputData(
+                    workDataOf(
+                        KEY_SCHEMA_VERSION to SpeechModelCatalog.PACKAGE_SCHEMA_VERSION,
+                        KEY_CATALOG_ID to descriptor.catalogId,
+                        KEY_MODEL_VERSION to descriptor.manifest.version,
+                    ),
+                )
+                .build()
             WorkManager.getInstance(context).enqueueUniqueWork(
                 UNIQUE_WORK_NAME,
                 ExistingWorkPolicy.KEEP,

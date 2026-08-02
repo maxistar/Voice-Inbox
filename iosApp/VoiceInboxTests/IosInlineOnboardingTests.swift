@@ -246,7 +246,9 @@ final class IosInlineOnboardingTests: XCTestCase {
             installationPhase: nil,
             progressPercent: nil,
             downloadAvailable: downloadAvailable,
-            canCancel: false
+            canCancel: false,
+            selectedModel: nil,
+            downloadChoices: []
         )
     }
 

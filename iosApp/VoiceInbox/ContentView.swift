@@ -82,30 +82,21 @@ struct ContentView: View {
                 }
 
 
-                if speechModelStore.isReady {
-                    Section("Speech Model") {
-                        if let active = speechModelStore.activeDescriptor {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(active.displayName).font(.headline)
-                                Text("\(active.languageSummary) · \(active.maturity)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                if !speechModelStore.isReady && !speechModelStore.isBusy {
+                    Section("Download Speech Model") {
+                        Picker("Model", selection: $speechModelStore.selectedDownloadModel) {
+                            ForEach(speechModelStore.availableModels.filter(\.networkDownloadAvailable)) { model in
+                                Text(model.displayName).tag(model)
                             }
                         }
-                        Button {
-                            guard !transcriber.isActive else {
-                                speechModelStore.message = "Wait for transcription to finish before replacing the speech model."
-                                return
-                            }
-                            presentPicker(.speechModelFolder)
-                        } label: {
-                            Label("Install Model from Folder", systemImage: "folder.badge.plus")
-                        }
-                        .disabled(speechModelStore.isBusy || transcriber.isActive)
-
-                        ForEach(speechModelStore.availableModels) { model in
-                            if model.id != speechModelStore.activeDescriptor?.id {
-                                Text("Available: \(model.displayName) · \(model.languageSummary) · \(model.maturity)")
+                        VStack(alignment: .leading, spacing: 4) {
+                            let model = speechModelStore.selectedDownloadModel
+                            Text(model.languageSummary).font(.subheadline)
+                            Text("\(model.maturity) · \(ByteCountFormatter.string(fromByteCount: model.totalSizeBytes, countStyle: .file)) download · \(ByteCountFormatter.string(fromByteCount: model.totalSizeBytes + model.safetyMarginBytes, countStyle: .file)) free")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            if speechModelStore.activeDescriptor != nil {
+                                Text("Downloading this model replaces the currently installed model.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -195,11 +186,19 @@ struct ContentView: View {
                             importStore: importStore,
                             outputStore: outputStore,
                             startupPolicyStore: startupPolicyStore,
+                            speechModelStore: speechModelStore,
                             selectInboxFolder: {
                                 presentPicker(.audioFolder)
                             },
                             selectOutputFile: {
                                 presentPicker(.outputFile)
+                            },
+                            installModelPackage: {
+                                guard !transcriber.isActive else {
+                                    speechModelStore.message = "Wait for transcription to finish before replacing the speech model."
+                                    return
+                                }
+                                presentPicker(.speechModelFolder)
                             }
                         )
                     } label: {
@@ -367,7 +366,7 @@ struct ContentView: View {
 
         switch route {
         case .modelDownload:
-            speechModelStore.downloadModel()
+            speechModelStore.downloadModel(speechModelStore.selectedDownloadModel)
         case .modelImport:
             guard !transcriber.isActive else {
                 speechModelStore.message = "Wait for transcription to finish before replacing the speech model."
@@ -391,7 +390,7 @@ struct ContentView: View {
         guard action.enabled, let route = IosTaskActionRouter.route(action.kind) else { return }
         switch route {
         case .modelDownload:
-            speechModelStore.downloadModel()
+            speechModelStore.downloadModel(speechModelStore.selectedDownloadModel)
         case .modelImport:
             guard !transcriber.isActive else {
                 speechModelStore.message = "Wait for transcription to finish before replacing the speech model."
