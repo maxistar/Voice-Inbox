@@ -1,5 +1,7 @@
 import Foundation
 import Shared
+import UniformTypeIdentifiers
+import UIKit
 import XCTest
 @testable import VoiceInbox
 
@@ -372,11 +374,34 @@ final class DeferredSpeechModelLoadingTests: XCTestCase {
 
     func testTypedActionsHaveExplicitIosRoutes() {
         XCTAssertEqual(IosTaskActionRouter.route(.downloadModel), .modelDownload)
+        XCTAssertEqual(IosTaskActionRouter.route(.createOutput), .outputCreation)
         XCTAssertEqual(IosTaskActionRouter.route(.selectOutput), .outputSelection)
         XCTAssertEqual(IosTaskActionRouter.route(.selectFolder), .folderSelection)
         XCTAssertEqual(IosTaskActionRouter.route(.transcribe), .transcribe)
         XCTAssertEqual(IosTaskActionRouter.route(.retryTranscription), .retry)
         XCTAssertEqual(IosTaskActionRouter.route(.showText), .showText)
+    }
+
+    func testOutputDocumentCreatorCoordinatorPreservesCancellationAndRoutesCreatedDocument() {
+        let controller = UIDocumentPickerViewController(forOpeningContentTypes: [.plainText])
+        var pickedURL: URL?
+        var cancellationCount = 0
+        let coordinator = IosOutputDocumentCreator.Coordinator(
+            onPick: { pickedURL = $0 },
+            onCancel: { cancellationCount += 1 }
+        )
+
+        coordinator.documentPicker(controller, didPickDocumentsAt: [])
+        XCTAssertNil(pickedURL)
+        XCTAssertEqual(cancellationCount, 1)
+
+        let createdURL = URL(fileURLWithPath: "/tmp/Voice Inbox Transcripts.md")
+        coordinator.documentPicker(controller, didPickDocumentsAt: [createdURL])
+        XCTAssertEqual(pickedURL, createdURL)
+        XCTAssertEqual(cancellationCount, 1)
+
+        coordinator.documentPickerWasCancelled(controller)
+        XCTAssertEqual(cancellationCount, 2)
     }
 
     func testRoutineImportAndScanSummariesDoNotRequestAnAlert() {

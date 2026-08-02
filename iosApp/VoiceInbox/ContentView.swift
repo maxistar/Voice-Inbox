@@ -248,6 +248,16 @@ struct ContentView: View {
                         outputStore.selectOutputFile(url)
                         presentedPicker = nil
                     }
+                case .outputCreation:
+                    IosOutputDocumentCreator(
+                        onPick: { url in
+                            outputStore.selectOutputFile(url)
+                            presentedPicker = nil
+                        },
+                        onCancel: {
+                            presentedPicker = nil
+                        }
+                    )
                 case .speechModelFolder:
                     IosSpeechModelDirectoryPicker { url in
                         speechModelStore.inspectModelPackage(from: url)
@@ -421,6 +431,8 @@ struct ContentView: View {
             presentPicker(.speechModelFolder)
         case .modelCancel:
             speechModelStore.cancelDownload()
+        case .outputCreation:
+            presentPicker(.outputCreation)
         case .outputSelection:
             presentPicker(.outputFile)
         case .folderSelection:
@@ -585,6 +597,7 @@ struct ContentView: View {
 private enum IosPresentedPicker: String, Identifiable {
     case audioFiles
     case audioFolder
+    case outputCreation
     case outputFile
     case speechModelFolder
 
