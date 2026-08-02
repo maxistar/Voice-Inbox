@@ -9,9 +9,40 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.UUID
 
+data class ActiveSpeechModelIdentity(
+    val catalogId: String,
+    val modelVersion: String,
+    val backend: SpeechModelBackend,
+) {
+    fun serialize(): String =
+        """{"schemaVersion":1,"catalogId":"$catalogId","modelVersion":"$modelVersion","backend":"${backend.name}"}"""
+
+    companion object {
+        fun parse(text: String): ActiveSpeechModelIdentity? {
+            fun string(name: String): String? =
+                Regex("\\\"$name\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"").find(text)?.groupValues?.get(1)
+            if (Regex("\\\"schemaVersion\\\"\\s*:\\s*(\\d+)").find(text)?.groupValues?.get(1) != "1") return null
+            val backend = string("backend")?.let { runCatching { SpeechModelBackend.valueOf(it) }.getOrNull() }
+                ?: return null
+            return ActiveSpeechModelIdentity(
+                catalogId = string("catalogId") ?: return null,
+                modelVersion = string("modelVersion") ?: return null,
+                backend = backend,
+            )
+        }
+    }
+}
+
+private data class ActivationTransaction(
+    val previous: ActiveSpeechModelIdentity?,
+    val candidateCatalogId: String,
+    val candidateVersion: String,
+)
+
 sealed interface InstalledSpeechModelState {
     data class Ready(
         val directory: File,
+        val descriptor: SpeechModelDescriptor,
         val verification: Verification = Verification.VERIFIED,
     ) : InstalledSpeechModelState {
         enum class Verification {
@@ -25,12 +56,20 @@ sealed interface InstalledSpeechModelState {
 
 class SpeechModelRepository(
     private val root: File,
-    val manifest: SpeechModelManifest = EmbeddedSpeechModel.manifest,
+    val descriptor: SpeechModelDescriptor,
     private val usableSpace: (File) -> Long = { it.usableSpace },
     private val moveDirectory: (File, File) -> Boolean = { source, destination ->
         source.renameTo(destination)
     },
 ) {
+    constructor(
+        root: File,
+        manifest: SpeechModelManifest,
+        usableSpace: (File) -> Long = { it.usableSpace },
+        moveDirectory: (File, File) -> Boolean = { source, destination -> source.renameTo(destination) },
+    ) : this(root, descriptorForManifest(manifest), usableSpace, moveDirectory)
+
+    val manifest: SpeechModelManifest = descriptor.manifest
     private val stagingRoot = File(root, "staging")
     private val installedRoot = File(root, "installed")
     private val activeVersionFile = File(root, "active-model")
@@ -54,7 +93,10 @@ class SpeechModelRepository(
         return if (missing == null) {
             InstalledSpeechModelState.Ready(
                 directory = installedDirectory,
-                verification = if (activeVersionFile.takeIf(File::isFile)?.readText()?.trim() == manifest.version) {
+                descriptor = descriptor,
+                verification = if (readActiveIdentity()?.let {
+                        it.catalogId == descriptor.catalogId && it.modelVersion == manifest.version
+                    } == true) {
                     InstalledSpeechModelState.Ready.Verification.VERIFIED
                 } else {
                     InstalledSpeechModelState.Ready.Verification.LEGACY_UNVERIFIED
@@ -67,14 +109,14 @@ class SpeechModelRepository(
 
     fun inspect(): InstalledSpeechModelState {
         recoverInterruptedActivation()
-        val activeVersion = activeVersionFile.takeIf(File::isFile)?.readText()?.trim()
-        if (activeVersion == manifest.version) {
+        val activeIdentity = readActiveIdentity()
+        if (activeIdentity?.catalogId == descriptor.catalogId && activeIdentity.modelVersion == manifest.version) {
             return recordValidation(validateDirectory(installedDirectory))
         }
 
         return when (val installed = validateDirectory(installedDirectory)) {
             is InstalledSpeechModelState.Ready -> {
-                writeActiveVersion(manifest.version)
+                writeActiveIdentity(descriptor)
                 invalidModelFile.delete()
                 installed
             }
@@ -156,9 +198,14 @@ class SpeechModelRepository(
         }
 
         installedRoot.mkdirs()
+        val previousIdentity = readActiveIdentity()
+        val previousDescriptor = previousIdentity?.let {
+            SpeechModelCatalog.resolveInstallation(it.catalogId, it.modelVersion)
+        }
+        val previousDirectory = previousDescriptor?.let { File(installedRoot, it.manifest.version) }
         backupDirectory.deleteRecursively()
         val replacing = installedDirectory.exists()
-        activationMarker.writeText(if (replacing) MARKER_REPLACEMENT else MARKER_FRESH)
+        writeActivationMarker(previousIdentity, descriptor)
         if (replacing) {
             check(moveDirectory(installedDirectory, backupDirectory)) {
                 "Failed to back up installed model"
@@ -168,7 +215,7 @@ class SpeechModelRepository(
             check(moveDirectory(stagingDirectory, installedDirectory)) {
                 "Failed to activate staged model"
             }
-            writeActiveVersion(manifest.version)
+            writeActiveIdentity(descriptor)
             invalidModelFile.delete()
             activationMarker.delete()
             backupDirectory.deleteRecursively()
@@ -178,18 +225,19 @@ class SpeechModelRepository(
                 check(moveDirectory(backupDirectory, installedDirectory)) {
                     "Failed to restore previous speech model"
                 }
-                writeActiveVersion(manifest.version)
+                previousIdentity?.let(::writeActiveIdentity)
                 invalidModelFile.delete()
             } else {
-                activeVersionFile.delete()
+                if (previousIdentity == null) activeVersionFile.delete()
             }
             activationMarker.delete()
             throw error
         }
 
         installedRoot.listFiles()
-            ?.filter { it.name != manifest.version }
+            ?.filter { it != previousDirectory && it.name != manifest.version }
             ?.forEach(File::deleteRecursively)
+        previousDirectory?.takeIf { it != installedDirectory }?.deleteRecursively()
         installedDirectory
     }
 
@@ -216,24 +264,50 @@ class SpeechModelRepository(
                 if (installedDirectory.exists()) {
                     backupDirectory.deleteRecursively()
                 } else if (moveDirectory(backupDirectory, installedDirectory)) {
-                    writeActiveVersion(manifest.version)
+                    writeActiveIdentity(descriptor)
                 }
             }
             return
         }
 
-        val replacement = activationMarker.readText().trim() == MARKER_REPLACEMENT
-        if (replacement && backupDirectory.exists()) {
+        if (activationMarker.readText().trim() == "replacement") {
             installedDirectory.deleteRecursively()
-            check(moveDirectory(backupDirectory, installedDirectory)) {
+            if (backupDirectory.exists()) {
+                check(moveDirectory(backupDirectory, installedDirectory)) {
+                    "Failed to recover previous speech model"
+                }
+                writeActiveIdentity(descriptor)
+                invalidModelFile.delete()
+            }
+            activationMarker.delete()
+            return
+        }
+
+        val marker = readActivationMarker() ?: run {
+            activationMarker.delete()
+            return
+        }
+        val candidateDescriptor = SpeechModelCatalog.resolveInstallation(
+            marker.candidateCatalogId,
+            marker.candidateVersion,
+        )
+        val candidateDirectory = File(installedRoot, marker.candidateVersion)
+        val candidateBackup = File(installedRoot, "${marker.candidateVersion}.backup")
+        val active = readActiveIdentity()
+        if (active?.catalogId == marker.candidateCatalogId && active.modelVersion == marker.candidateVersion) {
+            activationMarker.delete()
+            candidateBackup.deleteRecursively()
+            installedRoot.listFiles()?.filter { it.name != marker.candidateVersion }?.forEach(File::deleteRecursively)
+            return
+        }
+        candidateDirectory.deleteRecursively()
+        if (candidateBackup.exists()) {
+            check(moveDirectory(candidateBackup, candidateDirectory)) {
                 "Failed to recover previous speech model"
             }
-            writeActiveVersion(manifest.version)
-            invalidModelFile.delete()
-        } else if (!replacement) {
-            installedDirectory.deleteRecursively()
-            activeVersionFile.delete()
         }
+        if (marker.previous == null) activeVersionFile.delete() else writeActiveIdentity(marker.previous)
+        if (candidateDescriptor != null) invalidModelFile.delete()
         activationMarker.delete()
     }
 
@@ -251,6 +325,7 @@ class SpeechModelRepository(
         }
         return InstalledSpeechModelState.Ready(
             directory = directory,
+            descriptor = descriptor,
             verification = InstalledSpeechModelState.Ready.Verification.VERIFIED,
         )
     }
@@ -258,10 +333,39 @@ class SpeechModelRepository(
     private fun isValidFile(file: File, entry: SpeechModelFile): Boolean =
         verifyFile(file, entry).isSuccess
 
-    private fun writeActiveVersion(version: String) {
+    private fun readActiveIdentity(): ActiveSpeechModelIdentity? = readActiveIdentity(activeVersionFile)
+
+    private fun writeActivationMarker(
+        previous: ActiveSpeechModelIdentity?,
+        candidate: SpeechModelDescriptor,
+    ) {
+        val previousText = previous?.serialize()?.replace("\n", "") ?: "null"
+        activationMarker.writeText(
+            """{"schemaVersion":1,"previous":$previousText,"candidateCatalogId":"${candidate.catalogId}","candidateVersion":"${candidate.manifest.version}"}""",
+        )
+    }
+
+    private fun readActivationMarker(): ActivationTransaction? {
+        val text = activationMarker.takeIf(File::isFile)?.readText().orEmpty()
+        fun string(name: String): String? =
+            Regex("\\\"$name\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"").find(text)?.groupValues?.get(1)
+        val previousObject = Regex("\\\"previous\\\"\\s*:\\s*(\\{.*?})\\s*,\\s*\\\"candidateCatalogId", RegexOption.DOT_MATCHES_ALL)
+            .find(text)?.groupValues?.get(1)
+        return ActivationTransaction(
+            previous = previousObject?.let(ActiveSpeechModelIdentity::parse),
+            candidateCatalogId = string("candidateCatalogId") ?: return null,
+            candidateVersion = string("candidateVersion") ?: return null,
+        )
+    }
+
+    private fun writeActiveIdentity(descriptor: SpeechModelDescriptor) = writeActiveIdentity(
+        ActiveSpeechModelIdentity(descriptor.catalogId, descriptor.manifest.version, descriptor.backend),
+    )
+
+    private fun writeActiveIdentity(identity: ActiveSpeechModelIdentity) {
         root.mkdirs()
         val temporary = File(root, "active-model.${UUID.randomUUID()}.tmp")
-        temporary.writeText(version)
+        temporary.writeText(identity.serialize())
         runCatching {
             Files.move(
                 temporary.toPath(),
@@ -300,8 +404,38 @@ class SpeechModelRepository(
     }
 
     companion object {
-        private const val MARKER_REPLACEMENT = "replacement"
-        private const val MARKER_FRESH = "fresh"
+        fun forActive(root: File): SpeechModelRepository {
+            val descriptor = readActiveIdentity(File(root, "active-model"))?.let { identity ->
+                SpeechModelCatalog.resolveInstallation(identity.catalogId, identity.modelVersion)
+                    ?.takeIf { it.backend == identity.backend }
+            } ?: SpeechModelCatalog.defaultModel
+            return SpeechModelRepository(root, descriptor)
+        }
+
+        private fun descriptorForManifest(manifest: SpeechModelManifest): SpeechModelDescriptor =
+            SpeechModelCatalog.models.firstOrNull { it.manifest == manifest } ?: SpeechModelDescriptor(
+                catalogId = manifest.modelId,
+                displayName = manifest.modelId,
+                backend = SpeechModelBackend.PARAKEET_TDT_ONNX,
+                manifest = manifest,
+                distribution = SpeechModelDistribution(false, true),
+                languages = SpeechModelLanguageCoverage("Test model", emptyList()),
+                maturity = SpeechModelMaturity.EXPERIMENTAL,
+                attribution = SpeechModelAttribution("", "", "", "", "", ""),
+                supportedPlatforms = setOf(SpeechModelPlatform.ANDROID),
+            )
+
+        private fun readActiveIdentity(file: File): ActiveSpeechModelIdentity? {
+            val text = file.takeIf(File::isFile)?.readText()?.trim().orEmpty()
+            if (text.isEmpty()) return null
+            if (!text.startsWith("{")) {
+                val legacy = SpeechModelCatalog.models.singleOrNull { it.manifest.version == text }
+                    ?: return null
+                return ActiveSpeechModelIdentity(legacy.catalogId, legacy.manifest.version, legacy.backend)
+            }
+            return ActiveSpeechModelIdentity.parse(text)
+        }
+
         fun sha256(file: File): String {
             val digest = MessageDigest.getInstance("SHA-256")
             FileInputStream(file).use { input ->

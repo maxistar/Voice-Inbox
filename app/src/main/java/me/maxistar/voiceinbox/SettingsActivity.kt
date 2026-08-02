@@ -23,6 +23,7 @@ import java.util.concurrent.Executors
 
 internal object VoiceInboxPublicLinks {
     const val WEBSITE = "https://voiceinbox.simpleditor.org/"
+    const val DOCUMENTATION = "https://voiceinbox.simpleditor.org/docs/"
     const val LEGAL = "https://voiceinbox.simpleditor.org/legal/"
 }
 
@@ -34,6 +35,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var folderScanner: AudioFolderScanner
     private lateinit var folderDetail: TextView
     private lateinit var outputDetail: TextView
+    private lateinit var modelDetail: TextView
     private lateinit var scheduledSwitch: SwitchCompat
     private lateinit var scheduledTime: TextView
     private lateinit var scheduledTimeDetail: TextView
@@ -88,6 +90,7 @@ class SettingsActivity : AppCompatActivity() {
         settings = settingsStore.load()
         folderDetail = findViewById(R.id.settingsFolderDetail)
         outputDetail = findViewById(R.id.settingsOutputDetail)
+        modelDetail = findViewById(R.id.settingsModelDetail)
         scheduledTime = findViewById(R.id.scheduledTime)
         scheduledTimeDetail = findViewById(R.id.scheduledTimeDetail)
         scheduledSwitch = findViewById(R.id.scheduledSwitch)
@@ -100,6 +103,12 @@ class SettingsActivity : AppCompatActivity() {
         }
         findViewById<View>(R.id.settingsOutputRow).setOnClickListener {
             showOutputDocumentOptions()
+        }
+        findViewById<View>(R.id.settingsModelRow).setOnClickListener {
+            startActivity(
+                Intent(this, MainActivity::class.java)
+                    .putExtra("open-model-folder-picker", true),
+            )
         }
         findViewById<View>(R.id.settingsWebsiteRow).setOnClickListener {
             openExternalUrl(VoiceInboxPublicLinks.WEBSITE)
@@ -234,6 +243,16 @@ class SettingsActivity : AppCompatActivity() {
     private fun renderStorage() {
         renderOutput()
         renderFolder()
+        renderModel()
+    }
+
+    private fun renderModel() {
+        modelDetail.text = when (val state = SpeechModelRepository.forActive(
+            noBackupFilesDir.resolve("models"),
+        ).inspectLightweight()) {
+            is InstalledSpeechModelState.Ready -> "Active: ${state.descriptor.displayName}. Select a supported local model package to replace it."
+            else -> "Select a supported local model package."
+        }
     }
 
     private fun renderOutput() {

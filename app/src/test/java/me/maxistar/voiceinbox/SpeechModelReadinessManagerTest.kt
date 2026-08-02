@@ -60,6 +60,34 @@ class SpeechModelReadinessManagerTest {
         assertTrue(cachedStates.single() is SpeechModelReadinessState.Ready)
     }
 
+    @Test
+    fun invalidationInspectsTheNewRepositoryAfterActiveModelChanges() {
+        val executor = QueueingExecutor()
+        val firstRepository = readyRepository()
+        val secondRepository = SpeechModelRepository(
+            root = File(temporaryFolder.root, "missing-model"),
+            manifest = testManifest,
+            usableSpace = { Long.MAX_VALUE },
+        )
+        var activeRepository = firstRepository
+        val manager = SpeechModelReadinessManager(
+            repository = { activeRepository },
+            executor = executor,
+        )
+        val states = mutableListOf<SpeechModelReadinessState>()
+
+        manager.refresh { states += it }
+        executor.runNext()
+        assertTrue(states.last() is SpeechModelReadinessState.Ready)
+
+        activeRepository = secondRepository
+        manager.invalidate()
+        manager.refresh { states += it }
+        executor.runNext()
+
+        assertEquals(SpeechModelReadinessState.Missing, states.last())
+    }
+
     private fun readyRepository(): SpeechModelRepository {
         val repository = SpeechModelRepository(
             root = File(temporaryFolder.root, "models"),

@@ -4,14 +4,14 @@ import java.io.File
 
 object SpeechModelPreparation {
     private val lock = Any()
-    private var preparedDirectory: String? = null
+    private var preparedInstallation: String? = null
 
     fun prepare(
         repository: SpeechModelRepository,
-        initializeModel: (File) -> Boolean,
+        initializeModel: (InstalledSpeechModelState.Ready) -> Boolean,
     ): Result<File> = synchronized(lock) {
-        val expected = repository.installedDirectory.canonicalPath
-        if (preparedDirectory == expected) {
+        val expected = "${repository.descriptor.backend}:${repository.descriptor.catalogId}:${repository.manifest.version}:${repository.installedDirectory.canonicalPath}"
+        if (preparedInstallation == expected) {
             return@synchronized Result.success(repository.installedDirectory)
         }
         runCatching {
@@ -23,15 +23,15 @@ object SpeechModelPreparation {
                     is InstalledSpeechModelState.Ready -> error("unreachable")
                 }
             }
-            check(initializeModel(installed.directory)) { "Speech model failed to load" }
-            preparedDirectory = installed.directory.canonicalPath
+            check(initializeModel(installed)) { "Speech model failed to load" }
+            preparedInstallation = expected
             installed.directory
         }
     }
 
     fun invalidate(resetNative: () -> Unit = {}) {
         synchronized(lock) {
-            preparedDirectory = null
+            preparedInstallation = null
             resetNative()
         }
     }

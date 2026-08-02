@@ -33,6 +33,7 @@ enum class TaskRetention {
 
 enum class TaskActionKind {
     DOWNLOAD_MODEL,
+    SELECT_DOWNLOAD_MODEL,
     IMPORT_MODEL,
     CANCEL_MODEL_DOWNLOAD,
     RETRY_MODEL_DOWNLOAD,
@@ -116,6 +117,17 @@ data class ModelSetupSnapshot(
     val progressPercent: Int? = null,
     val downloadAvailable: Boolean = false,
     val canCancel: Boolean = false,
+    val selectedModel: SpeechModelPackageIdentity? = null,
+    val downloadChoices: List<SpeechModelDownloadChoice> = emptyList(),
+)
+
+data class SpeechModelDownloadChoice(
+    val identity: SpeechModelPackageIdentity,
+    val displayName: String,
+    val languageSummary: String,
+    val maturity: String,
+    val downloadBytes: Long,
+    val requiredStorageBytes: Long,
 )
 
 enum class OutputSetupSnapshotState {
@@ -256,14 +268,20 @@ object TaskListPresentationController {
             )
             active -> emptyList()
             error -> listOf(
+                TaskActionPresentation(
+                    TaskActionKind.SELECT_DOWNLOAD_MODEL,
+                    selectedModelLabel(snapshot),
+                    snapshot.downloadChoices.isNotEmpty(),
+                ),
                 TaskActionPresentation(TaskActionKind.RETRY_MODEL_DOWNLOAD, "Retry Download", snapshot.downloadAvailable),
-                TaskActionPresentation(TaskActionKind.IMPORT_MODEL, "Install Manually"),
             )
             else -> buildList {
-                if (snapshot.downloadAvailable) {
-                    add(TaskActionPresentation(TaskActionKind.DOWNLOAD_MODEL, "Download Model"))
+                if (snapshot.downloadChoices.size > 1) {
+                    add(TaskActionPresentation(TaskActionKind.SELECT_DOWNLOAD_MODEL, selectedModelLabel(snapshot)))
                 }
-                add(TaskActionPresentation(TaskActionKind.IMPORT_MODEL, "Install Manually"))
+                if (snapshot.downloadAvailable) {
+                    add(TaskActionPresentation(TaskActionKind.DOWNLOAD_MODEL, "Download"))
+                }
             }
         }
         return SetupTaskPresentation(
@@ -275,7 +293,7 @@ object TaskListPresentationController {
                 else -> SetupTaskState.REQUIRED
             },
             title = "Install Speech Model",
-            detail = snapshot.detail.takeUnless { active },
+            detail = selectedModelDetail(snapshot) ?: snapshot.detail.takeUnless { active },
             badge = if (active) "Installing" else if (error) "Needs attention" else "Required",
             progress = if (active) {
                 TaskProgressPresentation(
@@ -288,6 +306,25 @@ object TaskListPresentationController {
             errorMessage = snapshot.detail.takeIf { error },
             actions = actions,
         )
+    }
+
+    private fun selectedModelDetail(snapshot: ModelSetupSnapshot): String? {
+        val selected = snapshot.selectedModel ?: return null
+        val choice = snapshot.downloadChoices.firstOrNull { it.identity == selected } ?: return null
+        val download = formatBytes(choice.downloadBytes)
+        val storage = formatBytes(choice.requiredStorageBytes)
+        return "${choice.displayName} · ${choice.languageSummary} · ${choice.maturity} · $download download · $storage free"
+    }
+
+    private fun selectedModelLabel(snapshot: ModelSetupSnapshot): String =
+        snapshot.selectedModel
+            ?.let { selected -> snapshot.downloadChoices.firstOrNull { it.identity == selected } }
+            ?.displayName
+            ?: "Choose Model"
+
+    private fun formatBytes(bytes: Long): String = when {
+        bytes >= 1024L * 1024L * 1024L -> "${bytes / (1024L * 1024L * 1024L)} GB"
+        else -> "${bytes / (1024L * 1024L)} MB"
     }
 
     private fun outputTask(snapshot: OutputSetupSnapshot): SetupTaskPresentation? {
@@ -431,12 +468,13 @@ object TaskListPresentationController {
     }
 
     private fun audioComparator(filter: TaskListFilter): Comparator<AudioTaskSnapshot> = when (filter) {
-        TaskListFilter.PROCESSED -> compareByDescending<AudioTaskSnapshot> {
-            it.terminalAtMillis ?: it.importedAtMillis
-        }.thenByDescending { it.importedAtMillis }.thenByDescending { it.entryId }
-        TaskListFilter.NEW,
+        TaskListFilter.PROCESSED,
         TaskListFilter.ALL,
-        -> compareByDescending<AudioTaskSnapshot> { it.importedAtMillis }.thenByDescending { it.entryId }
+        -> compareByDescending<AudioTaskSnapshot> { it.terminalAtMillis ?: it.importedAtMillis }
+            .thenByDescending { it.importedAtMillis }
+            .thenByDescending { it.entryId }
+        TaskListFilter.NEW -> compareByDescending<AudioTaskSnapshot> { it.importedAtMillis }
+            .thenByDescending { it.entryId }
     }
 
     private fun emptyMessage(filter: TaskListFilter): String = when (filter) {

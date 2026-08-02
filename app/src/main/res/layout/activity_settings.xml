@@ -80,6 +80,31 @@
                     android:text="@string/output_not_selected" />
             </LinearLayout>
 
+            <LinearLayout
+                android:id="@+id/settingsModelRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:orientation="vertical"
+                android:paddingVertical="8dp">
+
+                <TextView
+                    android:id="@+id/settingsModelDetail"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Install speech model from folder"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Select a supported local model package" />
+            </LinearLayout>
+
             <TextView
                 android:id="@+id/startupProcessingTitle"
                 android:layout_width="match_parent"

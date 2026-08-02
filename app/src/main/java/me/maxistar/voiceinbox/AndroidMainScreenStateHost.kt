@@ -69,6 +69,7 @@ data class AndroidMainScreenState(
     val importEnabled: Boolean,
     val folderSync: AndroidFolderSyncPresentation,
     val onboardingHint: AndroidOnboardingHintPresentation,
+    val transcriptionActive: Boolean,
 ) {
     val refreshFolderVisible: Boolean get() = folderSync.visible
     val refreshFolderEnabled: Boolean get() = folderSync.enabled
@@ -120,6 +121,7 @@ object AndroidTaskListSnapshotMapper {
             entriesById = input.entries.associateBy(AudioCatalogEntry::id),
             importEnabled = input.importEnabled,
             folderSync = input.folderSync,
+            transcriptionActive = input.transcription.active,
             onboardingHint = AndroidOnboardingHintPresenter.present(
                 lifecycle = input.onboardingLifecycle,
                 filter = input.filter,
@@ -135,6 +137,10 @@ object AndroidTaskListSnapshotMapper {
         message?.contains("no text", ignoreCase = true) == true ||
             message?.contains("no speech", ignoreCase = true) == true
 
+}
+
+internal object AndroidTaskListAnimationPolicy {
+    fun suppressStructuralAnimations(transcriptionActive: Boolean): Boolean = transcriptionActive
 }
 
 class AndroidMainScreenStateHost(

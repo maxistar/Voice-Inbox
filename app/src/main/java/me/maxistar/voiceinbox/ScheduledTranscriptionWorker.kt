@@ -51,7 +51,7 @@ class ScheduledTranscriptionWorker(
         documentAccess.requireAppendable(output)
         folderScanner.requireReadable(folder)
 
-        if (SpeechModelRepository(
+        if (SpeechModelRepository.forActive(
             applicationContext.noBackupFilesDir.resolve("models"),
         ).inspectLightweight() !is InstalledSpeechModelState.Ready) return
 

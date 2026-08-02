@@ -71,6 +71,27 @@ class SpeechModelRepositoryTest {
     }
 
     @Test
+    fun catalogDescriptorRecognizesExistingProductionLayoutWithoutMigration() {
+        val descriptor = SpeechModelCatalog.defaultModel
+        val root = File(temporaryFolder.root, "models")
+        val installed = File(root, "installed/${descriptor.manifest.version}").apply { mkdirs() }
+        descriptor.manifest.files.forEach { installed.resolve(it.name).createNewFile() }
+        File(root, "active-model").apply {
+            parentFile?.mkdirs()
+            writeText(descriptor.manifest.version)
+        }
+
+        val state = SpeechModelRepository(root, descriptor.manifest).inspectLightweight()
+
+        assertTrue(state is InstalledSpeechModelState.Ready)
+        assertEquals(
+            InstalledSpeechModelState.Ready.Verification.VERIFIED,
+            (state as InstalledSpeechModelState.Ready).verification,
+        )
+        assertEquals(installed.canonicalFile, state.directory.canonicalFile)
+    }
+
+    @Test
     fun corruptAndIncompleteModelsAreRejected() {
         val repository = repository()
         repository.prepareForInstall().getOrThrow()
@@ -219,6 +240,63 @@ class SpeechModelRepositoryTest {
         assertTrue(repository.inspectLightweight() is InstalledSpeechModelState.Ready)
     }
 
+    @Test
+    fun activeReceiptRoundTripsBackendAndIdentity() {
+        val identity = ActiveSpeechModelIdentity(
+            "whisper-tiny-multilingual",
+            "whisper-tiny-ggml-f16-r1",
+            SpeechModelBackend.WHISPER_CPP,
+        )
+
+        assertEquals(identity, ActiveSpeechModelIdentity.parse(identity.serialize()))
+        assertEquals(null, ActiveSpeechModelIdentity.parse("not-json"))
+    }
+
+    @Test
+    fun crossModelActivationCommitsTypedReceiptAndRemovesPreviousPayload() {
+        val root = File(temporaryFolder.root, "switch-models")
+        val first = SpeechModelRepository(root, descriptor("first", "first-version"), { Long.MAX_VALUE })
+        first.prepareFreshImport().getOrThrow()
+        writeValidStaging(first)
+        val oldDirectory = first.activate().getOrThrow()
+
+        val second = SpeechModelRepository(root, descriptor("second", "second-version"), { Long.MAX_VALUE })
+        second.prepareFreshImport().getOrThrow()
+        writeValidStaging(second)
+        second.activate().getOrThrow()
+
+        assertFalse(oldDirectory.exists())
+        assertTrue(second.inspectLightweight() is InstalledSpeechModelState.Ready)
+        val receipt = root.resolve("active-model").readText()
+        assertTrue(receipt.contains("\"catalogId\":\"second\""))
+        assertTrue(receipt.contains("\"backend\":\"PARAKEET_TDT_ONNX\""))
+    }
+
+    @Test
+    fun failedCrossModelActivationPreservesPreviousPayloadAndReceipt() {
+        val root = File(temporaryFolder.root, "failed-switch-models")
+        val first = SpeechModelRepository(root, descriptor("first", "first-version"), { Long.MAX_VALUE })
+        first.prepareFreshImport().getOrThrow()
+        writeValidStaging(first)
+        val oldDirectory = first.activate().getOrThrow()
+        val oldReceipt = root.resolve("active-model").readText()
+        val second = SpeechModelRepository(
+            root,
+            descriptor("second", "second-version"),
+            { Long.MAX_VALUE },
+            { source, destination ->
+                if (source.path.contains("${File.separator}staging${File.separator}")) false
+                else source.renameTo(destination)
+            },
+        )
+        second.prepareFreshImport().getOrThrow()
+        writeValidStaging(second)
+
+        assertTrue(second.activate().isFailure)
+        assertTrue(oldDirectory.isDirectory)
+        assertEquals(oldReceipt, root.resolve("active-model").readText())
+    }
+
     private fun repository() = SpeechModelRepository(
         root = File(temporaryFolder.root, "models"),
         manifest = testManifest,
@@ -231,6 +309,18 @@ class SpeechModelRepositoryTest {
             repository.stagingDirectory.resolve(name).writeBytes(contents)
         }
     }
+
+    private fun descriptor(catalogId: String, version: String) = SpeechModelDescriptor(
+        catalogId = catalogId,
+        displayName = catalogId,
+        backend = SpeechModelBackend.PARAKEET_TDT_ONNX,
+        manifest = testManifest.copy(version = version),
+        distribution = SpeechModelDistribution(false, true),
+        languages = SpeechModelLanguageCoverage("Test", emptyList()),
+        maturity = SpeechModelMaturity.EXPERIMENTAL,
+        attribution = SpeechModelAttribution("", "", "", "", "", ""),
+        supportedPlatforms = setOf(SpeechModelPlatform.ANDROID),
+    )
 
     companion object {
         private val testFiles = linkedMapOf(

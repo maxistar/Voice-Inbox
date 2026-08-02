@@ -8,6 +8,38 @@ import kotlin.test.assertNull
 
 class BatchTranscriptionUseCaseTest {
     @Test
+    fun progressCoalescerBoundsContinuousUpdatesAndPublishesLifecycleChangesImmediately() {
+        val clock = MutableClock()
+        val coalescer = BatchProgressCoalescer(clock)
+        val base = BatchTranscriptionProgress(
+            phase = "Transcribing",
+            activeEntryId = 1,
+            filename = "one.wav",
+            completed = 0,
+            total = 2,
+            failed = 0,
+            processedUs = 1,
+            durationUs = 100,
+            progress = 1,
+        )
+
+        assertEquals(true, coalescer.shouldPublish(base))
+        clock.now = 100
+        assertEquals(false, coalescer.shouldPublish(base.copy(processedUs = 10, progress = 10)))
+        clock.now = 250
+        assertEquals(true, coalescer.shouldPublish(base.copy(processedUs = 25, progress = 25)))
+        clock.now = 251
+        assertEquals(
+            true,
+            coalescer.shouldPublish(base.copy(phase = "Appending", processedUs = 100, progress = 100)),
+        )
+        assertEquals(
+            true,
+            coalescer.shouldPublish(base.copy(completed = 1, activeEntryId = null, filename = null)),
+        )
+    }
+
+    @Test
     fun transcribeAllProcessesPendingEntriesAndReportsResult() {
         val catalog = FakeCatalog(
             entry(1, "one.wav", AudioFileState.PENDING),
@@ -171,6 +203,10 @@ class BatchTranscriptionUseCaseTest {
         runId = "run-1",
         retryEntryId = retryEntryId,
     )
+
+    private class MutableClock(var now: Long = 0) : BatchClock {
+        override fun currentTimeMillis(): Long = now
+    }
 
     private class FakeCatalog(
         vararg entries: AudioCatalogEntry,

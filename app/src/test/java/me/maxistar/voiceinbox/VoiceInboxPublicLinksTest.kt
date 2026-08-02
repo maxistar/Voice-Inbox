@@ -5,8 +5,9 @@ import org.junit.Test
 
 class VoiceInboxPublicLinksTest {
     @Test
-    fun settingsLinksUseCanonicalVoiceInboxOrigin() {
+    fun publicLinksUseCanonicalVoiceInboxOrigin() {
         assertEquals("https://voiceinbox.simpleditor.org/", VoiceInboxPublicLinks.WEBSITE)
+        assertEquals("https://voiceinbox.simpleditor.org/docs/", VoiceInboxPublicLinks.DOCUMENTATION)
         assertEquals("https://voiceinbox.simpleditor.org/legal/", VoiceInboxPublicLinks.LEGAL)
     }
 }

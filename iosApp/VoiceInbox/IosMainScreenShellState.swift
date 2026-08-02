@@ -53,6 +53,7 @@ enum IosTaskActionRoute: Equatable {
     case modelDownload
     case modelImport
     case modelCancel
+    case outputCreation
     case outputSelection
     case folderSelection
     case folderRefresh
@@ -70,6 +71,7 @@ enum IosTaskActionRouter {
         case .downloadModel, .retryModelDownload: .modelDownload
         case .importModel: .modelImport
         case .cancelModelDownload: .modelCancel
+        case .createOutput: .outputCreation
         case .selectOutput: .outputSelection
         case .selectFolder: .folderSelection
         case .refreshFolder: .folderRefresh
@@ -205,7 +207,9 @@ final class IosMainScreenShellState {
             installationPhase: installing ? installationPhase : nil,
             progressPercent: progress.map { KotlinInt(int: Int32($0)) },
             downloadAvailable: downloadAvailable,
-            canCancel: canCancel
+            canCancel: canCancel,
+            selectedModel: nil,
+            downloadChoices: []
         )
     }
 
