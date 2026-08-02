@@ -1476,10 +1476,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         MaterialAlertDialogBuilder(this)
             .setTitle("Download speech model")
             .setSingleChoiceItems(
-                choices.map { model ->
-                    "${model.displayName}\n${model.languages.summary} · ${model.maturity.name.lowercase()} · " +
-                        "${model.approximateDownloadBytes / (1024 * 1024)} MB"
-                }.toTypedArray(),
+                choices.map { it.displayName }.toTypedArray(),
                 choices.indexOfFirst { it.catalogId == selectedDownloadModel.catalogId },
             ) { dialog, which ->
                 selectedDownloadModel = choices[which]

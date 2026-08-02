@@ -82,7 +82,7 @@ struct ContentView: View {
                 }
 
 
-                if !speechModelStore.isReady && !speechModelStore.isBusy {
+                if !speechModelStore.isReady {
                     Section("Download Speech Model") {
                         Picker("Model", selection: $speechModelStore.selectedDownloadModel) {
                             ForEach(speechModelStore.availableModels.filter(\.networkDownloadAvailable)) { model in
@@ -101,11 +101,33 @@ struct ContentView: View {
                                     .foregroundStyle(.secondary)
                             }
                         }
+                        Button("Download") {
+                            speechModelStore.downloadModel(speechModelStore.selectedDownloadModel)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(speechModelStore.isBusy)
+
+                        let modelTask = screen.state.tasks
+                            .compactMap({ $0 as? SetupTaskPresentation })
+                            .first(where: { $0.kind == .model })
+                        if let error = modelTask?.errorMessage, !error.isEmpty {
+                            Text(error)
+                                .font(.footnote)
+                                .foregroundStyle(.red)
+                        }
+                        if let modelTask, modelTask.state == .active {
+                            TaskListRow(task: modelTask) { action in
+                                perform(action: action, task: modelTask, screen: screen)
+                            }
+                        }
                     }
                 }
 
                 Section {
-                    ForEach(screen.state.tasks.filter { $0 is SetupTaskPresentation }, id: \.stableId) { task in
+                    ForEach(screen.state.tasks.filter {
+                        guard let setup = $0 as? SetupTaskPresentation else { return false }
+                        return setup.kind != .model
+                    }, id: \.stableId) { task in
                         TaskListRow(task: task) { action in
                             perform(action: action, task: task, screen: screen)
                         }
