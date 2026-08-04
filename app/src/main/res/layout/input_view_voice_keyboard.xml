@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="#FAFAFA"
+    android:gravity="center_horizontal"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <TextView
+        android:id="@+id/voiceKeyboardStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:paddingVertical="4dp"
+        android:textAppearance="@android:style/TextAppearance.Material.Body1" />
+
+    <Button
+        android:id="@+id/voiceKeyboardRecord"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginTop="8dp"
+        android:text="@string/voice_keyboard_record" />
+
+    <Button
+        android:id="@+id/voiceKeyboardDismiss"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="@string/voice_keyboard_dismiss"
+        android:visibility="gone" />
+
+    <Button
+        android:id="@+id/voiceKeyboardSetup"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="@string/voice_keyboard_open_setup"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/voiceKeyboardBackspace"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:contentDescription="@string/voice_keyboard_backspace"
+            android:text="@string/voice_keyboard_backspace" />
+
+        <Button
+            android:id="@+id/voiceKeyboardSpace"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_marginHorizontal="4dp"
+            android:layout_weight="2"
+            android:text="@string/voice_keyboard_space" />
+
+        <Button
+            android:id="@+id/voiceKeyboardEnter"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:contentDescription="@string/voice_keyboard_enter"
+            android:text="@string/voice_keyboard_enter" />
+
+        <Button
+            android:id="@+id/voiceKeyboardNextKeyboard"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:contentDescription="@string/voice_keyboard_next"
+            android:text="@string/voice_keyboard_next" />
+    </LinearLayout>
+</LinearLayout>
