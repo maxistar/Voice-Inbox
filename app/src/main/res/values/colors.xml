@@ -2,4 +2,17 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <color name="voice_keyboard_surface">#F4F6F8</color>
+    <color name="voice_keyboard_key">#FFFFFF</color>
+    <color name="voice_keyboard_key_pressed">#DEE5ED</color>
+    <color name="voice_keyboard_text">#1A232D</color>
+    <color name="voice_keyboard_muted">#52606D</color>
+    <color name="voice_keyboard_primary">#0B63B6</color>
+    <color name="voice_keyboard_primary_pressed">#084B89</color>
+    <color name="voice_keyboard_recording">#C62828</color>
+    <color name="voice_keyboard_recording_pressed">#9D2020</color>
+    <color name="voice_keyboard_busy">#6B7785</color>
+    <color name="voice_keyboard_error">#B3261E</color>
+    <color name="voice_keyboard_on_primary">#FFFFFFFF</color>
+    <color name="voice_keyboard_ripple">#330B63B6</color>
 </resources>

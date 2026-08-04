@@ -14,6 +14,8 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
+import android.widget.ImageButton
+import android.widget.ProgressBar
 import android.widget.TextView
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -27,13 +29,14 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
     private var requestGeneration = 0L
 
     private var statusView: TextView? = null
-    private var recordButton: Button? = null
+    private var progressView: ProgressBar? = null
+    private var recordButton: ImageButton? = null
     private var dismissButton: Button? = null
     private var setupButton: Button? = null
-    private var backspaceButton: Button? = null
-    private var spaceButton: Button? = null
-    private var enterButton: Button? = null
-    private var nextKeyboardButton: Button? = null
+    private var backspaceButton: ImageButton? = null
+    private var spaceButton: ImageButton? = null
+    private var enterButton: ImageButton? = null
+    private var nextKeyboardButton: ImageButton? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -43,6 +46,7 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
     override fun onCreateInputView(): View {
         val view = LayoutInflater.from(this).inflate(R.layout.input_view_voice_keyboard, null)
         statusView = view.findViewById(R.id.voiceKeyboardStatus)
+        progressView = view.findViewById(R.id.voiceKeyboardProgress)
         recordButton = view.findViewById(R.id.voiceKeyboardRecord)
         dismissButton = view.findViewById(R.id.voiceKeyboardDismiss)
         setupButton = view.findViewById(R.id.voiceKeyboardSetup)
@@ -216,9 +220,8 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
     }
 
     private fun switchKeyboard() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            switchToNextInputMethod(false)
-        } else {
+        val restored = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && switchToPreviousInputMethod()
+        if (VoiceKeyboardSwitching.returnAction(restored) == VoiceKeyboardReturnAction.SHOW_PICKER) {
             getSystemService(InputMethodManager::class.java).showInputMethodPicker()
         }
     }
@@ -235,15 +238,41 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
         statusView?.setText(status)
         val phase = controller.phase
         recordButton?.apply {
-            isEnabled = true
-            text = when (phase) {
-                VoiceKeyboardPhase.RECORDING -> context.getString(R.string.voice_keyboard_stop)
-                VoiceKeyboardPhase.PREPARING,
-                VoiceKeyboardPhase.TRANSCRIBING,
-                -> context.getString(R.string.voice_keyboard_cancel)
-                VoiceKeyboardPhase.RESULT_PENDING -> context.getString(R.string.voice_keyboard_dismiss)
-                else -> context.getString(R.string.voice_keyboard_record)
-            }
+            val busy = phase in setOf(VoiceKeyboardPhase.PREPARING, VoiceKeyboardPhase.TRANSCRIBING)
+            isEnabled = phase != VoiceKeyboardPhase.RESULT_PENDING
+            alpha = if (isEnabled) 1f else 0.6f
+            background = getDrawable(
+                when (phase) {
+                    VoiceKeyboardPhase.RECORDING -> R.drawable.voice_keyboard_mic_recording
+                    VoiceKeyboardPhase.PREPARING,
+                    VoiceKeyboardPhase.TRANSCRIBING,
+                    VoiceKeyboardPhase.RESULT_PENDING,
+                    -> R.drawable.voice_keyboard_mic_busy
+                    VoiceKeyboardPhase.ERROR -> R.drawable.voice_keyboard_mic_error
+                    VoiceKeyboardPhase.IDLE -> R.drawable.voice_keyboard_mic_idle
+                },
+            )
+            setImageResource(
+                when (phase) {
+                    VoiceKeyboardPhase.RECORDING,
+                    VoiceKeyboardPhase.PREPARING,
+                    VoiceKeyboardPhase.TRANSCRIBING,
+                    -> R.drawable.ic_voice_keyboard_stop
+                    else -> R.drawable.ic_voice_keyboard_mic
+                },
+            )
+            contentDescription = context.getString(
+                when (phase) {
+                    VoiceKeyboardPhase.RECORDING -> R.string.voice_keyboard_stop
+                    VoiceKeyboardPhase.PREPARING,
+                    VoiceKeyboardPhase.TRANSCRIBING,
+                    -> R.string.voice_keyboard_cancel
+                    VoiceKeyboardPhase.ERROR -> R.string.voice_keyboard_record
+                    else -> R.string.voice_keyboard_record
+                },
+            )
+            keepScreenOn = phase == VoiceKeyboardPhase.RECORDING
+            progressView?.visibility = if (busy) View.VISIBLE else View.GONE
         }
         dismissButton?.visibility = if (phase == VoiceKeyboardPhase.RESULT_PENDING) View.VISIBLE else View.GONE
         setupButton?.visibility = if (showSetup) View.VISIBLE else View.GONE

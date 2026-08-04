@@ -65,6 +65,18 @@ class VoiceKeyboardControllerTest {
         assertTrue(controller.beginPreparation())
     }
 
+    @Test
+    fun keyboardReturnUsesPickerWhenPreviousInputMethodIsUnavailable() {
+        assertEquals(
+            VoiceKeyboardReturnAction.RESTORED_PREVIOUS,
+            VoiceKeyboardSwitching.returnAction(previousKeyboardRestored = true),
+        )
+        assertEquals(
+            VoiceKeyboardReturnAction.SHOW_PICKER,
+            VoiceKeyboardSwitching.returnAction(previousKeyboardRestored = false),
+        )
+    }
+
     private fun transcribingController(): VoiceKeyboardController = VoiceKeyboardController().apply {
         beginPreparation()
         recordingStarted()

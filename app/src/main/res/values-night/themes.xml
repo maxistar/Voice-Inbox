@@ -1,4 +1,17 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
+    <color name="voice_keyboard_surface">#15191E</color>
+    <color name="voice_keyboard_key">#252B33</color>
+    <color name="voice_keyboard_key_pressed">#39424D</color>
+    <color name="voice_keyboard_text">#E6EDF5</color>
+    <color name="voice_keyboard_muted">#B4C0CD</color>
+    <color name="voice_keyboard_primary">#76B8FF</color>
+    <color name="voice_keyboard_primary_pressed">#A2D0FF</color>
+    <color name="voice_keyboard_recording">#FFB4AB</color>
+    <color name="voice_keyboard_recording_pressed">#FFDAD6</color>
+    <color name="voice_keyboard_busy">#AAB7C4</color>
+    <color name="voice_keyboard_error">#FFB4AB</color>
+    <color name="voice_keyboard_on_primary">#002F62</color>
+    <color name="voice_keyboard_ripple">#3376B8FF</color>
     <!-- Base application theme. -->
     <style name="Base.Theme.NotesRecognition" parent="Theme.Material3.DayNight.NoActionBar">
         <!-- Customize your dark theme here. -->

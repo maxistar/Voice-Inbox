@@ -1,0 +1,7 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path android:fillColor="@color/voice_keyboard_muted" android:pathData="M20,5L4,5c-1.1,0 -2,0.9 -2,2v10c0,1.1 0.9,2 2,2h16c1.1,0 2,-0.9 2,-2L22,7c0,-1.1 -0.9,-2 -2,-2zM11,8h2v2h-2L11,8zM8,8h2v2L8,10L8,8zM5,8h2v2L5,10L5,8zM7,16L5,16v-2h2v2zM7,13L5,13v-2h2v2zM10,16L8,16v-2h2v2zM10,13L8,13v-2h2v2zM16,16h-5v-2h5v2zM16,13h-5v-2h5v2zM16,10h-2L14,8h2v2zM19,16h-2v-2h2v2zM19,13h-2v-2h2v2zM19,10h-2L17,8h2v2z" />
+</vector>

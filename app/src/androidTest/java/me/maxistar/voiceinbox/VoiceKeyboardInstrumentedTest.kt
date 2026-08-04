@@ -2,7 +2,9 @@ package me.maxistar.voiceinbox
 
 import android.content.ComponentName
 import android.content.pm.PackageManager
+import android.view.LayoutInflater
 import android.widget.EditText
+import android.widget.ImageButton
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
@@ -41,6 +43,31 @@ class VoiceKeyboardInstrumentedTest {
             connection.deleteSurroundingText(1, 0)
 
             assertEquals("start tex", editor.text.toString())
+        }
+    }
+
+    @Test
+    fun keyboardLayoutInflatesWithAccessibleIconControls() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            val view = LayoutInflater.from(context).inflate(R.layout.input_view_voice_keyboard, null)
+
+            assertEquals(
+                context.getString(R.string.voice_keyboard_return_to_previous),
+                view.findViewById<ImageButton>(R.id.voiceKeyboardNextKeyboard).contentDescription,
+            )
+            assertEquals(
+                context.getString(R.string.voice_keyboard_space),
+                view.findViewById<ImageButton>(R.id.voiceKeyboardSpace).contentDescription,
+            )
+            assertEquals(
+                context.getString(R.string.voice_keyboard_enter),
+                view.findViewById<ImageButton>(R.id.voiceKeyboardEnter).contentDescription,
+            )
+            assertEquals(
+                context.getString(R.string.voice_keyboard_backspace),
+                view.findViewById<ImageButton>(R.id.voiceKeyboardBackspace).contentDescription,
+            )
         }
     }
 }
