@@ -27,6 +27,8 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
     private lateinit var recorder: VoiceKeyboardAudioRecorder
     private var inputActive = false
     private var requestGeneration = 0L
+    private var warmUpGeneration = 0L
+    private var warmUpActive = false
 
     private var statusView: TextView? = null
     private var progressView: ProgressBar? = null
@@ -78,15 +80,19 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
         super.onStartInputView(info, restarting)
         inputActive = true
         flushPendingResult()
+        mainHandler.post(::startVisibleWarmUp)
     }
 
     override fun onFinishInput() {
         inputActive = false
+        warmUpGeneration += 1
+        warmUpActive = false
         super.onFinishInput()
     }
 
     override fun onDestroy() {
         requestGeneration += 1
+        warmUpGeneration += 1
         recorder.close()
         controller.cancel()
         workExecutor.shutdownNow()
@@ -94,6 +100,7 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
     }
 
     private fun handleRecordButton() {
+        if (warmUpActive) return
         when (controller.phase) {
             VoiceKeyboardPhase.RECORDING -> stopRecording()
             VoiceKeyboardPhase.PREPARING,
@@ -119,10 +126,7 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
         val generation = ++requestGeneration
         render(R.string.voice_keyboard_preparing)
         workExecutor.execute {
-            val preparation = runCatching {
-                val repository = SpeechModelRepository.forActive(noBackupFilesDir.resolve("models"))
-                SpeechModelPreparation.prepare(repository, NativeTranscriptionBridge::initialize).getOrThrow()
-            }
+            val preparation = prepareModelForDictation()
             mainHandler.post {
                 if (generation != requestGeneration || controller.phase != VoiceKeyboardPhase.PREPARING) return@post
                 preparation.onSuccess {
@@ -141,6 +145,27 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
                 }
             }
         }
+    }
+
+    private fun startVisibleWarmUp() {
+        if (warmUpActive || controller.phase != VoiceKeyboardPhase.IDLE) return
+        val generation = ++warmUpGeneration
+        warmUpActive = true
+        render(R.string.voice_keyboard_preparing)
+        workExecutor.execute {
+            val repository = SpeechModelRepository.forActive(noBackupFilesDir.resolve("models"))
+            val preparation = SpeechModelWarmup.prepare(repository, retryFailed = false).get()
+            mainHandler.post {
+                if (generation != warmUpGeneration) return@post
+                warmUpActive = false
+                render(R.string.voice_keyboard_ready)
+            }
+        }
+    }
+
+    private fun prepareModelForDictation(): Result<Unit> = runCatching {
+        val repository = SpeechModelRepository.forActive(noBackupFilesDir.resolve("models"))
+        SpeechModelWarmup.prepare(repository, retryFailed = true).get().getOrThrow()
     }
 
     private fun stopForDurationLimit(generation: Long) {
@@ -238,11 +263,13 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
         statusView?.setText(status)
         val phase = controller.phase
         recordButton?.apply {
-            val busy = phase in setOf(VoiceKeyboardPhase.PREPARING, VoiceKeyboardPhase.TRANSCRIBING)
-            isEnabled = phase != VoiceKeyboardPhase.RESULT_PENDING
+            val busy = warmUpActive || phase in setOf(VoiceKeyboardPhase.PREPARING, VoiceKeyboardPhase.TRANSCRIBING)
+            isEnabled = phase != VoiceKeyboardPhase.RESULT_PENDING && !warmUpActive
             alpha = if (isEnabled) 1f else 0.6f
             background = getDrawable(
-                when (phase) {
+                when {
+                    warmUpActive -> R.drawable.voice_keyboard_mic_busy
+                    else -> when (phase) {
                     VoiceKeyboardPhase.RECORDING -> R.drawable.voice_keyboard_mic_recording
                     VoiceKeyboardPhase.PREPARING,
                     VoiceKeyboardPhase.TRANSCRIBING,
@@ -250,25 +277,32 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
                     -> R.drawable.voice_keyboard_mic_busy
                     VoiceKeyboardPhase.ERROR -> R.drawable.voice_keyboard_mic_error
                     VoiceKeyboardPhase.IDLE -> R.drawable.voice_keyboard_mic_idle
+                    }
                 },
             )
             setImageResource(
-                when (phase) {
+                when {
+                    warmUpActive -> R.drawable.ic_voice_keyboard_mic
+                    else -> when (phase) {
                     VoiceKeyboardPhase.RECORDING,
                     VoiceKeyboardPhase.PREPARING,
                     VoiceKeyboardPhase.TRANSCRIBING,
                     -> R.drawable.ic_voice_keyboard_stop
                     else -> R.drawable.ic_voice_keyboard_mic
+                    }
                 },
             )
             contentDescription = context.getString(
-                when (phase) {
+                when {
+                    warmUpActive -> R.string.voice_keyboard_preparing
+                    else -> when (phase) {
                     VoiceKeyboardPhase.RECORDING -> R.string.voice_keyboard_stop
                     VoiceKeyboardPhase.PREPARING,
                     VoiceKeyboardPhase.TRANSCRIBING,
                     -> R.string.voice_keyboard_cancel
                     VoiceKeyboardPhase.ERROR -> R.string.voice_keyboard_record
                     else -> R.string.voice_keyboard_record
+                    }
                 },
             )
             keepScreenOn = phase == VoiceKeyboardPhase.RECORDING

@@ -1032,7 +1032,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                         SpeechModelImportPermission.releaseOwnedIfUnused(this)
                         if (shouldHandleModelInstallSuccess(info.id.toString())) {
                             modelReadiness.invalidate()
-                            SpeechModelPreparation.invalidate(NativeTranscriptionBridge::reset)
+                            SpeechModelWarmup.invalidate()
                         }
                         refreshModel()
                     }

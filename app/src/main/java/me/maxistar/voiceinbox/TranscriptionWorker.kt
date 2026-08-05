@@ -42,7 +42,7 @@ class TranscriptionWorker(
                 applicationContext.noBackupFilesDir.resolve("models"),
             )
             publish("Preparing speech model", null, null, 0, 0, null, null)
-            SpeechModelPreparation.prepare(modelRepository, NativeTranscriptionBridge::initialize)
+            SpeechModelWarmup.prepare(modelRepository, retryFailed = true).get()
                 .getOrElse { return@withContext failure(it.message ?: "Speech model preparation failed") }
 
             val batch = BatchTranscriptionUseCase(
