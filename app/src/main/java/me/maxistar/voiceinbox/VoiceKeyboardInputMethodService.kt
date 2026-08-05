@@ -9,6 +9,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.KeyEvent
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
@@ -24,6 +25,18 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
     private val controller = VoiceKeyboardController()
     private val mainHandler = Handler(Looper.getMainLooper())
     private val workExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val backspaceRepeater = VoiceKeyboardBackspaceRepeater(
+        scheduler = object : VoiceKeyboardRepeatScheduler {
+            override fun postDelayed(runnable: Runnable, delayMillis: Long) {
+                mainHandler.postDelayed(runnable, delayMillis)
+            }
+
+            override fun removeCallbacks(runnable: Runnable) {
+                mainHandler.removeCallbacks(runnable)
+            }
+        },
+        deleteOne = ::deleteOneBackspace,
+    )
     private lateinit var recorder: VoiceKeyboardAudioRecorder
     private var inputActive = false
     private var requestGeneration = 0L
@@ -63,7 +76,21 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
             render(R.string.voice_keyboard_ready)
         }
         setupButton?.setOnClickListener { openVoiceInboxSetup() }
-        backspaceButton?.setOnClickListener { currentInputConnection?.deleteSurroundingText(1, 0) }
+        backspaceButton?.apply {
+            setOnClickListener {
+                if (!backspaceRepeater.isRepeating()) deleteOneBackspace()
+            }
+            setOnLongClickListener {
+                if (isEditorReady()) backspaceRepeater.start()
+                true
+            }
+            setOnTouchListener { _, event ->
+                if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+                    backspaceRepeater.cancel()
+                }
+                false
+            }
+        }
         spaceButton?.setOnClickListener { currentInputConnection?.commitText(" ", 1) }
         enterButton?.setOnClickListener(::performEnterAction)
         nextKeyboardButton?.setOnClickListener { switchKeyboard() }
@@ -87,12 +114,19 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
         inputActive = false
         warmUpGeneration += 1
         warmUpActive = false
+        backspaceRepeater.cancel()
         super.onFinishInput()
+    }
+
+    override fun onFinishInputView(finishingInput: Boolean) {
+        backspaceRepeater.cancel()
+        super.onFinishInputView(finishingInput)
     }
 
     override fun onDestroy() {
         requestGeneration += 1
         warmUpGeneration += 1
+        backspaceRepeater.cancel()
         recorder.close()
         controller.cancel()
         workExecutor.shutdownNow()
@@ -226,6 +260,16 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
         return currentInputConnection?.commitText(text, 1) == true
     }
 
+    private fun deleteOneBackspace(): Boolean {
+        if (!isEditorReady()) return false
+        return VoiceKeyboardBackspace.deleteOne(currentInputConnection)
+    }
+
+    private fun isEditorReady(): Boolean = inputActive && controller.phase !in setOf(
+        VoiceKeyboardPhase.PREPARING,
+        VoiceKeyboardPhase.TRANSCRIBING,
+    )
+
     private fun performEnterAction(@Suppress("UNUSED_PARAMETER") view: View) {
         val connection = currentInputConnection ?: return
         val info = currentInputEditorInfo
@@ -310,7 +354,8 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
         }
         dismissButton?.visibility = if (phase == VoiceKeyboardPhase.RESULT_PENDING) View.VISIBLE else View.GONE
         setupButton?.visibility = if (showSetup) View.VISIBLE else View.GONE
-        val editorReady = inputActive && phase !in setOf(VoiceKeyboardPhase.PREPARING, VoiceKeyboardPhase.TRANSCRIBING)
+        val editorReady = isEditorReady()
+        if (!editorReady) backspaceRepeater.cancel()
         backspaceButton?.isEnabled = editorReady
         spaceButton?.isEnabled = editorReady
         enterButton?.isEnabled = editorReady

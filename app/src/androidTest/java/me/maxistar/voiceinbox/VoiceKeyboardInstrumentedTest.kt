@@ -40,9 +40,24 @@ class VoiceKeyboardInstrumentedTest {
             val connection = editor.onCreateInputConnection(android.view.inputmethod.EditorInfo())
 
             connection.commitText(" text", 1)
-            connection.deleteSurroundingText(1, 0)
+            connection.deleteSurroundingTextInCodePoints(1, 0)
 
             assertEquals("start tex", editor.text.toString())
+        }
+    }
+
+    @Test
+    fun inputConnectionDeletesEmojiAsOneCodePoint() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            val editor = EditText(context)
+            editor.setText("start \uD83D\uDE00")
+            editor.setSelection(editor.length())
+            val connection = editor.onCreateInputConnection(android.view.inputmethod.EditorInfo())
+
+            assertTrue(connection.deleteSurroundingTextInCodePoints(1, 0))
+
+            assertEquals("start ", editor.text.toString())
         }
     }
 
