@@ -1,6 +1,7 @@
 <resources>
     <string name="app_name">Voice Inbox</string>
     <string name="voice_keyboard_name">Voice Inbox keyboard</string>
+    <string name="voice_keyboard_subtype">Offline dictation</string>
     <string name="voice_keyboard_ready">Tap Record to dictate</string>
     <string name="voice_keyboard_preparing">Preparing speech model…</string>
     <string name="voice_keyboard_listening">Listening… Tap Stop when finished.</string>
