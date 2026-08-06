@@ -42,7 +42,7 @@ class SpeechModelImportWorker(
             ).import(treeUri.toString()) { progress -> publishProgress(progress, repository) }.getOrElse {
                 return failure(it.message ?: "Could not import speech model")
             }
-            SpeechModelPreparation.invalidate(NativeTranscriptionBridge::reset)
+            SpeechModelWarmup.invalidate()
             Result.success(
                 workDataOf(SpeechModelInstallationWork.KEY_MODEL_PATH to installed.absolutePath),
             )

@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/voice_keyboard_surface"
+    android:orientation="vertical"
+    android:paddingStart="12dp"
+    android:paddingTop="8dp"
+    android:paddingEnd="12dp"
+    android:paddingBottom="12dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="32dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/voiceKeyboardStatus"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/voice_keyboard_muted"
+            android:textSize="14sp" />
+
+        <ProgressBar
+            android:id="@+id/voiceKeyboardProgress"
+            style="?android:attr/progressBarStyleSmall"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:indeterminateTint="@color/voice_keyboard_primary"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="144dp"
+        android:layout_marginTop="4dp">
+
+        <ImageButton
+            android:id="@+id/voiceKeyboardRecord"
+            android:layout_width="104dp"
+            android:layout_height="104dp"
+            android:layout_gravity="center"
+            android:background="@drawable/voice_keyboard_mic_idle"
+            android:contentDescription="@string/voice_keyboard_record"
+            android:padding="28dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_voice_keyboard_mic" />
+
+        <Button
+            android:id="@+id/voiceKeyboardDismiss"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:background="@drawable/voice_keyboard_secondary_action"
+            android:paddingHorizontal="16dp"
+            android:text="@string/voice_keyboard_dismiss"
+            android:textColor="@color/voice_keyboard_text"
+            android:visibility="gone" />
+
+        <Button
+            android:id="@+id/voiceKeyboardSetup"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:background="@drawable/voice_keyboard_secondary_action"
+            android:paddingHorizontal="16dp"
+            android:text="@string/voice_keyboard_open_setup"
+            android:textColor="@color/voice_keyboard_text"
+            android:visibility="gone" />
+    </FrameLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:layout_marginTop="4dp"
+        android:baselineAligned="false"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageButton
+            android:id="@+id/voiceKeyboardNextKeyboard"
+            android:layout_width="52dp"
+            android:layout_height="52dp"
+            android:background="@drawable/voice_keyboard_key"
+            android:contentDescription="@string/voice_keyboard_return_to_previous"
+            android:padding="14dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_voice_keyboard_keyboard" />
+
+        <ImageButton
+            android:id="@+id/voiceKeyboardSpace"
+            android:layout_width="0dp"
+            android:layout_height="52dp"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="@drawable/voice_keyboard_key"
+            android:contentDescription="@string/voice_keyboard_space"
+            android:padding="14dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_voice_keyboard_space" />
+
+        <ImageButton
+            android:id="@+id/voiceKeyboardEnter"
+            android:layout_width="52dp"
+            android:layout_height="52dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/voice_keyboard_key"
+            android:contentDescription="@string/voice_keyboard_enter"
+            android:padding="14dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_voice_keyboard_enter" />
+
+        <ImageButton
+            android:id="@+id/voiceKeyboardBackspace"
+            android:layout_width="52dp"
+            android:layout_height="52dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/voice_keyboard_key"
+            android:contentDescription="@string/voice_keyboard_backspace"
+            android:padding="14dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_voice_keyboard_delete" />
+    </LinearLayout>
+</LinearLayout>

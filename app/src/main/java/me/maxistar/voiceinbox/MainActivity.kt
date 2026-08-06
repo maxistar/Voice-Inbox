@@ -2,7 +2,9 @@ package me.maxistar.voiceinbox
 
 import me.maxistar.voiceinbox.core.*
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Bundle
@@ -160,6 +162,16 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         if (uri != null) acceptModelFolder(uri)
     }
 
+    private val microphonePermissionRequest = registerForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        Toast.makeText(
+            this,
+            if (granted) R.string.voice_keyboard_permission_granted else R.string.voice_keyboard_permission_denied,
+            Toast.LENGTH_LONG,
+        ).show()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -237,6 +249,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
             intent.removeExtra(EXTRA_OPEN_MODEL_FOLDER_PICKER)
             modelFolderPicker.launch(null)
         }
+        requestMicrophonePermissionIfNeeded(intent)
     }
 
     override fun onStart() {
@@ -251,7 +264,9 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
         handleShareIntent(intent)
+        requestMicrophonePermissionIfNeeded(intent)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -305,6 +320,14 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         folderExecutor.shutdown()
         importExecutor.shutdown()
         super.onDestroy()
+    }
+
+    private fun requestMicrophonePermissionIfNeeded(intent: Intent) {
+        if (!intent.getBooleanExtra(VoiceKeyboardSetup.EXTRA_REQUEST_MICROPHONE_PERMISSION, false)) return
+        intent.removeExtra(VoiceKeyboardSetup.EXTRA_REQUEST_MICROPHONE_PERMISSION)
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            microphonePermissionRequest.launch(Manifest.permission.RECORD_AUDIO)
+        }
     }
 
     private fun bindViews() {
@@ -1009,7 +1032,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                         SpeechModelImportPermission.releaseOwnedIfUnused(this)
                         if (shouldHandleModelInstallSuccess(info.id.toString())) {
                             modelReadiness.invalidate()
-                            SpeechModelPreparation.invalidate(NativeTranscriptionBridge::reset)
+                            SpeechModelWarmup.invalidate()
                         }
                         refreshModel()
                     }
