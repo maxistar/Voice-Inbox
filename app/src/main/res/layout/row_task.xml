@@ -28,6 +28,17 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="12dp"
             android:textAppearance="?attr/textAppearanceLabelMedium" />
+
+        <ImageButton
+            android:id="@+id/taskDismiss"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/task_dismiss_output_export"
+            android:padding="12dp"
+            android:src="@drawable/ic_close_24"
+            android:visibility="gone" />
     </LinearLayout>
 
     <TextView

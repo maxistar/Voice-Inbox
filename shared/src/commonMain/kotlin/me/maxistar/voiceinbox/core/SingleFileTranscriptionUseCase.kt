@@ -3,7 +3,7 @@ package me.maxistar.voiceinbox.core
 data class SingleFileTranscriptionInput(
     val audioId: String,
     val audioName: String,
-    val outputId: String,
+    val outputId: String? = null,
     val fallbackRecordingTimeMillis: Long?,
 )
 
@@ -82,16 +82,18 @@ class SingleFileTranscriptionUseCase(
             if (transcript.isBlank()) throw IllegalStateException(ERROR_NO_TEXT_RECOGNIZED)
             val finalTranscript = transcript.trim()
 
-            onProgress(SingleFileTranscriptionProgress(PHASE_APPENDING_TRANSCRIPT, durationUs, durationUs))
-            val formatted = TranscriptOutput.formatEntry(
-                audioName = input.audioName,
-                recordingTimeLabel = timestampLabelFormatter.formatRecordingTime(
-                    info.embeddedRecordingTimeMillis ?: input.fallbackRecordingTimeMillis,
-                ),
-                transcript = finalTranscript,
-            )
-            AppendPublication.publish(transcriptOutput.readTail(input.outputId), formatted) { text ->
-                transcriptOutput.append(input.outputId, text)
+            input.outputId?.let { outputId ->
+                onProgress(SingleFileTranscriptionProgress(PHASE_APPENDING_TRANSCRIPT, durationUs, durationUs))
+                val formatted = TranscriptOutput.formatEntry(
+                    audioName = input.audioName,
+                    recordingTimeLabel = timestampLabelFormatter.formatRecordingTime(
+                        info.embeddedRecordingTimeMillis ?: input.fallbackRecordingTimeMillis,
+                    ),
+                    transcript = finalTranscript,
+                )
+                AppendPublication.publish(transcriptOutput.readTail(outputId), formatted) { text ->
+                    transcriptOutput.append(outputId, text)
+                }
             }
             return SingleFileTranscriptionResult(
                 durationUs = durationUs,

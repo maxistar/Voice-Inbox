@@ -238,12 +238,29 @@ class AndroidMainScreenStateHostTest {
                 onboardingLifecycle = AndroidOnboardingHintLifecycle.ACTIVE,
             ),
         )
-        assertEquals(TaskActionKind.CREATE_OUTPUT, directModelCompletion.onboardingHint.action?.kind)
+        assertTrue(directModelCompletion.onboardingHint.visible)
+        assertEquals(TaskActionKind.SELECT_OUTPUT, directModelCompletion.onboardingHint.action?.kind)
         assertEquals(
-            listOf(TaskActionKind.CREATE_OUTPUT, TaskActionKind.SELECT_OUTPUT),
+            listOf(
+                TaskActionKind.CREATE_OUTPUT,
+                TaskActionKind.SELECT_OUTPUT,
+                TaskActionKind.HIDE_OUTPUT,
+            ),
             directModelCompletion.taskList.tasks.single().actions.map { it.kind },
         )
         assertEquals(listOf("setup:output"), directModelCompletion.taskList.tasks.map { it.stableId })
+
+        val hiddenOutput = AndroidTaskListSnapshotMapper.state(
+            AndroidMainScreenInput(
+                model = ModelSetupSnapshot(ModelSetupSnapshotState.READY),
+                output = OutputSetupSnapshot(OutputSetupSnapshotState.REQUIRED),
+                folder = FolderSetupSnapshot(FolderSetupSnapshotState.UNSELECTED),
+                outputTaskHidden = true,
+                hydration = hydrated(),
+                onboardingLifecycle = AndroidOnboardingHintLifecycle.DISMISSED,
+            ),
+        )
+        assertTrue(hiddenOutput.taskList.tasks.none { it.stableId == "setup:output" })
 
         val allFilter = AndroidTaskListSnapshotMapper.state(
             AndroidMainScreenInput(

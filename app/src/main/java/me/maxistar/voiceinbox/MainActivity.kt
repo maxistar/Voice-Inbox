@@ -914,9 +914,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     }
 
     private fun retryEntry(entry: AudioCatalogEntry) {
-        val output = outputUri ?: return
         stopPreviewPlayback(render = true)
-        val request = TranscriptionWorker.requestRetry(folderUri, output, entry.id)
+        val request = TranscriptionWorker.requestRetry(folderUri, exportOutputUri(), entry.id)
         beginTranscriptionHandoff(request.id, entry.id)
         TranscriptionWorker.enqueue(this, request)
     }
@@ -1165,7 +1164,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
             } else {
                 SpeechModelInstallationState.NOT_INSTALLED
             },
-            outputSelected = outputAccessReady,
+            outputSelected = true,
             folderSelected = folderAccessReady,
             pendingCount = pendingCount,
             transcriptionState = transcriptionState,
@@ -1197,10 +1196,9 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     }
 
     private fun startBatchTranscription() {
-        val output = outputUri ?: return
-        if (!outputAccessReady || (folderUri != null && !folderAccessReady)) return
+        if (folderUri != null && !folderAccessReady) return
         stopPreviewPlayback(render = true)
-        val request = TranscriptionWorker.requestAll(folderUri, output)
+        val request = TranscriptionWorker.requestAll(folderUri, exportOutputUri())
         beginTranscriptionHandoff(request.id, requestedEntryId = null)
         TranscriptionWorker.enqueue(this, request)
     }
@@ -1359,7 +1357,6 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
             it.folderUri == AndroidAudioImportConstants.SOURCE_ID
         }
         val eligible = modelReady &&
-            outputAccessReady &&
             audioInputAvailable &&
             !folderBusy()
         val transcription = TranscriptionTaskSnapshot(
@@ -1423,6 +1420,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
             current.copy(
                 model = modelSnapshot,
                 output = outputSnapshot,
+                outputTaskHidden = selectionStore.isOutputTaskHidden(),
                 folder = folderSnapshot,
                 entries = currentEntries,
                 preview = PreviewTaskSnapshot(
@@ -1510,6 +1508,10 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
             TaskActionKind.CANCEL_MODEL_DOWNLOAD -> SpeechModelDownloadWorker.cancel(this)
             TaskActionKind.CREATE_OUTPUT -> launchOutputCreatorIfEnabled()
             TaskActionKind.SELECT_OUTPUT -> launchOutputPickerIfEnabled()
+            TaskActionKind.HIDE_OUTPUT -> {
+                selectionStore.hideOutputTask()
+                publishTaskState()
+            }
             TaskActionKind.SELECT_FOLDER -> launchFolderPickerIfEnabled()
             TaskActionKind.REFRESH_FOLDER -> dispatchManualFolderRefresh()
             TaskActionKind.IMPORT_AUDIO -> if (!ingestionActive) {
@@ -1542,13 +1544,14 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     }
 
     private fun transcribeEntry(entry: AudioCatalogEntry) {
-        val output = outputUri ?: return
-        if (entry.state != AudioFileState.PENDING || !outputAccessReady) return
+        if (entry.state != AudioFileState.PENDING) return
         stopPreviewPlayback(render = true)
-        val request = TranscriptionWorker.requestEntry(folderUri, output, entry.id)
+        val request = TranscriptionWorker.requestEntry(folderUri, exportOutputUri(), entry.id)
         beginTranscriptionHandoff(request.id, entry.id)
         TranscriptionWorker.enqueue(this, request)
     }
+
+    private fun exportOutputUri(): Uri? = outputUri?.takeIf { outputAccessReady }
 
     private fun updateMenu(menu: Menu) {
         val state = taskStateHost.state.value

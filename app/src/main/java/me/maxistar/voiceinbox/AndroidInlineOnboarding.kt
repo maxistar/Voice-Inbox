@@ -124,8 +124,9 @@ object AndroidOnboardingHintPresenter {
             ),
             AndroidOnboardingChecklistStep(
                 kind = AndroidOnboardingStepKind.OUTPUT,
-                label = "Create or choose transcript output",
+                label = "Configure automatic transcript export · Optional",
                 complete = output.state == OutputSetupSnapshotState.READY,
+                optional = true,
             ),
             AndroidOnboardingChecklistStep(
                 kind = AndroidOnboardingStepKind.FOLDER,
@@ -166,9 +167,10 @@ object AndroidOnboardingHintPresenter {
         model: ModelSetupSnapshot,
         output: OutputSetupSnapshot,
         folder: FolderSetupSnapshot,
-    ): Boolean = model.state == ModelSetupSnapshotState.READY &&
-        output.state == OutputSetupSnapshotState.READY &&
-        folder.state == FolderSetupSnapshotState.READY
+    ): Boolean =
+        model.state == ModelSetupSnapshotState.READY &&
+            output.state == OutputSetupSnapshotState.READY &&
+            folder.state == FolderSetupSnapshotState.READY
 
     private fun nextAction(
         model: ModelSetupSnapshot,
@@ -195,14 +197,19 @@ object AndroidOnboardingHintPresenter {
             kind = TaskActionKind.IMPORT_MODEL,
         )
         output.state != OutputSetupSnapshotState.READY -> AndroidOnboardingHintAction(
-            label = "Create Output File",
+            label = "Choose export document",
             enabled = true,
-            kind = TaskActionKind.CREATE_OUTPUT,
+            kind = TaskActionKind.SELECT_OUTPUT,
+        )
+        folder.state != FolderSetupSnapshotState.READY -> AndroidOnboardingHintAction(
+            label = "Select audio folder",
+            enabled = true,
+            kind = TaskActionKind.SELECT_FOLDER,
         )
         else -> AndroidOnboardingHintAction(
-            label = "Select audio folder (optional)",
-            enabled = folder.state != FolderSetupSnapshotState.SCANNING,
-            kind = TaskActionKind.SELECT_FOLDER,
+            label = "Ready to transcribe",
+            enabled = false,
+            kind = TaskActionKind.IMPORT_AUDIO,
         )
     }
 }

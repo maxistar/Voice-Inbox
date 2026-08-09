@@ -55,6 +55,7 @@ enum IosTaskActionRoute: Equatable {
     case modelCancel
     case outputCreation
     case outputSelection
+    case hideOutput
     case folderSelection
     case folderRefresh
     case transcribe
@@ -73,6 +74,7 @@ enum IosTaskActionRouter {
         case .cancelModelDownload: .modelCancel
         case .createOutput: .outputCreation
         case .selectOutput: .outputSelection
+        case .hideOutput: .hideOutput
         case .selectFolder: .folderSelection
         case .refreshFolder: .folderRefresh
         case .transcribe: .transcribe
@@ -98,6 +100,7 @@ final class IosMainScreenShellState {
         modelDownloadProgress: Int?,
         modelCanCancel: Bool,
         outputStatus: IosOutputDocumentStatus,
+        outputGuidanceHidden: Bool = false,
         folderStatus: IosInboxFolderStatus,
         folderScanning: Bool,
         activePreviewEntryId: Int64?,
@@ -125,6 +128,7 @@ final class IosMainScreenShellState {
             model: model,
             output: output,
             folder: folder,
+            showOutputTask: !outputGuidanceHidden,
             audio: importedFiles.map { file in
                 AudioTaskSnapshot(
                     entryId: file.id,

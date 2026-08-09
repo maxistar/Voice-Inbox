@@ -27,7 +27,6 @@ class TranscriptionWorker(
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val folderUri = inputData.getString(KEY_FOLDER_URI)
         val outputUri = inputData.getString(KEY_OUTPUT_URI)?.let(Uri::parse)
-            ?: return@withContext failure("Output file is missing")
         val retryId = inputData.getLong(KEY_RETRY_ID, NO_RETRY_ID).takeIf { it != NO_RETRY_ID }
         val catalog: AudioCatalogQueuePort =
             AndroidSqlDelightAudioCatalogFactory(applicationContext).create()
@@ -58,7 +57,7 @@ class TranscriptionWorker(
                     sourceScope = AudioCatalogSourceScope.of(
                         listOfNotNull(AndroidAudioImportConstants.SOURCE_ID, folderUri),
                     ),
-                    outputId = outputUri.toString(),
+                    outputId = outputUri?.toString(),
                     runId = id.toString(),
                     retryEntryId = retryId,
                 ),
@@ -224,11 +223,11 @@ class TranscriptionWorker(
 
     private class AndroidBatchEntryTranscriber(
         private val transcriber: SingleFileTranscriber,
-        private val outputUri: Uri,
+        private val outputUri: Uri?,
     ) : BatchEntryTranscriber {
         override fun transcribe(
             entry: AudioCatalogEntry,
-            outputId: String,
+            outputId: String?,
             runId: String,
             onProgress: (SingleFileTranscriptionProgress) -> Unit,
         ): SingleFileTranscriptionResult {
@@ -275,35 +274,35 @@ class TranscriptionWorker(
         private const val NOTIFICATION_CHANNEL = "audio-transcription"
         private const val NOTIFICATION_ID = 2109
 
-        fun enqueueAll(context: Context, folderUri: Uri?, outputUri: Uri): UUID =
+        fun enqueueAll(context: Context, folderUri: Uri?, outputUri: Uri?): UUID =
             enqueue(context, request(folderUri, outputUri, null))
 
-        fun requestAll(folderUri: Uri?, outputUri: Uri): OneTimeWorkRequest =
+        fun requestAll(folderUri: Uri?, outputUri: Uri?): OneTimeWorkRequest =
             request(folderUri, outputUri, null)
 
         fun enqueueRetry(
             context: Context,
             folderUri: Uri?,
-            outputUri: Uri,
+            outputUri: Uri?,
             entryId: Long,
         ): UUID = enqueue(context, request(folderUri, outputUri, entryId))
 
         fun requestRetry(
             folderUri: Uri?,
-            outputUri: Uri,
+            outputUri: Uri?,
             entryId: Long,
         ): OneTimeWorkRequest = request(folderUri, outputUri, entryId)
 
         fun enqueueEntry(
             context: Context,
             folderUri: Uri?,
-            outputUri: Uri,
+            outputUri: Uri?,
             entryId: Long,
         ): UUID = enqueue(context, request(folderUri, outputUri, entryId))
 
         fun requestEntry(
             folderUri: Uri?,
-            outputUri: Uri,
+            outputUri: Uri?,
             entryId: Long,
         ): OneTimeWorkRequest = request(folderUri, outputUri, entryId)
 
@@ -318,11 +317,11 @@ class TranscriptionWorker(
 
         private fun request(
             folderUri: Uri?,
-            outputUri: Uri,
+            outputUri: Uri?,
             retryId: Long?,
         ): OneTimeWorkRequest {
             val input = androidx.work.Data.Builder()
-                .putString(KEY_OUTPUT_URI, outputUri.toString())
+                .apply { outputUri?.let { putString(KEY_OUTPUT_URI, it.toString()) } }
                 .putLong(KEY_RETRY_ID, retryId ?: NO_RETRY_ID)
                 .apply { folderUri?.let { putString(KEY_FOLDER_URI, it.toString()) } }
                 .build()

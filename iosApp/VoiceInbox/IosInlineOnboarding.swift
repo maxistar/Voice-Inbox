@@ -138,9 +138,9 @@ enum IosOnboardingHintPresenter {
                 ),
                 IosOnboardingChecklistStep(
                     kind: .output,
-                    label: "Select transcript output",
+                    label: "Configure automatic transcript export",
                     complete: output.state == .ready,
-                    optional: false
+                    optional: true
                 ),
                 IosOnboardingChecklistStep(
                     kind: .folder,

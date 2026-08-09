@@ -95,7 +95,7 @@ class AndroidTaskActionRouterTest {
     }
 
     @Test
-    fun routesOnlyCurrentEnabledOnboardingActionIncludingOptionalFolder() {
+    fun routesOnlyCurrentEnabledRequiredOnboardingAction() {
         var state = onboardingState(
             model = ModelSetupSnapshot(ModelSetupSnapshotState.REQUIRED, downloadAvailable = true),
         )
@@ -116,12 +116,12 @@ class AndroidTaskActionRouterTest {
         state = onboardingState(
             model = ModelSetupSnapshot(ModelSetupSnapshotState.READY),
         )
-        assertTrue(
+        assertFalse(
             router.route(
                 request(TaskListDisplayItem.OnboardingHint.STABLE_KEY, null, TaskActionKind.CREATE_OUTPUT),
             ),
         )
-        assertFalse(
+        assertTrue(
             router.route(
                 request(TaskListDisplayItem.OnboardingHint.STABLE_KEY, null, TaskActionKind.SELECT_OUTPUT),
             ),
@@ -148,7 +148,11 @@ class AndroidTaskActionRouterTest {
             ),
         )
         assertEquals(
-            listOf(TaskActionKind.DOWNLOAD_MODEL, TaskActionKind.CREATE_OUTPUT, TaskActionKind.SELECT_FOLDER),
+            listOf(
+                TaskActionKind.DOWNLOAD_MODEL,
+                TaskActionKind.SELECT_OUTPUT,
+                TaskActionKind.SELECT_FOLDER,
+            ),
             calls,
         )
     }

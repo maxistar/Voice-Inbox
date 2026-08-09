@@ -4,7 +4,7 @@ import kotlin.coroutines.cancellation.CancellationException
 
 data class BatchTranscriptionInput(
     val sourceScope: AudioCatalogSourceScope,
-    val outputId: String,
+    val outputId: String? = null,
     val runId: String,
     val retryEntryId: Long? = null,
 )
@@ -33,7 +33,7 @@ data class BatchTranscriptionResult(
 interface BatchEntryTranscriber {
     fun transcribe(
         entry: AudioCatalogEntry,
-        outputId: String,
+        outputId: String?,
         runId: String,
         onProgress: (SingleFileTranscriptionProgress) -> Unit,
     ): SingleFileTranscriptionResult
@@ -42,7 +42,7 @@ interface BatchEntryTranscriber {
 interface OutcomeBatchEntryTranscriber {
     fun transcribe(
         entry: AudioCatalogEntry,
-        outputId: String,
+        outputId: String?,
         runId: String,
         onProgress: (SingleFileTranscriptionProgress) -> Unit,
     ): SingleFileTranscriptionOutcome
@@ -228,7 +228,7 @@ class OutcomeBatchTranscriptionUseCase(
         transcriber = object : BatchEntryTranscriber {
             override fun transcribe(
                 entry: AudioCatalogEntry,
-                outputId: String,
+                outputId: String?,
                 runId: String,
                 onProgress: (SingleFileTranscriptionProgress) -> Unit,
             ): SingleFileTranscriptionResult {

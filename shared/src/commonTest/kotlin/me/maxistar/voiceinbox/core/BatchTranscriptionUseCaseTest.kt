@@ -315,7 +315,7 @@ class BatchTranscriptionUseCaseTest {
 
         override fun transcribe(
             entry: AudioCatalogEntry,
-            outputId: String,
+            outputId: String?,
             runId: String,
             onProgress: (SingleFileTranscriptionProgress) -> Unit,
         ): SingleFileTranscriptionResult {

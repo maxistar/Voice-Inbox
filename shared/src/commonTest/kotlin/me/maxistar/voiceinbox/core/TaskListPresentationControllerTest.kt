@@ -68,23 +68,40 @@ class TaskListPresentationControllerTest {
     }
 
     @Test
-    fun outputSetupOffersCreationBeforeExistingDocumentSelection() {
+    fun outputSetupOffersCreationSelectionAndHiding() {
         val task = assertIs<SetupTaskPresentation>(
             state(output = OutputSetupSnapshot(OutputSetupSnapshotState.REQUIRED)).tasks.single(),
         )
 
-        assertEquals("Output Document", task.title)
+        assertEquals("Automatic Transcript Export", task.title)
         assertEquals(
-            listOf(TaskActionKind.CREATE_OUTPUT, TaskActionKind.SELECT_OUTPUT),
+            listOf(
+                TaskActionKind.CREATE_OUTPUT,
+                TaskActionKind.SELECT_OUTPUT,
+                TaskActionKind.HIDE_OUTPUT,
+            ),
             task.actions.map { it.kind },
         )
-        assertEquals(listOf("Create New", "Choose Existing"), task.actions.map { it.label })
+        assertEquals(listOf("Create New", "Choose Existing", "Hide"), task.actions.map { it.label })
 
         val invalid = assertIs<SetupTaskPresentation>(
             state(output = OutputSetupSnapshot(OutputSetupSnapshotState.INVALID, "Access expired")).tasks.single(),
         )
         assertEquals("Access expired", invalid.errorMessage)
-        assertEquals(task.actions, invalid.actions)
+        assertEquals(
+            listOf(TaskActionKind.CREATE_OUTPUT, TaskActionKind.SELECT_OUTPUT),
+            invalid.actions.map { it.kind },
+        )
+    }
+
+    @Test
+    fun hiddenOptionalOutputDoesNotCreateSetupTask() {
+        val hidden = state(
+            output = OutputSetupSnapshot(OutputSetupSnapshotState.REQUIRED),
+            showOutputTask = false,
+        )
+
+        assertTrue(hidden.tasks.none { it.stableId == "setup:output" })
     }
 
     @Test
@@ -296,6 +313,7 @@ class TaskListPresentationControllerTest {
         model: ModelSetupSnapshot = ModelSetupSnapshot(ModelSetupSnapshotState.READY),
         output: OutputSetupSnapshot = OutputSetupSnapshot(OutputSetupSnapshotState.READY),
         folder: FolderSetupSnapshot = FolderSetupSnapshot(FolderSetupSnapshotState.READY),
+        showOutputTask: Boolean = true,
         audio: List<AudioTaskSnapshot> = emptyList(),
         transcription: TranscriptionTaskSnapshot = TranscriptionTaskSnapshot(),
     ): TaskListState = TaskListPresentationController.state(
@@ -304,6 +322,7 @@ class TaskListPresentationControllerTest {
             model = model,
             output = output,
             folder = folder,
+            showOutputTask = showOutputTask,
             audio = audio,
             transcription = transcription,
         ),

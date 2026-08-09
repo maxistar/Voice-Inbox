@@ -215,6 +215,9 @@ struct ContentView: View {
                             selectOutputFile: {
                                 presentPicker(.outputFile)
                             },
+                            disableExport: {
+                                outputStore.disableExport()
+                            },
                             installModelPackage: {
                                 guard !transcriber.isActive else {
                                     speechModelStore.message = "Wait for transcription to finish before replacing the speech model."
@@ -319,11 +322,9 @@ struct ContentView: View {
 
     private func currentScreen() -> IosTaskListScreen {
         let speechModelReady = speechModelStore.isReady
-        let outputReady = outputStore.isReady
         let transcriptionReady = transcriber.backendConfigured &&
             speechModelReady &&
-            !speechModelStore.isBusy &&
-            outputReady
+            !speechModelStore.isBusy
         return shellState.screen(
             selection: selectedTab,
             importedFiles: importStore.files,
@@ -335,6 +336,7 @@ struct ContentView: View {
             modelDownloadProgress: speechModelStore.downloadProgress?.percent,
             modelCanCancel: speechModelStore.canCancelDownload,
             outputStatus: outputStore.status,
+            outputGuidanceHidden: outputStore.isGuidanceHidden,
             folderStatus: importStore.inboxFolderStatus,
             folderScanning: importStore.isScanningFolder,
             activePreviewEntryId: previewPlayer.playingFileId,
@@ -407,6 +409,8 @@ struct ContentView: View {
             presentPicker(.speechModelFolder)
         case .outputSelection:
             presentPicker(.outputFile)
+        case .hideOutput:
+            outputStore.hideGuidance()
         case .folderSelection:
             presentPicker(.audioFolder)
         default:
@@ -435,6 +439,8 @@ struct ContentView: View {
             presentPicker(.outputCreation)
         case .outputSelection:
             presentPicker(.outputFile)
+        case .hideOutput:
+            outputStore.hideGuidance()
         case .folderSelection:
             presentPicker(.audioFolder)
         case .folderRefresh:
@@ -466,10 +472,7 @@ struct ContentView: View {
                 files: importStore.files
             )
         case .transcribe, .retryTranscription:
-            guard let outputDocument = outputStore.currentDocument() else {
-                outputStore.refreshAccess()
-                return
-            }
+            let outputDocument = outputStore.currentDocument()
             previewPlayer.stop()
             let onSuccess: (String) -> Void = { transcript in
                 shownTranscript = IosTranscriptReview.presentation(
@@ -510,10 +513,7 @@ struct ContentView: View {
     }
 
     private func transcribeAll() {
-        guard let outputDocument = outputStore.currentDocument() else {
-            outputStore.refreshAccess()
-            return
-        }
+        let outputDocument = outputStore.currentDocument()
         previewPlayer.stop()
         transcriber.transcribeAll(
             modelDirectory: speechModelStore.modelDirectory,
@@ -573,11 +573,7 @@ struct ContentView: View {
             importStore.importMessage = "Found files to process, but the speech model is not ready."
             return
         }
-        guard let outputDocument = outputStore.currentDocument() else {
-            outputStore.refreshAccess()
-            importStore.importMessage = "Found files to process, but the output file is not ready."
-            return
-        }
+        let outputDocument = outputStore.currentDocument()
 
         previewPlayer.stop()
         selectedTab = .new
@@ -609,6 +605,8 @@ private struct TaskListRow: View {
     let onAction: (TaskActionPresentation) -> Void
 
     var body: some View {
+        let dismissAction = task.actions.first { $0.kind == .hideOutput }
+        let visibleActions = task.actions.filter { $0.kind != .hideOutput }
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -627,6 +625,16 @@ private struct TaskListRow: View {
                     .padding(.vertical, 4)
                     .background(.thinMaterial)
                     .clipShape(Capsule())
+                if let dismissAction {
+                    Button {
+                        onAction(dismissAction)
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Hide automatic transcript export")
+                    .accessibilityIdentifier("task-dismiss-\(task.stableId)")
+                }
             }
 
             if let error = task.errorMessage, !error.isEmpty {
@@ -650,9 +658,9 @@ private struct TaskListRow: View {
                 }
             }
 
-            if !task.actions.isEmpty {
+            if !visibleActions.isEmpty {
                 HStack {
-                    ForEach(Array(task.actions.enumerated()), id: \.offset) { _, action in
+                    ForEach(Array(visibleActions.enumerated()), id: \.offset) { _, action in
                         Button(action.label) { onAction(action) }
                             .disabled(!action.enabled)
                             .accessibilityIdentifier("task-action-\(task.stableId)-\(action.kind.name.lowercased())")

@@ -215,6 +215,7 @@ class TaskListAdapter(
     ) : RecyclerView.ViewHolder(itemView) {
         private val title: TextView = itemView.findViewById(R.id.taskTitle)
         private val badge: TextView = itemView.findViewById(R.id.taskBadge)
+        private val dismiss: ImageButton = itemView.findViewById(R.id.taskDismiss)
         private val detail: TextView = itemView.findViewById(R.id.taskDetail)
         private val progressPhase: TextView = itemView.findViewById(R.id.taskProgressPhase)
         private val progress: ProgressBar = itemView.findViewById(R.id.taskProgress)
@@ -231,7 +232,14 @@ class TaskListAdapter(
             bindOptional(detail, task.detail)
             bindProgress(task.progress)
             bindOptional(error, task.errorMessage)
-            bindActions(task, entryId)
+            val dismissAction = task.actions.firstOrNull { it.kind == TaskActionKind.HIDE_OUTPUT }
+            dismiss.isVisible = dismissAction != null
+            dismiss.setOnClickListener {
+                dismissAction?.let { action ->
+                    onAction(AndroidTaskActionRequest(task.stableId, entryId, action.kind))
+                }
+            }
+            bindActions(task, entryId, task.actions.filterNot { it.kind == TaskActionKind.HIDE_OUTPUT })
         }
 
         fun bindProgress(value: TaskProgressPresentation?) {
@@ -247,13 +255,17 @@ class TaskListAdapter(
             bindOptional(progressMeta, progressMetadata(value))
         }
 
-        private fun bindActions(task: TaskPresentation, entryId: Long?) {
+        private fun bindActions(
+            task: TaskPresentation,
+            entryId: Long?,
+            visibleActions: List<TaskActionPresentation>,
+        ) {
             val owner = task.stableId to entryId
-            if (boundActionOwner == owner && boundActions == task.actions) return
+            if (boundActionOwner == owner && boundActions == visibleActions) return
             boundActionOwner = owner
-            boundActions = task.actions
+            boundActions = visibleActions
             actions.removeAllViews()
-            task.actions.forEachIndexed { index, action ->
+            visibleActions.forEachIndexed { index, action ->
                 actions.addView(
                     MaterialButton(actions.context).apply {
                         text = action.label
@@ -270,7 +282,7 @@ class TaskListAdapter(
                     },
                 )
             }
-            actions.isVisible = task.actions.isNotEmpty()
+            actions.isVisible = visibleActions.isNotEmpty()
         }
     }
 
@@ -323,9 +335,9 @@ class TaskListAdapter(
             explanation.text = presentation.explanation
             disclosure.text = presentation.downloadDisclosure.orEmpty()
             disclosure.isVisible = presentation.downloadDisclosure != null
-            bindStep(modelStep, presentation.steps.first { it.kind == AndroidOnboardingStepKind.MODEL })
-            bindStep(outputStep, presentation.steps.first { it.kind == AndroidOnboardingStepKind.OUTPUT })
-            bindStep(folderStep, presentation.steps.first { it.kind == AndroidOnboardingStepKind.FOLDER })
+            bindStep(modelStep, presentation.steps.firstOrNull { it.kind == AndroidOnboardingStepKind.MODEL })
+            bindStep(outputStep, presentation.steps.firstOrNull { it.kind == AndroidOnboardingStepKind.OUTPUT })
+            bindStep(folderStep, presentation.steps.firstOrNull { it.kind == AndroidOnboardingStepKind.FOLDER })
             action.text = presentation.action?.label.orEmpty()
             action.isEnabled = presentation.action?.enabled == true
             action.isVisible = presentation.action != null
@@ -336,7 +348,9 @@ class TaskListAdapter(
             }
         }
 
-        private fun bindStep(view: TextView, step: AndroidOnboardingChecklistStep) {
+        private fun bindStep(view: TextView, step: AndroidOnboardingChecklistStep?) {
+            view.isVisible = step != null
+            step ?: return
             view.text = itemView.resources.getString(
                 if (step.complete) R.string.onboarding_step_complete else R.string.onboarding_step_incomplete,
                 step.label,

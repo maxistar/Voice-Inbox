@@ -25,6 +25,7 @@ data class AndroidMainScreenInput(
     val filter: TaskListFilter = TaskListFilter.NEW,
     val model: ModelSetupSnapshot = ModelSetupSnapshot(ModelSetupSnapshotState.REQUIRED),
     val output: OutputSetupSnapshot = OutputSetupSnapshot(OutputSetupSnapshotState.REQUIRED),
+    val outputTaskHidden: Boolean = false,
     val folder: FolderSetupSnapshot = FolderSetupSnapshot(FolderSetupSnapshotState.UNSELECTED),
     val entries: List<AudioCatalogEntry> = emptyList(),
     val preview: PreviewTaskSnapshot = PreviewTaskSnapshot(),
@@ -103,6 +104,7 @@ object AndroidTaskListSnapshotMapper {
                         ?: ModelSetupSnapshot(ModelSetupSnapshotState.READY),
                     output = input.output.takeIf { input.hydration.outputKnown }
                         ?: OutputSetupSnapshot(OutputSetupSnapshotState.READY),
+                    showOutputTask = !input.outputTaskHidden,
                     folder = input.folder.takeIf { input.hydration.folderKnown }
                         ?: FolderSetupSnapshot(FolderSetupSnapshotState.READY),
                     audio = audio,

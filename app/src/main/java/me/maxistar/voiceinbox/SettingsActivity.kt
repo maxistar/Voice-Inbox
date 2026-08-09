@@ -197,16 +197,24 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun showOutputDocumentOptions() {
-        val actions = arrayOf(
-            getString(R.string.settings_output_create_new),
-            getString(R.string.settings_output_choose_existing),
+        val actions = listOf(
+            R.string.settings_output_create_new,
+            R.string.settings_output_choose_existing,
+            R.string.settings_output_do_not_export,
         )
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.settings_output_action_title)
-            .setItems(actions) { _, index ->
-                when (index) {
-                    0 -> outputCreator.launch(FileSelectionRules.DEFAULT_OUTPUT_FILE_NAME)
-                    1 -> outputPicker.launch(FileSelectionRules.outputMimeTypes)
+            .setItems(actions.map(::getString).toTypedArray()) { _, index ->
+                when (actions[index]) {
+                    R.string.settings_output_create_new ->
+                        outputCreator.launch(FileSelectionRules.DEFAULT_OUTPUT_FILE_NAME)
+                    R.string.settings_output_choose_existing ->
+                        outputPicker.launch(FileSelectionRules.outputMimeTypes)
+                    R.string.settings_output_do_not_export -> {
+                        selectionStore.clearOutputUri()
+                        selectionStore.hideOutputTask()
+                        renderStorage()
+                    }
                 }
             }
             .show()

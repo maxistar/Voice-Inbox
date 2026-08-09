@@ -106,7 +106,7 @@ final class IosSingleFileTranscriptionController: ObservableObject {
         localURL: URL,
         modelDirectory: URL,
         modelStore: IosSpeechModelStore,
-        outputDocument: IosSelectedOutputDocument,
+        outputDocument: IosSelectedOutputDocument?,
         store: IosAudioImportStore,
         onSuccess: ((String) -> Void)? = nil
     ) {
@@ -199,7 +199,7 @@ final class IosSingleFileTranscriptionController: ObservableObject {
     func transcribeAll(
         modelDirectory: URL,
         modelStore: IosSpeechModelStore,
-        outputDocument: IosSelectedOutputDocument,
+        outputDocument: IosSelectedOutputDocument?,
         store: IosAudioImportStore,
         onFinished: (() -> Void)? = nil
     ) {
@@ -295,7 +295,7 @@ final class IosSingleFileTranscriptionController: ObservableObject {
         localURL: URL,
         modelDirectory: URL,
         modelStore: IosSpeechModelStore,
-        outputDocument: IosSelectedOutputDocument,
+        outputDocument: IosSelectedOutputDocument?,
         store: IosAudioImportStore,
         onSuccess: ((String) -> Void)? = nil
     ) {
@@ -315,7 +315,7 @@ final class IosSingleFileTranscriptionController: ObservableObject {
         file: IosImportedAudioFile,
         localURL: URL,
         modelDirectory: String,
-        outputDocument: IosSelectedOutputDocument,
+        outputDocument: IosSelectedOutputDocument?,
         modelPrepared: Bool = false,
         onProgress: @escaping (SingleFileTranscriptionProgress) -> Void
     ) -> SingleFileTranscriptionOutcome {
@@ -332,10 +332,10 @@ final class IosSingleFileTranscriptionController: ObservableObject {
         let formatter = IosTimestampLabelFormatter()
         let output = CallbackTranscriptOutput(
             readTailBlock: { _ in
-                IosOutputDocumentStore.readTail(outputDocument.url)
+                outputDocument.map { IosOutputDocumentStore.readTail($0.url) } ?? ""
             },
             appendBlock: { _, text in
-                IosOutputDocumentStore.append(text, to: outputDocument.url)
+                outputDocument.flatMap { IosOutputDocumentStore.append(text, to: $0.url) }
             }
         )
         let useCase = SingleFileTranscriptionUseCase(
@@ -349,7 +349,7 @@ final class IosSingleFileTranscriptionController: ObservableObject {
             input: SingleFileTranscriptionInput(
                 audioId: localURL.path,
                 audioName: file.displayName,
-                outputId: outputDocument.id,
+                outputId: outputDocument?.id,
                 fallbackRecordingTimeMillis: KotlinLong(
                     longLong: Int64(file.importedAt.timeIntervalSince1970 * 1000)
                 )
@@ -360,7 +360,7 @@ final class IosSingleFileTranscriptionController: ObservableObject {
 
     nonisolated private static func runSharedBatchTranscription(
         modelDirectory: String,
-        outputDocument: IosSelectedOutputDocument,
+        outputDocument: IosSelectedOutputDocument?,
         onProgress: @escaping (BatchTranscriptionProgress) -> Void
     ) -> BatchTranscriptionResult {
         let catalog = IosSqlDelightAudioCatalogFactory().create(
@@ -381,7 +381,7 @@ final class IosSingleFileTranscriptionController: ObservableObject {
                 sourceScope: AudioCatalogSourceScope(
                     sourceIds: [IosAudioCatalogConstants.importedFolderUri]
                 ),
-                outputId: outputDocument.id,
+                outputId: outputDocument?.id,
                 runId: UUID().uuidString,
                 retryEntryId: nil
             ),
@@ -392,16 +392,16 @@ final class IosSingleFileTranscriptionController: ObservableObject {
 
 private final class IosBatchEntryOutcomeTranscriber: OutcomeBatchEntryTranscriber {
     private let modelDirectory: String
-    private let outputDocument: IosSelectedOutputDocument
+    private let outputDocument: IosSelectedOutputDocument?
 
-    init(modelDirectory: String, outputDocument: IosSelectedOutputDocument) {
+    init(modelDirectory: String, outputDocument: IosSelectedOutputDocument?) {
         self.modelDirectory = modelDirectory
         self.outputDocument = outputDocument
     }
 
     func transcribe(
         entry: AudioCatalogEntry,
-        outputId: String,
+        outputId: String?,
         runId: String,
         onProgress: @escaping (SingleFileTranscriptionProgress) -> Void
     ) -> SingleFileTranscriptionOutcome {

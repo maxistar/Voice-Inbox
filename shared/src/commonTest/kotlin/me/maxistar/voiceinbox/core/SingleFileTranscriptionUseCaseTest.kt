@@ -99,6 +99,26 @@ class SingleFileTranscriptionUseCaseTest {
         assertTrue(staging.cleaned)
     }
 
+    @Test
+    fun transcribesWithoutOutputWithoutAccessingTheOutputPort() {
+        val output = FakeTranscriptOutput()
+        val progress = mutableListOf<SingleFileTranscriptionProgress>()
+
+        val result = useCase(output = output).transcribe(input(outputId = null)) {
+            progress += it
+        }
+
+        assertEquals("hello", result.transcriptText)
+        assertEquals(0, output.reads)
+        assertEquals(emptyList(), output.appended)
+        assertEquals(
+            listOf(
+                SingleFileTranscriptionUseCase.PHASE_DECODING_AUDIO,
+            ),
+            progress.map { it.phase },
+        )
+    }
+
     private fun useCase(
         decoder: FakeAudioDecoder = FakeAudioDecoder(chunks = listOf(floatArrayOf(1f))),
         transcriber: FakeNativeTranscriber = FakeNativeTranscriber("hello"),
@@ -112,10 +132,13 @@ class SingleFileTranscriptionUseCaseTest {
         transcriptOutput = output,
     )
 
-    private fun input(fallbackRecordingTimeMillis: Long? = null) = SingleFileTranscriptionInput(
+    private fun input(
+        fallbackRecordingTimeMillis: Long? = null,
+        outputId: String? = "content://output",
+    ) = SingleFileTranscriptionInput(
         audioId = "content://audio/1",
         audioName = "voice.m4a",
-        outputId = "content://output",
+        outputId = outputId,
         fallbackRecordingTimeMillis = fallbackRecordingTimeMillis,
     )
 
@@ -171,8 +194,12 @@ class SingleFileTranscriptionUseCaseTest {
         private val existingTail: String = "",
     ) : PlatformTranscriptOutput {
         val appended = mutableListOf<String>()
+        var reads = 0
 
-        override fun readTail(outputId: String): String = existingTail
+        override fun readTail(outputId: String): String {
+            reads += 1
+            return existingTail
+        }
 
         override fun append(outputId: String, text: String) {
             appended += text

@@ -376,10 +376,52 @@ final class DeferredSpeechModelLoadingTests: XCTestCase {
         XCTAssertEqual(IosTaskActionRouter.route(.downloadModel), .modelDownload)
         XCTAssertEqual(IosTaskActionRouter.route(.createOutput), .outputCreation)
         XCTAssertEqual(IosTaskActionRouter.route(.selectOutput), .outputSelection)
+        XCTAssertEqual(IosTaskActionRouter.route(.hideOutput), .hideOutput)
         XCTAssertEqual(IosTaskActionRouter.route(.selectFolder), .folderSelection)
         XCTAssertEqual(IosTaskActionRouter.route(.transcribe), .transcribe)
         XCTAssertEqual(IosTaskActionRouter.route(.retryTranscription), .retry)
         XCTAssertEqual(IosTaskActionRouter.route(.showText), .showText)
+    }
+
+    @MainActor
+    func testReadyIosShellEnablesTranscriptionWithoutOutputBookmark() {
+        let file = IosImportedAudioFile(
+            id: 10,
+            displayName: "voice.m4a",
+            localFileName: "voice.m4a",
+            sizeBytes: 10,
+            importedAt: Date(),
+            status: .pending
+        )
+        let screen = IosMainScreenShellState().screen(
+            selection: .new,
+            importedFiles: [file],
+            modelStatus: IosSpeechModelStatus(
+                directory: FileManager.default.temporaryDirectory,
+                installationState: .installedVerified,
+                missingFiles: []
+            ),
+            modelMessage: nil,
+            modelInstalling: false,
+            modelInstallationPhase: nil,
+            modelDownloadAvailable: false,
+            modelDownloadProgress: nil,
+            modelCanCancel: false,
+            outputStatus: IosOutputDocumentStatus(displayName: nil, message: "Optional", ready: false),
+            folderStatus: IosInboxFolderStatus(displayName: nil, message: nil, needsSelection: true),
+            folderScanning: false,
+            activePreviewEntryId: nil,
+            previewState: .idle,
+            transcription: .idle,
+            preparationOwnerEntryId: nil,
+            prerequisiteError: nil,
+            actionsEnabled: true
+        )
+
+        guard let task = screen.state.tasks.compactMap({ $0 as? AudioTaskPresentation }).first else {
+            return XCTFail("Expected an audio task")
+        }
+        XCTAssertTrue(task.actions.contains { $0.kind == .transcribe && $0.enabled })
     }
 
     func testOutputDocumentCreatorCoordinatorPreservesCancellationAndRoutesCreatedDocument() {

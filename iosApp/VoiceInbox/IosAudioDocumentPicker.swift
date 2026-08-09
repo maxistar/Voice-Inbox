@@ -180,6 +180,10 @@ final class IosOutputDocumentStore: ObservableObject {
         status.ready && selectedDocument != nil
     }
 
+    var isGuidanceHidden: Bool {
+        userDefaults.bool(forKey: Self.outputGuidanceHiddenKey)
+    }
+
     func currentDocument() -> IosSelectedOutputDocument? {
         guard isReady else { return nil }
         return selectedDocument
@@ -211,6 +215,7 @@ final class IosOutputDocumentStore: ObservableObject {
             )
             userDefaults.set(bookmark, forKey: Self.outputBookmarkKey)
             userDefaults.set(url.lastPathComponent, forKey: Self.outputDisplayNameKey)
+            userDefaults.removeObject(forKey: Self.outputGuidanceHiddenKey)
             selectedDocument = IosSelectedOutputDocument(
                 id: url.absoluteString,
                 url: url,
@@ -233,6 +238,23 @@ final class IosOutputDocumentStore: ObservableObject {
 
     func refreshAccess() {
         restoreOutputDocument()
+    }
+
+    func disableExport() {
+        userDefaults.removeObject(forKey: Self.outputBookmarkKey)
+        userDefaults.removeObject(forKey: Self.outputDisplayNameKey)
+        userDefaults.set(true, forKey: Self.outputGuidanceHiddenKey)
+        selectedDocument = nil
+        status = IosOutputDocumentStatus(
+            displayName: nil,
+            message: "Automatic export is off. Transcripts stay in Voice Inbox.",
+            ready: false
+        )
+    }
+
+    func hideGuidance() {
+        userDefaults.set(true, forKey: Self.outputGuidanceHiddenKey)
+        objectWillChange.send()
     }
 
     private func restoreOutputDocument() {
@@ -343,4 +365,5 @@ final class IosOutputDocumentStore: ObservableObject {
 
     private static let outputBookmarkKey = "iosOutputDocumentBookmark"
     private static let outputDisplayNameKey = "iosOutputDocumentDisplayName"
+    private static let outputGuidanceHiddenKey = "iosOutputDocumentGuidanceHidden"
 }

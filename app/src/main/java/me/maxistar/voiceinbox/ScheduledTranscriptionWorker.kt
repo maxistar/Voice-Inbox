@@ -44,12 +44,12 @@ class ScheduledTranscriptionWorker(
             ),
         )
         val folder = selectionStore.loadFolderUri()?.let(Uri::parse) ?: return
-        val output = selectionStore.loadOutputUri()?.let(Uri::parse) ?: return
+        val output = selectionStore.loadOutputUri()?.let(Uri::parse)
 
         val documentAccess = DocumentAccess(applicationContext.contentResolver)
         val folderScanner = AudioFolderScanner(applicationContext.contentResolver)
-        documentAccess.requireAppendable(output)
         folderScanner.requireReadable(folder)
+        val writableOutput = output?.takeIf { runCatching { documentAccess.requireAppendable(it) }.isSuccess }
 
         if (SpeechModelRepository.forActive(
             applicationContext.noBackupFilesDir.resolve("models"),
@@ -64,7 +64,7 @@ class ScheduledTranscriptionWorker(
             ),
         )
         if (ScheduledTranscriptionRules.shouldStartTranscription(pending, transcriptionActive())) {
-            TranscriptionWorker.enqueueAll(applicationContext, folder, output)
+            TranscriptionWorker.enqueueAll(applicationContext, folder, writableOutput)
         }
     }
 

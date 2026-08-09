@@ -61,6 +61,7 @@ struct SettingsView: View {
     @ObservedObject var speechModelStore: IosSpeechModelStore
     let selectInboxFolder: () -> Void
     let selectOutputFile: () -> Void
+    let disableExport: () -> Void
     let installModelPackage: () -> Void
 
     private let websiteURL = URL(string: "https://voiceinbox.simpleditor.org/")!
@@ -110,6 +111,10 @@ struct SettingsView: View {
                         outputStore.isReady ? "Change Output File" : "Select Output File",
                         systemImage: "doc.badge.plus"
                     )
+                }
+
+                Button("Do not export", role: .destructive) {
+                    disableExport()
                 }
             }
 

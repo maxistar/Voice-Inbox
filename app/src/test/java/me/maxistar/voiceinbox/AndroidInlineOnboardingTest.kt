@@ -60,30 +60,48 @@ class AndroidInlineOnboardingTest {
     }
 
     @Test
-    fun directSetupCompletionAdvancesThroughOutputAndOptionalFolder() {
-        val output = present(model = readyModel())
-        assertEquals(TaskActionKind.CREATE_OUTPUT, output.action?.kind)
-        assertEquals("Create Output File", output.action?.label)
-        assertTrue(output.steps.single { it.kind == AndroidOnboardingStepKind.OUTPUT }.label.contains("Create or choose"))
-        assertTrue(output.steps.first().complete)
+    fun readyModelKeepsOptionalChecklistVisibleUntilUserCompletesOrDismissesIt() {
+        val presentation = present(model = readyModel())
 
-        val folder = present(model = readyModel(), output = readyOutput())
-        assertEquals(TaskActionKind.SELECT_FOLDER, folder.action?.kind)
-        assertTrue(folder.steps.last().optional)
-        assertTrue(folder.steps.last().label.contains("Optional"))
+        assertTrue(presentation.visible)
+        assertEquals(TaskActionKind.SELECT_OUTPUT, presentation.action?.kind)
+        assertFalse(present(lifecycle = AndroidOnboardingHintLifecycle.DISMISSED, model = readyModel()).visible)
+    }
+
+    @Test
+    fun incompleteModelSetupShowsOptionalExportAndFolderGuidance() {
+        val presentation = present()
+
+        assertTrue(presentation.steps.single { it.kind == AndroidOnboardingStepKind.OUTPUT }.optional)
+        assertTrue(presentation.steps.single { it.kind == AndroidOnboardingStepKind.FOLDER }.optional)
     }
 
     @Test
     fun fullyConfiguredSetupRetiresAndCompletesOnlyAfterHydration() {
-        val readyFolder = FolderSetupSnapshot(FolderSetupSnapshotState.READY)
-        assertFalse(present(model = readyModel(), output = readyOutput(), folder = readyFolder).visible)
+        assertTrue(present(model = readyModel()).visible)
+        assertFalse(
+            present(
+                model = readyModel(),
+                output = readyOutput(),
+                folder = FolderSetupSnapshot(FolderSetupSnapshotState.READY),
+            ).visible,
+        )
         assertTrue(
             AndroidOnboardingHintPresenter.shouldComplete(
                 AndroidOnboardingHintLifecycle.ACTIVE,
                 hydrated(),
                 readyModel(),
                 readyOutput(),
-                readyFolder,
+                FolderSetupSnapshot(FolderSetupSnapshotState.READY),
+            ),
+        )
+        assertFalse(
+            AndroidOnboardingHintPresenter.shouldComplete(
+                AndroidOnboardingHintLifecycle.ACTIVE,
+                hydrated(),
+                readyModel(),
+                OutputSetupSnapshot(OutputSetupSnapshotState.REQUIRED),
+                FolderSetupSnapshot(FolderSetupSnapshotState.UNSELECTED),
             ),
         )
         assertFalse(
@@ -91,8 +109,8 @@ class AndroidInlineOnboardingTest {
                 AndroidOnboardingHintLifecycle.ACTIVE,
                 AndroidMainScreenHydration(),
                 readyModel(),
-                readyOutput(),
-                readyFolder,
+                OutputSetupSnapshot(OutputSetupSnapshotState.REQUIRED),
+                FolderSetupSnapshot(FolderSetupSnapshotState.UNSELECTED),
             ),
         )
     }

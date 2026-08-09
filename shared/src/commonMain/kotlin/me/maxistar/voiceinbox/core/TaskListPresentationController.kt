@@ -39,6 +39,7 @@ enum class TaskActionKind {
     RETRY_MODEL_DOWNLOAD,
     CREATE_OUTPUT,
     SELECT_OUTPUT,
+    HIDE_OUTPUT,
     SELECT_FOLDER,
     REFRESH_FOLDER,
     TRANSCRIBE,
@@ -191,6 +192,7 @@ data class TaskListInput(
     val model: ModelSetupSnapshot,
     val output: OutputSetupSnapshot,
     val folder: FolderSetupSnapshot,
+    val showOutputTask: Boolean = true,
     val audio: List<AudioTaskSnapshot>,
     val preview: PreviewTaskSnapshot = PreviewTaskSnapshot(),
     val transcription: TranscriptionTaskSnapshot = TranscriptionTaskSnapshot(),
@@ -254,7 +256,9 @@ object TaskListPresentationController {
 
     private fun setupTasks(input: TaskListInput): List<SetupTaskPresentation> = buildList {
         modelTask(input.model)?.let(::add)
-        outputTask(input.output)?.let(::add)
+        if (input.showOutputTask) {
+            outputTask(input.output)?.let(::add)
+        }
         folderTask(input.folder)?.let(::add)
     }
 
@@ -334,15 +338,16 @@ object TaskListPresentationController {
             stableId = "setup:output",
             kind = SetupTaskKind.OUTPUT,
             state = if (error) SetupTaskState.ERROR else SetupTaskState.REQUIRED,
-            title = "Output Document",
-            detail = snapshot.detail,
-            badge = if (error) "Needs attention" else "Required",
+            title = "Automatic Transcript Export",
+            detail = snapshot.detail ?: "Optional. Transcripts are stored in Voice Inbox.",
+            badge = if (error) "Needs attention" else "Optional",
             progress = null,
             errorMessage = snapshot.detail.takeIf { error },
-            actions = listOf(
-                TaskActionPresentation(TaskActionKind.CREATE_OUTPUT, "Create New"),
-                TaskActionPresentation(TaskActionKind.SELECT_OUTPUT, "Choose Existing"),
-            ),
+            actions = buildList {
+                add(TaskActionPresentation(TaskActionKind.CREATE_OUTPUT, "Create New"))
+                add(TaskActionPresentation(TaskActionKind.SELECT_OUTPUT, "Choose Existing"))
+                if (!error) add(TaskActionPresentation(TaskActionKind.HIDE_OUTPUT, "Hide"))
+            },
         )
     }
 

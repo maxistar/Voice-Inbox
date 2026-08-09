@@ -27,7 +27,7 @@ class SingleFileTranscriber(
 ) {
     fun transcribe(
         entry: AudioCatalogEntry,
-        outputUri: Uri,
+        outputUri: Uri?,
         workId: String,
         onProgress: (FileTranscriptionProgress) -> Unit,
     ): FileTranscriptionResult {
@@ -43,7 +43,7 @@ class SingleFileTranscriber(
             input = SingleFileTranscriptionInput(
                 audioId = entry.documentUri,
                 audioName = entry.displayName,
-                outputId = outputUri.toString(),
+                outputId = outputUri?.toString(),
                 fallbackRecordingTimeMillis = entry.fingerprint.modifiedMillis,
             ),
             onProgress = { progress ->
