@@ -26,3 +26,4 @@ local.properties
 xcuserdata/
 *.xcuserstate
 *.xcscmblueprint
+__pycache__
