@@ -2,9 +2,10 @@
     <string name="app_name">Voice Inbox</string>
     <string name="voice_keyboard_name">Voice Inbox keyboard</string>
     <string name="voice_keyboard_subtype">Offline dictation</string>
-    <string name="voice_keyboard_ready">Tap Record to dictate</string>
+    <string name="voice_keyboard_ready">Tap to record, or hold while speaking</string>
     <string name="voice_keyboard_preparing">Preparing speech model…</string>
-    <string name="voice_keyboard_listening">Listening… Tap Stop when finished.</string>
+    <string name="voice_keyboard_listening_held">Listening… Release to transcribe.</string>
+    <string name="voice_keyboard_listening_latched">Listening… Tap Stop when finished.</string>
     <string name="voice_keyboard_transcribing">Transcribing locally…</string>
     <string name="voice_keyboard_result_pending">Text is ready. Focus an editor to insert it, or dismiss it.</string>
     <string name="voice_keyboard_no_speech">No speech detected. Try again.</string>

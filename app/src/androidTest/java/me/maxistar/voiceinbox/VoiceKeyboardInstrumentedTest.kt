@@ -3,6 +3,7 @@ package me.maxistar.voiceinbox
 import android.content.ComponentName
 import android.content.pm.PackageManager
 import android.view.LayoutInflater
+import android.view.ViewConfiguration
 import android.widget.EditText
 import android.widget.ImageButton
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -24,10 +25,11 @@ class VoiceKeyboardInstrumentedTest {
 
         assertEquals("android.permission.BIND_INPUT_METHOD", service.permission)
         assertTrue(service.metaData?.containsKey("android.view.im") == true)
-        assertEquals(
-            PackageManager.PERMISSION_GRANTED,
-            context.packageManager.checkPermission(android.Manifest.permission.RECORD_AUDIO, context.packageName),
+        val packageInfo = context.packageManager.getPackageInfo(
+            context.packageName,
+            PackageManager.GET_PERMISSIONS,
         )
+        assertTrue(packageInfo.requestedPermissions?.contains(android.Manifest.permission.RECORD_AUDIO) == true)
     }
 
     @Test
@@ -68,6 +70,14 @@ class VoiceKeyboardInstrumentedTest {
             val view = LayoutInflater.from(context).inflate(R.layout.input_view_voice_keyboard, null)
 
             assertEquals(
+                context.getString(R.string.voice_keyboard_record),
+                view.findViewById<ImageButton>(R.id.voiceKeyboardRecord).contentDescription,
+            )
+            val recordButton = view.findViewById<ImageButton>(R.id.voiceKeyboardRecord)
+            val minimumTouchTarget = (48 * context.resources.displayMetrics.density).toInt()
+            assertTrue(recordButton.layoutParams.width >= minimumTouchTarget)
+            assertTrue(recordButton.layoutParams.height >= minimumTouchTarget)
+            assertEquals(
                 context.getString(R.string.voice_keyboard_return_to_previous),
                 view.findViewById<ImageButton>(R.id.voiceKeyboardNextKeyboard).contentDescription,
             )
@@ -84,5 +94,36 @@ class VoiceKeyboardInstrumentedTest {
                 view.findViewById<ImageButton>(R.id.voiceKeyboardBackspace).contentDescription,
             )
         }
+    }
+
+    @Test
+    fun androidLongPressThresholdClassifiesLatchedAndHeldRecording() {
+        val threshold = ViewConfiguration.getLongPressTimeout().toLong()
+        val coordinator = HybridRecordGestureCoordinator(HybridRecordGesturePolicy(threshold))
+
+        assertTrue(coordinator.begin(pointerId = 0, generation = 1, eventTimeMillis = 1_000))
+        assertEquals(
+            HybridRecordRelease.LATCH,
+            coordinator.release(0, 1, 1_000 + threshold - 1)?.release,
+        )
+        coordinator.finish(1)
+
+        assertTrue(coordinator.begin(pointerId = 0, generation = 2, eventTimeMillis = 2_000))
+        assertEquals(
+            HybridRecordRelease.STOP_AND_TRANSCRIBE,
+            coordinator.release(0, 2, 2_000 + threshold)?.release,
+        )
+    }
+
+    @Test
+    fun cancelledHeldGestureCannotStartAfterModelPreparation() {
+        val coordinator = HybridRecordGestureCoordinator(
+            HybridRecordGesturePolicy(ViewConfiguration.getLongPressTimeout().toLong()),
+        )
+        assertTrue(coordinator.begin(pointerId = 4, generation = 9, eventTimeMillis = 1_000))
+
+        assertTrue(coordinator.cancel(pointerId = 4, generation = 9))
+
+        assertEquals(HybridRecordPreparationAction.CANCEL, coordinator.preparationAction(9))
     }
 }
