@@ -25,6 +25,8 @@
     <string name="voice_keyboard_return_to_previous">Return to previous keyboard</string>
     <string name="voice_keyboard_permission_granted">Microphone permission granted. Return to the Voice Inbox keyboard.</string>
     <string name="voice_keyboard_permission_denied">Microphone permission was not granted.</string>
+    <string name="voice_keyboard_discovery_dismiss">Dismiss voice keyboard suggestion</string>
+    <string name="voice_keyboard_system_action_error">Android keyboard settings are unavailable on this device. See the keyboard guide for manual steps.</string>
     <string name="menu_select_output">Select output file</string>
     <string name="menu_change_output">Change output file</string>
     <string name="menu_select_folder">Select audio folder</string>
@@ -47,6 +49,15 @@
     <string name="settings_about_website">Website</string>
     <string name="settings_about_legal">Legal information</string>
     <string name="settings_about_link_error">No app can open this link.</string>
+    <string name="settings_voice_keyboard_title">Voice keyboard</string>
+    <string name="settings_voice_keyboard_explanation">Compact Android dictation for any editable field. Recognition runs locally after model setup; this is not a full typing keyboard.</string>
+    <string name="settings_voice_keyboard_disabled">Not enabled</string>
+    <string name="settings_voice_keyboard_enabled">Enabled · Choose it from Android’s keyboard picker</string>
+    <string name="settings_voice_keyboard_selected">Ready · Currently selected</string>
+    <string name="settings_voice_keyboard_enable">Enable</string>
+    <string name="settings_voice_keyboard_choose">Choose keyboard</string>
+    <string name="settings_voice_keyboard_change">Change keyboard</string>
+    <string name="settings_voice_keyboard_documentation">Keyboard guide</string>
     <string name="settings_scheduled_transcription_title">Nightly transcription</string>
     <string name="settings_scheduled_transcription_subtitle">Automatically scan and transcribe new notes around the selected time.</string>
     <string name="settings_scheduled_transcription_time">Scheduled time: %1$02d:%2$02d</string>

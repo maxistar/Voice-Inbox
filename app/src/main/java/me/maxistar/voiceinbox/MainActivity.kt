@@ -61,6 +61,9 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private lateinit var startupPolicyStore: StartupProcessingPolicyStore
     private lateinit var startupCoordinator: StartupProcessingCoordinator
     private lateinit var onboardingHintStore: AndroidOnboardingHintStore
+    private lateinit var keyboardDiscoveryStore: AndroidVoiceKeyboardDiscoveryStore
+    private lateinit var keyboardStatusProvider: AndroidVoiceKeyboardStatusProvider
+    private lateinit var keyboardSystemGateway: AndroidVoiceKeyboardSystemGateway
     private val folderExecutor = Executors.newSingleThreadExecutor()
     private val importExecutor = Executors.newSingleThreadExecutor()
 
@@ -129,6 +132,9 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private val stopRefreshIndicator = Runnable(::stopRefreshIndicatorAnimation)
     private val queuedImportUris = mutableListOf<Uri>()
     private var onboardingHintLifecycle = AndroidOnboardingHintLifecycle.DISMISSED
+    private var keyboardDiscoveryLifecycle = AndroidVoiceKeyboardDiscoveryLifecycle.SUPPRESSED
+    private var keyboardStatus = AndroidVoiceKeyboardStatus.DISABLED
+    private var keyboardStatusKnown = false
     private var pendingModelPackageUri: Uri? = null
     private var pendingModelPackageCatalogId: String? = null
 
@@ -201,6 +207,13 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
             getSharedPreferences(AndroidOnboardingHintStore.PREFERENCES_NAME, MODE_PRIVATE),
         )
         onboardingHintLifecycle = onboardingHintStore.load()
+        keyboardDiscoveryStore = AndroidVoiceKeyboardDiscoveryStore(
+            getSharedPreferences(AndroidVoiceKeyboardDiscoveryStore.PREFERENCES_NAME, MODE_PRIVATE),
+        )
+        keyboardDiscoveryLifecycle = keyboardDiscoveryStore.loadOrInitialize(onboardingHintLifecycle)
+        keyboardStatusProvider = AndroidVoiceKeyboardStatusProvider(this)
+        keyboardSystemGateway = AndroidVoiceKeyboardSystemGateway(this)
+        refreshKeyboardStatus(publish = false)
         startupCoordinator = StartupProcessingCoordinator.restore(
             savedInstanceState?.getString(STATE_STARTUP_PROCESSING_STAGE),
         )
@@ -260,6 +273,11 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         } else {
             hasStarted = true
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::keyboardStatusProvider.isInitialized) refreshKeyboardStatus(publish = true)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -337,7 +355,11 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         allTab = findViewById(R.id.allTab)
         taskFilters = findViewById(R.id.taskFilters)
         taskList = findViewById(R.id.taskList)
-        taskAdapter = TaskListAdapter(::handleTaskAction, ::dismissOnboardingHint)
+        taskAdapter = TaskListAdapter(
+            ::handleTaskAction,
+            ::dismissOnboardingHint,
+            ::dismissKeyboardDiscovery,
+        )
         taskList.layoutManager = LinearLayoutManager(this)
         taskList.adapter = taskAdapter
         (taskList.itemAnimator as? SimpleItemAnimator)?.supportsChangeAnimations = false
@@ -1411,10 +1433,22 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                 modelSnapshot,
                 outputSnapshot,
                 folderSnapshot,
+                keyboardStatus,
+                keyboardStatusKnown,
             )
         ) {
             onboardingHintLifecycle = AndroidOnboardingHintLifecycle.COMPLETED
             onboardingHintStore.save(onboardingHintLifecycle)
+        }
+        if (
+            AndroidVoiceKeyboardDiscoveryPresenter.shouldComplete(
+                keyboardDiscoveryLifecycle,
+                keyboardStatus,
+                keyboardStatusKnown,
+            )
+        ) {
+            keyboardDiscoveryLifecycle = AndroidVoiceKeyboardDiscoveryLifecycle.COMPLETED
+            keyboardDiscoveryStore.save(keyboardDiscoveryLifecycle)
         }
         taskStateHost.update { current ->
             current.copy(
@@ -1443,6 +1477,9 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                     },
                 ),
                 onboardingLifecycle = onboardingHintLifecycle,
+                keyboardStatus = keyboardStatus,
+                keyboardKnown = keyboardStatusKnown,
+                keyboardDiscoveryLifecycle = keyboardDiscoveryLifecycle,
             )
         }
     }
@@ -1459,7 +1496,13 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         renderingFilter = false
         importAudio.isEnabled = state.importEnabled
         updateTaskListAnimation(state.transcriptionActive)
-        taskAdapter.submitList(TaskListDisplayItems.from(state.taskList, state.onboardingHint))
+        taskAdapter.submitList(
+            TaskListDisplayItems.from(
+                state.taskList,
+                state.onboardingHint,
+                state.keyboardDiscovery,
+            ),
+        )
         invalidateOptionsMenu()
     }
 
@@ -1498,6 +1541,38 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         publishTaskState()
     }
 
+    private fun dismissKeyboardDiscovery() {
+        if (keyboardDiscoveryLifecycle != AndroidVoiceKeyboardDiscoveryLifecycle.ELIGIBLE) return
+        keyboardDiscoveryLifecycle = AndroidVoiceKeyboardDiscoveryLifecycle.DISMISSED
+        keyboardDiscoveryStore.save(keyboardDiscoveryLifecycle)
+        publishTaskState()
+    }
+
+    private fun refreshKeyboardStatus(publish: Boolean) {
+        keyboardStatus = keyboardStatusProvider.current()
+        keyboardStatusKnown = true
+        if (publish) publishTaskState()
+    }
+
+    private fun performKeyboardSystemAction() {
+        val action = AndroidVoiceKeyboardActionPresenter.systemAction(keyboardStatusProvider.current())
+        if (!keyboardSystemGateway.perform(action)) {
+            Toast.makeText(this, R.string.voice_keyboard_system_action_error, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun openVoiceKeyboardDocumentation() {
+        runCatching {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(VoiceInboxPublicLinks.VOICE_KEYBOARD_DOCUMENTATION)))
+        }.onFailure { error ->
+            if (error is android.content.ActivityNotFoundException) {
+                Toast.makeText(this, R.string.settings_about_link_error, Toast.LENGTH_LONG).show()
+            } else {
+                throw error
+            }
+        }
+    }
+
     private fun performTaskAction(kind: TaskActionKind, entry: AudioCatalogEntry?) {
         when (kind) {
             TaskActionKind.DOWNLOAD_MODEL,
@@ -1523,6 +1598,10 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
             TaskActionKind.PLAY -> entry?.let(::startPreviewPlayback)
             TaskActionKind.STOP -> stopPreviewPlayback(render = true)
             TaskActionKind.SHOW_TEXT -> entry?.let(::showTranscriptText)
+            TaskActionKind.ENABLE_VOICE_KEYBOARD,
+            TaskActionKind.CHOOSE_VOICE_KEYBOARD,
+            -> performKeyboardSystemAction()
+            TaskActionKind.OPEN_VOICE_KEYBOARD_DOCUMENTATION -> openVoiceKeyboardDocumentation()
         }
     }
 

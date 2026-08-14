@@ -183,6 +183,69 @@ class AndroidTaskActionRouterTest {
         assertEquals(0, callCount)
     }
 
+    @Test
+    fun discoveryRoutesOnlyCurrentSetupAndDocumentationActions() {
+        var state = AndroidTaskListSnapshotMapper.state(
+            AndroidMainScreenInput(
+                model = ModelSetupSnapshot(ModelSetupSnapshotState.READY),
+                output = OutputSetupSnapshot(OutputSetupSnapshotState.READY),
+                folder = FolderSetupSnapshot(FolderSetupSnapshotState.READY),
+                hydration = AndroidMainScreenHydration(true, true, true, true),
+                keyboardKnown = true,
+                keyboardStatus = AndroidVoiceKeyboardStatus.DISABLED,
+                keyboardDiscoveryLifecycle = AndroidVoiceKeyboardDiscoveryLifecycle.ELIGIBLE,
+            ),
+        )
+        val calls = mutableListOf<TaskActionKind>()
+        val router = AndroidTaskActionRouter({ state }) { kind, _ -> calls += kind }
+
+        assertTrue(
+            router.route(
+                request(
+                    TaskListDisplayItem.KeyboardDiscovery.STABLE_KEY,
+                    null,
+                    TaskActionKind.ENABLE_VOICE_KEYBOARD,
+                ),
+            ),
+        )
+        assertTrue(
+            router.route(
+                request(
+                    TaskListDisplayItem.KeyboardDiscovery.STABLE_KEY,
+                    null,
+                    TaskActionKind.OPEN_VOICE_KEYBOARD_DOCUMENTATION,
+                ),
+            ),
+        )
+        assertFalse(
+            router.route(
+                request(
+                    TaskListDisplayItem.KeyboardDiscovery.STABLE_KEY,
+                    null,
+                    TaskActionKind.SELECT_FOLDER,
+                ),
+            ),
+        )
+
+        state = state.copy(keyboardDiscovery = AndroidVoiceKeyboardDiscoveryPresentation.HIDDEN)
+        assertFalse(
+            router.route(
+                request(
+                    TaskListDisplayItem.KeyboardDiscovery.STABLE_KEY,
+                    null,
+                    TaskActionKind.ENABLE_VOICE_KEYBOARD,
+                ),
+            ),
+        )
+        assertEquals(
+            listOf(
+                TaskActionKind.ENABLE_VOICE_KEYBOARD,
+                TaskActionKind.OPEN_VOICE_KEYBOARD_DOCUMENTATION,
+            ),
+            calls,
+        )
+    }
+
     private fun state(
         modelReady: Boolean = true,
         filter: TaskListFilter = TaskListFilter.NEW,
@@ -222,6 +285,7 @@ class AndroidTaskActionRouterTest {
         folder = folder,
         hydration = AndroidMainScreenHydration(true, true, true, true),
         onboardingLifecycle = lifecycle,
+        keyboardKnown = true,
     )
 
     private fun request(stableId: String, entryId: Long?, kind: TaskActionKind) =

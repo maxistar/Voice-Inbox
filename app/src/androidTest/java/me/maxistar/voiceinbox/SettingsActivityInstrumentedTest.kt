@@ -66,6 +66,21 @@ class SettingsActivityInstrumentedTest {
         assertEquals(30, scheduledStore.load().minute)
     }
 
+    @Test
+    fun voiceKeyboardSectionIsPermanentAndActionable() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        clearSettings(context)
+
+        ActivityScenario.launch(SettingsActivity::class.java).use {
+            onView(withText(R.string.settings_voice_keyboard_title))
+                .perform(scrollTo())
+                .check(matches(isDisplayed()))
+            onView(withId(R.id.settingsVoiceKeyboardStatus)).check(matches(isDisplayed()))
+            onView(withId(R.id.settingsVoiceKeyboardAction)).check(matches(isDisplayed()))
+            onView(withId(R.id.settingsVoiceKeyboardDocumentation)).check(matches(isDisplayed()))
+        }
+    }
+
     private fun clearSettings(context: Context) {
         context.getSharedPreferences(StartupProcessingPolicyStore.PREFERENCES_NAME, Context.MODE_PRIVATE)
             .edit()

@@ -49,6 +49,9 @@ enum class TaskActionKind {
     STOP,
     SHOW_TEXT,
     IMPORT_AUDIO,
+    ENABLE_VOICE_KEYBOARD,
+    CHOOSE_VOICE_KEYBOARD,
+    OPEN_VOICE_KEYBOARD_DOCUMENTATION,
 }
 
 data class TaskActionPresentation(

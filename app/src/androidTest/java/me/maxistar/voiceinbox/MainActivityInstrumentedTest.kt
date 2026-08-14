@@ -466,7 +466,7 @@ class MainActivityInstrumentedTest {
             }
             awaitActivity(scenario) { activity ->
                 displayItems(activity).filterIsInstance<TaskListDisplayItem.OnboardingHint>()
-                    .singleOrNull()?.presentation?.action?.kind == TaskActionKind.CREATE_OUTPUT
+                    .singleOrNull()?.presentation?.action?.kind == TaskActionKind.SELECT_OUTPUT
             }
             scenario.onActivity { activity ->
                 stateHost(activity).replace(
@@ -520,6 +520,8 @@ class MainActivityInstrumentedTest {
                 setField(activity, "modelPresentationKnown", true)
                 setField(activity, "outputPresentationKnown", true)
                 setField(activity, "folderPresentationKnown", true)
+                setField(activity, "keyboardStatus", AndroidVoiceKeyboardStatus.ENABLED)
+                setField(activity, "keyboardStatusKnown", true)
                 invoke(activity, "publishTaskState")
             }
             awaitActivity(scenario) { activity ->
@@ -544,6 +546,57 @@ class MainActivityInstrumentedTest {
         }
     }
 
+    @Test
+    fun legacyDiscoveryCardCanBeDismissedAndDoesNotDuplicateOnboarding() {
+        clearOnboardingActivityState()
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                setField(
+                    activity,
+                    "keyboardDiscoveryLifecycle",
+                    AndroidVoiceKeyboardDiscoveryLifecycle.ELIGIBLE,
+                )
+                stateHost(activity).replace(
+                    AndroidMainScreenInput(
+                        model = me.maxistar.voiceinbox.core.ModelSetupSnapshot(ModelSetupSnapshotState.READY),
+                        output = me.maxistar.voiceinbox.core.OutputSetupSnapshot(
+                            me.maxistar.voiceinbox.core.OutputSetupSnapshotState.READY,
+                        ),
+                        folder = me.maxistar.voiceinbox.core.FolderSetupSnapshot(
+                            me.maxistar.voiceinbox.core.FolderSetupSnapshotState.READY,
+                        ),
+                        hydration = AndroidMainScreenHydration(true, true, true, true),
+                        onboardingLifecycle = AndroidOnboardingHintLifecycle.COMPLETED,
+                        keyboardStatus = AndroidVoiceKeyboardStatus.DISABLED,
+                        keyboardKnown = true,
+                        keyboardDiscoveryLifecycle = AndroidVoiceKeyboardDiscoveryLifecycle.ELIGIBLE,
+                    ),
+                )
+            }
+            awaitActivity(scenario) { activity ->
+                val items = displayItems(activity)
+                items.count { it is TaskListDisplayItem.KeyboardDiscovery } == 1 &&
+                    items.none { it is TaskListDisplayItem.OnboardingHint }
+            }
+            scenario.onActivity { activity ->
+                activity.findViewById<android.view.View>(R.id.keyboardDiscoveryClose).performClick()
+            }
+            awaitActivity(scenario) { activity ->
+                displayItems(activity).none { it is TaskListDisplayItem.KeyboardDiscovery }
+            }
+            val context = InstrumentationRegistry.getInstrumentation().targetContext
+            assertEquals(
+                AndroidVoiceKeyboardDiscoveryLifecycle.DISMISSED,
+                AndroidVoiceKeyboardDiscoveryStore(
+                    context.getSharedPreferences(
+                        AndroidVoiceKeyboardDiscoveryStore.PREFERENCES_NAME,
+                        Context.MODE_PRIVATE,
+                    ),
+                ).loadOrInitialize(AndroidOnboardingHintLifecycle.COMPLETED),
+            )
+        }
+    }
+
     private fun clearActivityState() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         WorkManager.getInstance(context).cancelUniqueWork(TranscriptionWorker.UNIQUE_WORK_NAME).result.get(30, TimeUnit.SECONDS)
@@ -553,6 +606,7 @@ class MainActivityInstrumentedTest {
         context.getSharedPreferences(DocumentSelectionStore.PREFERENCES_NAME, Context.MODE_PRIVATE).edit().clear().commit()
         context.getSharedPreferences(StartupProcessingPolicyStore.PREFERENCES_NAME, Context.MODE_PRIVATE).edit().clear().commit()
         context.getSharedPreferences(AndroidOnboardingHintStore.PREFERENCES_NAME, Context.MODE_PRIVATE).edit().clear().commit()
+        context.getSharedPreferences(AndroidVoiceKeyboardDiscoveryStore.PREFERENCES_NAME, Context.MODE_PRIVATE).edit().clear().commit()
         context.deleteDatabase(AndroidSqlDelightAudioCatalogFactory.DATABASE_NAME)
         java.io.File(context.filesDir, AndroidAudioImportConstants.DIRECTORY_NAME).deleteRecursively()
     }
@@ -563,6 +617,7 @@ class MainActivityInstrumentedTest {
         context.getSharedPreferences(DocumentSelectionStore.PREFERENCES_NAME, Context.MODE_PRIVATE).edit().clear().commit()
         context.getSharedPreferences(StartupProcessingPolicyStore.PREFERENCES_NAME, Context.MODE_PRIVATE).edit().clear().commit()
         context.getSharedPreferences(AndroidOnboardingHintStore.PREFERENCES_NAME, Context.MODE_PRIVATE).edit().clear().commit()
+        context.getSharedPreferences(AndroidVoiceKeyboardDiscoveryStore.PREFERENCES_NAME, Context.MODE_PRIVATE).edit().clear().commit()
         context.deleteDatabase(AndroidSqlDelightAudioCatalogFactory.DATABASE_NAME)
         java.io.File(context.filesDir, AndroidAudioImportConstants.DIRECTORY_NAME).deleteRecursively()
     }
@@ -583,6 +638,8 @@ class MainActivityInstrumentedTest {
         ),
         hydration = AndroidMainScreenHydration(true, true, true, true),
         onboardingLifecycle = AndroidOnboardingHintLifecycle.ACTIVE,
+        keyboardStatus = AndroidVoiceKeyboardStatus.DISABLED,
+        keyboardKnown = true,
     )
 
     private fun seedCatalogEntry(

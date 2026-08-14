@@ -150,6 +150,35 @@ class TaskListDisplayItemsTest {
         assertTrue(items(filter = TaskListFilter.ALL).none { it is TaskListDisplayItem.OnboardingHint })
     }
 
+    @Test
+    fun keyboardDiscoveryIsStableDismissibleAndOrderedAfterOnboarding() {
+        val onboarding = onboardingHint()
+        val discovery = AndroidVoiceKeyboardDiscoveryPresentation(visible = true)
+        val withBoth = items(onboardingHint = onboarding, keyboardDiscovery = discovery)
+
+        assertEquals(
+            listOf(
+                TaskListDisplayItem.OnboardingHint.STABLE_KEY,
+                TaskListDisplayItem.KeyboardDiscovery.STABLE_KEY,
+                TaskListDisplayItem.Empty.STABLE_KEY,
+            ),
+            withBoth.map { it.stableKey },
+        )
+        val changed = discovery.copy(setupLabel = "Choose keyboard")
+        assertTrue(
+            TaskListDisplayItemDiff.areItemsTheSame(
+                withBoth[1],
+                items(keyboardDiscovery = changed).first(),
+            ),
+        )
+        assertFalse(
+            TaskListDisplayItemDiff.areContentsTheSame(
+                withBoth[1],
+                items(keyboardDiscovery = changed).first(),
+            ),
+        )
+    }
+
     private fun items(
         filter: TaskListFilter = TaskListFilter.NEW,
         model: ModelSetupSnapshot = ModelSetupSnapshot(ModelSetupSnapshotState.READY),
@@ -157,6 +186,7 @@ class TaskListDisplayItemsTest {
         audio: List<AudioTaskSnapshot> = emptyList(),
         transcription: TranscriptionTaskSnapshot = TranscriptionTaskSnapshot(),
         onboardingHint: AndroidOnboardingHintPresentation = AndroidOnboardingHintPresentation.HIDDEN,
+        keyboardDiscovery: AndroidVoiceKeyboardDiscoveryPresentation = AndroidVoiceKeyboardDiscoveryPresentation.HIDDEN,
     ): List<TaskListDisplayItem> = TaskListDisplayItems.from(
         TaskListPresentationController.state(
             TaskListInput(
@@ -169,6 +199,7 @@ class TaskListDisplayItemsTest {
             ),
         ),
         onboardingHint,
+        keyboardDiscovery,
     )
 
     private fun onboardingHint() = AndroidOnboardingHintPresentation(
@@ -177,6 +208,7 @@ class TaskListDisplayItemsTest {
             AndroidOnboardingChecklistStep(AndroidOnboardingStepKind.MODEL, "Install speech model", false),
             AndroidOnboardingChecklistStep(AndroidOnboardingStepKind.OUTPUT, "Select transcript output", false),
             AndroidOnboardingChecklistStep(AndroidOnboardingStepKind.FOLDER, "Select audio folder · Optional", false, true),
+            AndroidOnboardingChecklistStep(AndroidOnboardingStepKind.KEYBOARD, "Enable voice keyboard · Optional", false, true),
         ),
         action = AndroidOnboardingHintAction("Start setup", true, TaskActionKind.DOWNLOAD_MODEL),
     )
