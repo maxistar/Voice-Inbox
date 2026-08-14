@@ -11,10 +11,9 @@ class HybridRecordFlowTest {
         val flow = FakeHybridRecordFlow()
 
         flow.down(generation = 1, atMillis = 0)
-        flow.preparationCompleted(generation = 1)
         flow.up(generation = 1, atMillis = 100)
         flow.activation(generation = 1)
-        flow.activation(generation = 1)
+        flow.modelReady(generation = 1)
 
         assertEquals(1, flow.startCount)
         assertEquals(1, flow.stopCount)
@@ -26,8 +25,8 @@ class HybridRecordFlowTest {
         val flow = FakeHybridRecordFlow()
 
         flow.down(generation = 1, atMillis = 0)
-        flow.preparationCompleted(generation = 1)
         flow.up(generation = 1, atMillis = 500)
+        flow.modelReady(generation = 1)
         flow.up(generation = 1, atMillis = 700)
 
         assertEquals(1, flow.startCount)
@@ -40,8 +39,8 @@ class HybridRecordFlowTest {
         val flow = FakeHybridRecordFlow()
 
         flow.down(generation = 1, atMillis = 0)
-        flow.preparationCompleted(generation = 1)
         flow.cancel(generation = 1)
+        flow.modelReady(generation = 1)
 
         assertEquals(1, flow.startCount)
         assertEquals(1, flow.cancelCount)
@@ -53,8 +52,8 @@ class HybridRecordFlowTest {
         val flow = FakeHybridRecordFlow()
 
         flow.down(generation = 1, atMillis = 0)
-        flow.preparationCompleted(generation = 1)
         flow.durationLimit(generation = 1)
+        flow.modelReady(generation = 1)
         flow.up(generation = 1, atMillis = 800)
 
         assertEquals(1, flow.stopCount)
@@ -62,15 +61,19 @@ class HybridRecordFlowTest {
     }
 
     @Test
-    fun releasedHoldNeverStartsAfterDelayedPreparation() {
+    fun recordingStopsBeforeModelAndTranscribesOnlyAfterPreparation() {
         val flow = FakeHybridRecordFlow()
 
         flow.down(generation = 1, atMillis = 0)
         flow.up(generation = 1, atMillis = 500)
-        flow.preparationCompleted(generation = 1)
 
-        assertEquals(0, flow.startCount)
-        assertEquals(1, flow.cancelCount)
+        assertEquals(1, flow.startCount)
+        assertEquals(1, flow.stopCount)
+        assertEquals(0, flow.transcriptionCount)
+
+        flow.modelReady(generation = 1)
+
+        assertEquals(1, flow.transcriptionCount)
     }
 
     private class FakeHybridRecordFlow {
@@ -87,22 +90,8 @@ class HybridRecordFlowTest {
             currentGeneration = generation
             terminal = false
             assertTrue(gestures.begin(0, generation, atMillis))
-            assertTrue(controller.beginPreparation())
-        }
-
-        fun preparationCompleted(generation: Long) {
-            if (generation != currentGeneration || terminal) return
-            when (gestures.preparationAction(generation)) {
-                HybridRecordPreparationAction.START_HELD,
-                HybridRecordPreparationAction.START_LATCHED,
-                -> {
-                    assertTrue(controller.recordingStarted())
-                    startCount += 1
-                }
-                HybridRecordPreparationAction.CANCEL,
-                HybridRecordPreparationAction.IGNORE,
-                -> cancel(generation)
-            }
+            assertTrue(controller.beginRecording())
+            startCount += 1
         }
 
         fun up(generation: Long, atMillis: Long) {
@@ -118,6 +107,14 @@ class HybridRecordFlowTest {
             stop(generation)
         }
 
+        fun modelReady(generation: Long) {
+            if (generation != currentGeneration || terminal) return
+            if (!controller.modelReady()) return
+            terminal = true
+            transcriptionCount += 1
+            gestures.finish(generation)
+        }
+
         fun cancel(generation: Long) {
             if (generation != currentGeneration || terminal) return
             terminal = true
@@ -129,10 +126,7 @@ class HybridRecordFlowTest {
         private fun stop(generation: Long) {
             if (generation != currentGeneration || terminal) return
             if (!controller.recordingStopped()) return
-            terminal = true
             stopCount += 1
-            transcriptionCount += 1
-            gestures.finish(generation)
         }
     }
 }

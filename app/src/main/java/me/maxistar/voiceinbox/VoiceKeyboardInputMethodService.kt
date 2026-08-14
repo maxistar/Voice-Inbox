@@ -19,13 +19,29 @@ import android.widget.Button
 import android.widget.ImageButton
 import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.Future
 
 class VoiceKeyboardInputMethodService : InputMethodService() {
     private val controller = VoiceKeyboardController()
     private val mainHandler = Handler(Looper.getMainLooper())
     private val workExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val passiveWarmupScheduler = VoiceKeyboardWarmupScheduler(
+        scheduler = object : VoiceKeyboardDelayScheduler {
+            override fun postDelayed(runnable: Runnable, delayMillis: Long) {
+                mainHandler.postDelayed(runnable, delayMillis)
+            }
+
+            override fun removeCallbacks(runnable: Runnable) {
+                mainHandler.removeCallbacks(runnable)
+            }
+        },
+        delayMillis = PASSIVE_WARMUP_DELAY_MS,
+    )
     private val recordGestureCoordinator = HybridRecordGestureCoordinator(
         HybridRecordGesturePolicy(ViewConfiguration.getLongPressTimeout().toLong()),
     )
@@ -43,9 +59,10 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
     )
     private lateinit var recorder: VoiceKeyboardAudioRecorder
     private var inputActive = false
+    private var inputViewActive = false
     private var requestGeneration = 0L
-    private var warmUpGeneration = 0L
-    private var warmUpActive = false
+    private var requestPreparation: Future<Result<File>>? = null
+    private var durationLimitCallback: Runnable? = null
     private var activeTouchPointerId: Int? = null
     private var activeTouchGeneration: Long? = null
     private var handledRecordingStopTouch = false
@@ -68,6 +85,7 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
 
     override fun onCreateInputView(): View {
         val view = LayoutInflater.from(this).inflate(R.layout.input_view_voice_keyboard, null)
+        applyNavigationBarInsets(view)
         statusView = view.findViewById(R.id.voiceKeyboardStatus)
         progressView = view.findViewById(R.id.voiceKeyboardProgress)
         recordButton = view.findViewById(R.id.voiceKeyboardRecord)
@@ -113,6 +131,26 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
         return view
     }
 
+    private fun applyNavigationBarInsets(view: View) {
+        val initialPaddingLeft = view.paddingLeft
+        val initialPaddingTop = view.paddingTop
+        val initialPaddingRight = view.paddingRight
+        val initialPaddingBottom = view.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(view) { target, insets ->
+            val navigationBarBottom = insets
+                .getInsets(WindowInsetsCompat.Type.navigationBars())
+                .bottom
+            target.setPadding(
+                initialPaddingLeft,
+                initialPaddingTop,
+                initialPaddingRight,
+                initialPaddingBottom + navigationBarBottom,
+            )
+            insets
+        }
+        ViewCompat.requestApplyInsets(view)
+    }
+
     override fun onStartInput(attribute: EditorInfo, restarting: Boolean) {
         super.onStartInput(attribute, restarting)
         inputActive = true
@@ -121,20 +159,23 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
     override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         inputActive = true
+        inputViewActive = true
         flushPendingResult()
-        mainHandler.post(::startVisibleWarmUp)
+        schedulePassiveWarmUp()
     }
 
     override fun onFinishInput() {
         inputActive = false
-        warmUpGeneration += 1
-        warmUpActive = false
+        inputViewActive = false
+        passiveWarmupScheduler.cancel()
         backspaceRepeater.cancel()
         cancelActiveDictationForLifecycle()
         super.onFinishInput()
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
+        inputViewActive = false
+        passiveWarmupScheduler.cancel()
         backspaceRepeater.cancel()
         cancelActiveDictationForLifecycle()
         super.onFinishInputView(finishingInput)
@@ -142,7 +183,9 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
 
     override fun onDestroy() {
         requestGeneration += 1
-        warmUpGeneration += 1
+        inputViewActive = false
+        passiveWarmupScheduler.cancel()
+        cancelDurationLimit()
         backspaceRepeater.cancel()
         recordGestureCoordinator.clear()
         recorder.close()
@@ -152,10 +195,9 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
     }
 
     private fun handleRecordButtonActivation() {
-        if (warmUpActive) return
         when (controller.phase) {
             VoiceKeyboardPhase.RECORDING -> stopRecording()
-            VoiceKeyboardPhase.PREPARING,
+            VoiceKeyboardPhase.WAITING_FOR_MODEL,
             VoiceKeyboardPhase.TRANSCRIBING,
             -> cancelCurrentRequest()
             VoiceKeyboardPhase.RESULT_PENDING -> {
@@ -164,7 +206,7 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
             }
             VoiceKeyboardPhase.IDLE,
             VoiceKeyboardPhase.ERROR,
-            -> prepareAndStartRecording(requestGeneration + 1, touchInitiated = false)
+            -> startRecordingAndPrepare(requestGeneration + 1, touchInitiated = false)
         }
     }
 
@@ -172,7 +214,6 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 handledRecordingStopTouch = false
-                if (warmUpActive) return true
                 if (controller.phase == VoiceKeyboardPhase.RECORDING) {
                     handledRecordingStopTouch = true
                     stopRecording()
@@ -184,7 +225,7 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
                 if (!recordGestureCoordinator.begin(pointerId, generation, event.eventTime)) return true
                 activeTouchPointerId = pointerId
                 activeTouchGeneration = generation
-                prepareAndStartRecording(generation, touchInitiated = true)
+                startRecordingAndPrepare(generation, touchInitiated = true)
             }
 
             MotionEvent.ACTION_UP -> {
@@ -228,7 +269,6 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
                 if (generation == requestGeneration) {
                     when (controller.phase) {
                         VoiceKeyboardPhase.RECORDING -> render(R.string.voice_keyboard_listening_latched)
-                        VoiceKeyboardPhase.PREPARING -> render(R.string.voice_keyboard_preparing)
                         else -> Unit
                     }
                 }
@@ -238,7 +278,6 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
                 when {
                     generation != requestGeneration -> recordGestureCoordinator.finish(generation)
                     controller.phase == VoiceKeyboardPhase.RECORDING -> stopRecording(generation)
-                    controller.phase == VoiceKeyboardPhase.PREPARING -> cancelCurrentRequest(generation)
                     else -> recordGestureCoordinator.finish(generation)
                 }
             }
@@ -251,78 +290,76 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
         if (!view.performClick()) suppressNextRecordClick = false
     }
 
-    private fun prepareAndStartRecording(generation: Long, touchInitiated: Boolean) {
+    private fun startRecordingAndPrepare(generation: Long, touchInitiated: Boolean) {
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             recordGestureCoordinator.finish(generation)
             controller.fail()
             render(R.string.voice_keyboard_microphone_permission_missing, showSetup = true)
             return
         }
-        if (!controller.beginPreparation()) return
-        requestGeneration = generation
-        render(R.string.voice_keyboard_preparing)
-        workExecutor.execute {
-            val preparation = prepareModelForDictation()
-            mainHandler.post {
-                if (generation != requestGeneration || controller.phase != VoiceKeyboardPhase.PREPARING) return@post
-                preparation.onSuccess {
-                    val preparationAction = if (touchInitiated) {
-                        recordGestureCoordinator.preparationAction(generation)
-                    } else {
-                        HybridRecordPreparationAction.START_LATCHED
-                    }
-                    if (preparationAction in setOf(
-                            HybridRecordPreparationAction.CANCEL,
-                            HybridRecordPreparationAction.IGNORE,
-                        )
-                    ) {
-                        cancelCurrentRequest(generation)
-                        return@onSuccess
-                    }
-                    recorder.start().onSuccess {
-                        if (controller.recordingStarted()) {
-                            render(
-                                if (preparationAction == HybridRecordPreparationAction.START_HELD) {
-                                    R.string.voice_keyboard_listening_held
-                                } else {
-                                    R.string.voice_keyboard_listening_latched
-                                },
-                            )
-                            mainHandler.postDelayed({ stopForDurationLimit(generation) }, MAX_PHRASE_DURATION_MS)
-                        }
-                    }.onFailure {
-                        recordGestureCoordinator.finish(generation)
-                        controller.fail()
-                        render(R.string.voice_keyboard_microphone_unavailable, showSetup = false)
-                    }
-                }.onFailure {
-                    recordGestureCoordinator.finish(generation)
-                    controller.fail()
-                    render(R.string.voice_keyboard_model_unavailable, showSetup = true)
-                }
-            }
-        }
-    }
 
-    private fun startVisibleWarmUp() {
-        if (warmUpActive || controller.phase != VoiceKeyboardPhase.IDLE) return
-        val generation = ++warmUpGeneration
-        warmUpActive = true
-        render(R.string.voice_keyboard_preparing)
-        workExecutor.execute {
-            val repository = SpeechModelRepository.forActive(noBackupFilesDir.resolve("models"))
-            val preparation = SpeechModelWarmup.prepare(repository, retryFailed = false).get()
-            mainHandler.post {
-                if (generation != warmUpGeneration) return@post
-                warmUpActive = false
-                render(R.string.voice_keyboard_ready)
-            }
-        }
-    }
-
-    private fun prepareModelForDictation(): Result<Unit> = runCatching {
         val repository = SpeechModelRepository.forActive(noBackupFilesDir.resolve("models"))
-        SpeechModelWarmup.prepare(repository, retryFailed = true).get().getOrThrow()
+        if (repository.inspectLightweight() !is InstalledSpeechModelState.Ready) {
+            recordGestureCoordinator.finish(generation)
+            controller.fail()
+            render(R.string.voice_keyboard_model_unavailable, showSetup = true)
+            return
+        }
+        if (!controller.beginRecording()) return
+
+        requestGeneration = generation
+        passiveWarmupScheduler.cancel()
+        requestPreparation = SpeechModelWarmup.prepare(repository, retryFailed = true)
+        val preparationAction = if (touchInitiated) {
+            recordGestureCoordinator.preparationAction(generation)
+        } else {
+            HybridRecordPreparationAction.START_LATCHED
+        }
+        if (preparationAction in setOf(
+                HybridRecordPreparationAction.CANCEL,
+                HybridRecordPreparationAction.IGNORE,
+            )
+        ) {
+            cancelCurrentRequest(generation)
+            return
+        }
+        recorder.start().onSuccess {
+            render(
+                if (preparationAction == HybridRecordPreparationAction.START_HELD) {
+                    R.string.voice_keyboard_listening_held
+                } else {
+                    R.string.voice_keyboard_listening_latched
+                },
+            )
+            scheduleDurationLimit(generation)
+        }.onFailure {
+            recordGestureCoordinator.finish(generation)
+            requestPreparation = null
+            controller.fail()
+            render(R.string.voice_keyboard_microphone_unavailable, showSetup = false)
+        }
+    }
+
+    private fun schedulePassiveWarmUp() {
+        passiveWarmupScheduler.schedule {
+            if (!inputViewActive || controller.phase != VoiceKeyboardPhase.IDLE) return@schedule
+            val repository = SpeechModelRepository.forActive(noBackupFilesDir.resolve("models"))
+            if (repository.inspectLightweight() is InstalledSpeechModelState.Ready) {
+                SpeechModelWarmup.prepare(repository, retryFailed = false)
+            }
+        }
+    }
+
+    private fun scheduleDurationLimit(generation: Long) {
+        cancelDurationLimit()
+        durationLimitCallback = Runnable { stopForDurationLimit(generation) }.also {
+            mainHandler.postDelayed(it, MAX_PHRASE_DURATION_MS)
+        }
+    }
+
+    private fun cancelDurationLimit() {
+        durationLimitCallback?.let(mainHandler::removeCallbacks)
+        durationLimitCallback = null
     }
 
     private fun stopForDurationLimit(generation: Long) {
@@ -337,15 +374,63 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
         recordGestureCoordinator.finish(expectedGeneration)
         activeTouchPointerId = null
         activeTouchGeneration = null
-        mainHandler.removeCallbacksAndMessages(null)
+        cancelDurationLimit()
         val generation = expectedGeneration
-        render(R.string.voice_keyboard_transcribing)
+        val preparation = requestPreparation
+        render(
+            if (preparation?.isDone == true && runCatching { preparation.get().isSuccess }.getOrDefault(false)) {
+                R.string.voice_keyboard_transcribing
+            } else {
+                R.string.voice_keyboard_preparing
+            },
+        )
         workExecutor.execute {
-            val result = recorder.stop().mapCatching { samples ->
-                if (samples.isEmpty()) null else NativeTranscriptionBridge.transcribeChunk(samples)?.text
+            val samplesResult = recorder.stop()
+            val samples = samplesResult.getOrElse { error ->
+                mainHandler.post {
+                    if (generation != requestGeneration) return@post
+                    controller.fail()
+                    requestPreparation = null
+                    render(R.string.voice_keyboard_transcription_failed)
+                }
+                return@execute
+            }
+            if (samples.isEmpty()) {
+                mainHandler.post {
+                    if (generation != requestGeneration) return@post
+                    requestPreparation = null
+                    controller.cancel()
+                    render(R.string.voice_keyboard_no_speech)
+                }
+                return@execute
+            }
+            val preparationResult = runCatching {
+                checkNotNull(preparation) { "Speech model preparation was not started" }
+                preparation.get().getOrThrow()
             }
             mainHandler.post {
+                if (generation != requestGeneration || controller.phase != VoiceKeyboardPhase.WAITING_FOR_MODEL) {
+                    return@post
+                }
+                preparationResult.onFailure {
+                    requestPreparation = null
+                    controller.fail()
+                    render(R.string.voice_keyboard_model_unavailable, showSetup = true)
+                }.onSuccess {
+                    if (!controller.modelReady()) return@onSuccess
+                    render(R.string.voice_keyboard_transcribing)
+                    transcribeCapturedSamples(generation, samples)
+                }
+            }
+        }
+    }
+
+    private fun transcribeCapturedSamples(generation: Long, samples: FloatArray) {
+        workExecutor.execute {
+            val result = runCatching { NativeTranscriptionBridge.transcribeChunk(samples)?.text }
+            mainHandler.post {
                 if (generation != requestGeneration || controller.phase != VoiceKeyboardPhase.TRANSCRIBING) return@post
+                requestPreparation = null
                 result.onSuccess { text ->
                     val completed = controller.completeTranscription(text)
                     when {
@@ -367,10 +452,11 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
     private fun cancelCurrentRequest(expectedGeneration: Long = requestGeneration) {
         if (expectedGeneration != requestGeneration) return
         requestGeneration += 1
-        mainHandler.removeCallbacksAndMessages(null)
+        cancelDurationLimit()
         if (controller.phase == VoiceKeyboardPhase.RECORDING) {
             workExecutor.execute { recorder.cancel() }
         }
+        requestPreparation = null
         recordGestureCoordinator.finish(expectedGeneration)
         activeTouchPointerId = null
         activeTouchGeneration = null
@@ -380,8 +466,8 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
 
     private fun cancelActiveDictationForLifecycle() {
         if (controller.phase in setOf(
-                VoiceKeyboardPhase.PREPARING,
                 VoiceKeyboardPhase.RECORDING,
+                VoiceKeyboardPhase.WAITING_FOR_MODEL,
                 VoiceKeyboardPhase.TRANSCRIBING,
             )
         ) {
@@ -412,7 +498,7 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
     }
 
     private fun isEditorReady(): Boolean = inputActive && controller.phase !in setOf(
-        VoiceKeyboardPhase.PREPARING,
+        VoiceKeyboardPhase.WAITING_FOR_MODEL,
         VoiceKeyboardPhase.TRANSCRIBING,
     )
 
@@ -453,48 +539,37 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
         statusView?.setText(status)
         val phase = controller.phase
         recordButton?.apply {
-            val busy = warmUpActive || phase in setOf(VoiceKeyboardPhase.PREPARING, VoiceKeyboardPhase.TRANSCRIBING)
-            val ownsActivePointer = activeTouchGeneration == requestGeneration && activeTouchPointerId != null
-            isEnabled = phase != VoiceKeyboardPhase.RESULT_PENDING && !warmUpActive &&
-                (phase != VoiceKeyboardPhase.PREPARING || ownsActivePointer)
+            val busy = phase in setOf(VoiceKeyboardPhase.WAITING_FOR_MODEL, VoiceKeyboardPhase.TRANSCRIBING)
+            isEnabled = phase != VoiceKeyboardPhase.RESULT_PENDING
             alpha = if (isEnabled) 1f else 0.6f
             background = getDrawable(
-                when {
-                    warmUpActive -> R.drawable.voice_keyboard_mic_busy
-                    else -> when (phase) {
+                when (phase) {
                     VoiceKeyboardPhase.RECORDING -> R.drawable.voice_keyboard_mic_recording
-                    VoiceKeyboardPhase.PREPARING,
+                    VoiceKeyboardPhase.WAITING_FOR_MODEL,
                     VoiceKeyboardPhase.TRANSCRIBING,
                     VoiceKeyboardPhase.RESULT_PENDING,
                     -> R.drawable.voice_keyboard_mic_busy
                     VoiceKeyboardPhase.ERROR -> R.drawable.voice_keyboard_mic_error
                     VoiceKeyboardPhase.IDLE -> R.drawable.voice_keyboard_mic_idle
-                    }
                 },
             )
             setImageResource(
-                when {
-                    warmUpActive -> R.drawable.ic_voice_keyboard_mic
-                    else -> when (phase) {
+                when (phase) {
                     VoiceKeyboardPhase.RECORDING,
-                    VoiceKeyboardPhase.PREPARING,
+                    VoiceKeyboardPhase.WAITING_FOR_MODEL,
                     VoiceKeyboardPhase.TRANSCRIBING,
                     -> R.drawable.ic_voice_keyboard_stop
                     else -> R.drawable.ic_voice_keyboard_mic
-                    }
                 },
             )
             contentDescription = context.getString(
-                when {
-                    warmUpActive -> R.string.voice_keyboard_preparing
-                    else -> when (phase) {
+                when (phase) {
                     VoiceKeyboardPhase.RECORDING -> R.string.voice_keyboard_stop
-                    VoiceKeyboardPhase.PREPARING,
+                    VoiceKeyboardPhase.WAITING_FOR_MODEL,
                     VoiceKeyboardPhase.TRANSCRIBING,
                     -> R.string.voice_keyboard_cancel
                     VoiceKeyboardPhase.ERROR -> R.string.voice_keyboard_record
                     else -> R.string.voice_keyboard_record
-                    }
                 },
             )
             keepScreenOn = phase == VoiceKeyboardPhase.RECORDING
@@ -511,6 +586,7 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
     }
 
     private companion object {
+        const val PASSIVE_WARMUP_DELAY_MS = 400L
         const val MAX_PHRASE_DURATION_MS = 30_000L
     }
 }

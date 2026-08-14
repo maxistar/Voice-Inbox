@@ -29,6 +29,18 @@ internal class SpeechModelWarmupCoordinator(
 
     fun state(): SpeechModelWarmupState = synchronized(lock) { currentState }
 
+    fun state(repository: SpeechModelRepository): SpeechModelWarmupState {
+        val installation = installationIdentity(repository)
+        return synchronized(lock) {
+            when (val state = currentState) {
+                is SpeechModelWarmupState.Preparing -> state.takeIf { it.installation == installation }
+                is SpeechModelWarmupState.Ready -> state.takeIf { it.installation == installation }
+                is SpeechModelWarmupState.Failed -> state.takeIf { it.installation == installation }
+                SpeechModelWarmupState.Idle -> state
+            } ?: SpeechModelWarmupState.Idle
+        }
+    }
+
     fun warmUp(repository: SpeechModelRepository) {
         prepare(repository, retryFailed = false)
     }
@@ -95,6 +107,8 @@ internal object SpeechModelWarmup {
         repository: SpeechModelRepository,
         retryFailed: Boolean,
     ): Future<Result<File>> = coordinator.prepare(repository, retryFailed)
+
+    fun state(repository: SpeechModelRepository): SpeechModelWarmupState = coordinator.state(repository)
 
     fun invalidate() {
         SpeechModelPreparation.invalidate(NativeTranscriptionBridge::reset)
