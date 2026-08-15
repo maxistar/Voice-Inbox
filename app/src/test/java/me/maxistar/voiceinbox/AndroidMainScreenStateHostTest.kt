@@ -220,6 +220,7 @@ class AndroidMainScreenStateHostTest {
                 folder = FolderSetupSnapshot(FolderSetupSnapshotState.UNSELECTED),
                 hydration = hydrated(),
                 onboardingLifecycle = AndroidOnboardingHintLifecycle.ACTIVE,
+                keyboardKnown = true,
             ),
         )
         assertTrue(initial.onboardingHint.visible)
@@ -236,6 +237,7 @@ class AndroidMainScreenStateHostTest {
                 folder = FolderSetupSnapshot(FolderSetupSnapshotState.UNSELECTED),
                 hydration = hydrated(),
                 onboardingLifecycle = AndroidOnboardingHintLifecycle.ACTIVE,
+                keyboardKnown = true,
             ),
         )
         assertTrue(directModelCompletion.onboardingHint.visible)
@@ -270,6 +272,7 @@ class AndroidMainScreenStateHostTest {
                 folder = FolderSetupSnapshot(FolderSetupSnapshotState.UNSELECTED),
                 hydration = hydrated(),
                 onboardingLifecycle = AndroidOnboardingHintLifecycle.ACTIVE,
+                keyboardKnown = true,
             ),
         )
         assertFalse(allFilter.onboardingHint.visible)

@@ -74,16 +74,33 @@ class AndroidInlineOnboardingTest {
 
         assertTrue(presentation.steps.single { it.kind == AndroidOnboardingStepKind.OUTPUT }.optional)
         assertTrue(presentation.steps.single { it.kind == AndroidOnboardingStepKind.FOLDER }.optional)
+        assertTrue(presentation.steps.single { it.kind == AndroidOnboardingStepKind.KEYBOARD }.optional)
     }
 
     @Test
     fun fullyConfiguredSetupRetiresAndCompletesOnlyAfterHydration() {
         assertTrue(present(model = readyModel()).visible)
+        assertTrue(
+            present(
+                model = readyModel(),
+                output = readyOutput(),
+                folder = FolderSetupSnapshot(FolderSetupSnapshotState.READY),
+            ).visible,
+        )
+        assertEquals(
+            TaskActionKind.ENABLE_VOICE_KEYBOARD,
+            present(
+                model = readyModel(),
+                output = readyOutput(),
+                folder = FolderSetupSnapshot(FolderSetupSnapshotState.READY),
+            ).action?.kind,
+        )
         assertFalse(
             present(
                 model = readyModel(),
                 output = readyOutput(),
                 folder = FolderSetupSnapshot(FolderSetupSnapshotState.READY),
+                keyboardStatus = AndroidVoiceKeyboardStatus.ENABLED,
             ).visible,
         )
         assertTrue(
@@ -93,6 +110,8 @@ class AndroidInlineOnboardingTest {
                 readyModel(),
                 readyOutput(),
                 FolderSetupSnapshot(FolderSetupSnapshotState.READY),
+                AndroidVoiceKeyboardStatus.ENABLED,
+                true,
             ),
         )
         assertFalse(
@@ -102,6 +121,8 @@ class AndroidInlineOnboardingTest {
                 readyModel(),
                 OutputSetupSnapshot(OutputSetupSnapshotState.REQUIRED),
                 FolderSetupSnapshot(FolderSetupSnapshotState.UNSELECTED),
+                AndroidVoiceKeyboardStatus.DISABLED,
+                true,
             ),
         )
         assertFalse(
@@ -111,6 +132,8 @@ class AndroidInlineOnboardingTest {
                 readyModel(),
                 OutputSetupSnapshot(OutputSetupSnapshotState.REQUIRED),
                 FolderSetupSnapshot(FolderSetupSnapshotState.UNSELECTED),
+                AndroidVoiceKeyboardStatus.DISABLED,
+                false,
             ),
         )
     }
@@ -122,7 +145,18 @@ class AndroidInlineOnboardingTest {
         model: ModelSetupSnapshot = ModelSetupSnapshot(ModelSetupSnapshotState.REQUIRED, downloadAvailable = true),
         output: OutputSetupSnapshot = OutputSetupSnapshot(OutputSetupSnapshotState.REQUIRED),
         folder: FolderSetupSnapshot = FolderSetupSnapshot(FolderSetupSnapshotState.UNSELECTED),
-    ) = AndroidOnboardingHintPresenter.present(lifecycle, filter, hydration, model, output, folder)
+        keyboardStatus: AndroidVoiceKeyboardStatus = AndroidVoiceKeyboardStatus.DISABLED,
+        keyboardKnown: Boolean = true,
+    ) = AndroidOnboardingHintPresenter.present(
+        lifecycle,
+        filter,
+        hydration,
+        model,
+        output,
+        folder,
+        keyboardStatus,
+        keyboardKnown,
+    )
 
     private fun hydrated() = AndroidMainScreenHydration(true, true, true, true)
     private fun readyModel() = ModelSetupSnapshot(ModelSetupSnapshotState.READY)

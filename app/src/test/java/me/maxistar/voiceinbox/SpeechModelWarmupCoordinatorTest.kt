@@ -32,6 +32,7 @@ class SpeechModelWarmupCoordinatorTest {
         assertTrue(first.get().isSuccess)
         assertEquals(1, preparations)
         assertTrue(coordinator.state() is SpeechModelWarmupState.Ready)
+        assertTrue(coordinator.state(repository) is SpeechModelWarmupState.Ready)
     }
 
     @Test
@@ -104,6 +105,8 @@ class SpeechModelWarmupCoordinatorTest {
         assertTrue(
             state.installation.endsWith(":${secondRepository.installedDirectory.canonicalPath}"),
         )
+        assertTrue(coordinator.state(firstRepository) is SpeechModelWarmupState.Idle)
+        assertTrue(coordinator.state(secondRepository) is SpeechModelWarmupState.Ready)
     }
 
     private fun coordinator(

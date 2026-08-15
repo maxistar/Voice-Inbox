@@ -56,6 +56,16 @@ sealed class TaskListDisplayItem {
         }
     }
 
+    data class KeyboardDiscovery(
+        val presentation: AndroidVoiceKeyboardDiscoveryPresentation,
+    ) : TaskListDisplayItem() {
+        override val stableKey: String = STABLE_KEY
+
+        companion object {
+            const val STABLE_KEY = "hint:android-voice-keyboard"
+        }
+    }
+
     data class Empty(
         val message: String,
         val actions: List<TaskActionPresentation>,
@@ -72,6 +82,7 @@ object TaskListDisplayItems {
     fun from(
         state: TaskListState,
         onboardingHint: AndroidOnboardingHintPresentation = AndroidOnboardingHintPresentation.HIDDEN,
+        keyboardDiscovery: AndroidVoiceKeyboardDiscoveryPresentation = AndroidVoiceKeyboardDiscoveryPresentation.HIDDEN,
     ): List<TaskListDisplayItem> {
         return buildList {
             state.tasks.filterIsInstance<SetupTaskPresentation>().forEach {
@@ -79,6 +90,9 @@ object TaskListDisplayItems {
             }
             if (onboardingHint.visible) {
                 add(TaskListDisplayItem.OnboardingHint(onboardingHint))
+            }
+            if (keyboardDiscovery.visible) {
+                add(TaskListDisplayItem.KeyboardDiscovery(keyboardDiscovery))
             }
             if (state.batchAction.visible) {
                 add(
@@ -131,6 +145,7 @@ sealed class TaskListChangePayload {
 class TaskListAdapter(
     private val onAction: (AndroidTaskActionRequest) -> Unit,
     private val onDismissOnboarding: () -> Unit,
+    private val onDismissKeyboardDiscovery: () -> Unit,
 ) : ListAdapter<TaskListDisplayItem, RecyclerView.ViewHolder>(TaskListDisplayItemDiff) {
     init {
         setHasStableIds(true)
@@ -143,6 +158,7 @@ class TaskListAdapter(
         is TaskListDisplayItem.Audio -> VIEW_AUDIO
         is TaskListDisplayItem.BatchAction -> VIEW_BATCH
         is TaskListDisplayItem.OnboardingHint -> VIEW_ONBOARDING
+        is TaskListDisplayItem.KeyboardDiscovery -> VIEW_KEYBOARD_DISCOVERY
         is TaskListDisplayItem.Empty -> VIEW_EMPTY
     }
 
@@ -160,6 +176,11 @@ class TaskListAdapter(
                 onAction,
                 onDismissOnboarding,
             )
+            VIEW_KEYBOARD_DISCOVERY -> KeyboardDiscoveryViewHolder(
+                inflater.inflate(R.layout.row_voice_keyboard_discovery, parent, false),
+                onAction,
+                onDismissKeyboardDiscovery,
+            )
             VIEW_EMPTY -> EmptyTaskViewHolder(
                 inflater.inflate(R.layout.row_empty_task, parent, false),
                 onAction,
@@ -174,6 +195,7 @@ class TaskListAdapter(
             is TaskListDisplayItem.Audio -> (holder as AudioTaskViewHolder).bind(item.task)
             is TaskListDisplayItem.BatchAction -> (holder as BatchActionViewHolder).bind(item)
             is TaskListDisplayItem.OnboardingHint -> (holder as OnboardingHintViewHolder).bind(item)
+            is TaskListDisplayItem.KeyboardDiscovery -> (holder as KeyboardDiscoveryViewHolder).bind(item)
             is TaskListDisplayItem.Empty -> (holder as EmptyTaskViewHolder).bind(item)
         }
     }
@@ -322,6 +344,7 @@ class TaskListAdapter(
         private val modelStep: TextView = itemView.findViewById(R.id.onboardingModelStep)
         private val outputStep: TextView = itemView.findViewById(R.id.onboardingOutputStep)
         private val folderStep: TextView = itemView.findViewById(R.id.onboardingFolderStep)
+        private val keyboardStep: TextView = itemView.findViewById(R.id.onboardingKeyboardStep)
         private val action: MaterialButton = itemView.findViewById(R.id.onboardingAction)
         private val close: ImageButton = itemView.findViewById(R.id.onboardingClose)
 
@@ -338,6 +361,7 @@ class TaskListAdapter(
             bindStep(modelStep, presentation.steps.firstOrNull { it.kind == AndroidOnboardingStepKind.MODEL })
             bindStep(outputStep, presentation.steps.firstOrNull { it.kind == AndroidOnboardingStepKind.OUTPUT })
             bindStep(folderStep, presentation.steps.firstOrNull { it.kind == AndroidOnboardingStepKind.FOLDER })
+            bindStep(keyboardStep, presentation.steps.firstOrNull { it.kind == AndroidOnboardingStepKind.KEYBOARD })
             action.text = presentation.action?.label.orEmpty()
             action.isEnabled = presentation.action?.enabled == true
             action.isVisible = presentation.action != null
@@ -359,6 +383,41 @@ class TaskListAdapter(
                 if (step.complete) R.string.onboarding_step_complete_accessibility else R.string.onboarding_step_incomplete_accessibility,
                 step.label,
             )
+        }
+    }
+
+    private class KeyboardDiscoveryViewHolder(
+        itemView: View,
+        private val onAction: (AndroidTaskActionRequest) -> Unit,
+        onDismiss: () -> Unit,
+    ) : RecyclerView.ViewHolder(itemView) {
+        private val title: TextView = itemView.findViewById(R.id.keyboardDiscoveryTitle)
+        private val explanation: TextView = itemView.findViewById(R.id.keyboardDiscoveryExplanation)
+        private val setup: MaterialButton = itemView.findViewById(R.id.keyboardDiscoverySetup)
+        private val documentation: MaterialButton = itemView.findViewById(R.id.keyboardDiscoveryDocumentation)
+
+        init {
+            itemView.findViewById<ImageButton>(R.id.keyboardDiscoveryClose).setOnClickListener { onDismiss() }
+        }
+
+        fun bind(item: TaskListDisplayItem.KeyboardDiscovery) {
+            val presentation = item.presentation
+            title.text = presentation.title
+            explanation.text = presentation.explanation
+            setup.text = presentation.setupLabel
+            documentation.text = presentation.documentationLabel
+            setup.setOnClickListener {
+                onAction(AndroidTaskActionRequest(item.stableKey, null, presentation.setupAction))
+            }
+            documentation.setOnClickListener {
+                onAction(
+                    AndroidTaskActionRequest(
+                        item.stableKey,
+                        null,
+                        TaskActionKind.OPEN_VOICE_KEYBOARD_DOCUMENTATION,
+                    ),
+                )
+            }
         }
     }
 
@@ -399,6 +458,7 @@ class TaskListAdapter(
         const val VIEW_BATCH = 3
         const val VIEW_EMPTY = 4
         const val VIEW_ONBOARDING = 5
+        const val VIEW_KEYBOARD_DISCOVERY = 6
 
         fun stableLongId(value: String): Long {
             var hash = -0x340d631b8c46753bL

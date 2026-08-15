@@ -26,6 +26,11 @@ class AndroidTaskActionRouter(
                     state.onboardingHint.action?.let { action ->
                         action.kind == request.kind && action.enabled
                     } == true
+            request.stableId == TaskListDisplayItem.KeyboardDiscovery.STABLE_KEY ->
+                state.keyboardDiscovery.visible && request.kind in setOf(
+                    state.keyboardDiscovery.setupAction,
+                    TaskActionKind.OPEN_VOICE_KEYBOARD_DOCUMENTATION,
+                )
             request.kind == TaskActionKind.TRANSCRIBE_ALL ->
                 request.stableId == TaskListDisplayItem.BatchAction.STABLE_KEY &&
                     state.taskList.batchAction.visible &&

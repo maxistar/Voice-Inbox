@@ -106,6 +106,49 @@
             </LinearLayout>
 
             <TextView
+                android:id="@+id/settingsVoiceKeyboardTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="@string/settings_voice_keyboard_title"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/settingsVoiceKeyboardExplanation"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/settings_voice_keyboard_explanation" />
+
+            <TextView
+                android:id="@+id/settingsVoiceKeyboardStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/settings_voice_keyboard_disabled" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/settingsVoiceKeyboardDocumentation"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_voice_keyboard_documentation" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/settingsVoiceKeyboardAction"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="@string/settings_voice_keyboard_enable" />
+            </LinearLayout>
+
+            <TextView
                 android:id="@+id/startupProcessingTitle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

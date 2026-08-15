@@ -70,6 +70,7 @@ enum class AndroidOnboardingStepKind {
     MODEL,
     OUTPUT,
     FOLDER,
+    KEYBOARD,
 }
 
 data class AndroidOnboardingChecklistStep(
@@ -106,12 +107,14 @@ object AndroidOnboardingHintPresenter {
         model: ModelSetupSnapshot,
         output: OutputSetupSnapshot,
         folder: FolderSetupSnapshot,
+        keyboardStatus: AndroidVoiceKeyboardStatus,
+        keyboardKnown: Boolean,
     ): AndroidOnboardingHintPresentation {
         if (
             lifecycle != AndroidOnboardingHintLifecycle.ACTIVE ||
             filter != TaskListFilter.NEW ||
-            !setupKnown(hydration) ||
-            allStepsComplete(model, output, folder)
+            !setupKnown(hydration, keyboardKnown) ||
+            allStepsComplete(model, output, folder, keyboardStatus)
         ) {
             return AndroidOnboardingHintPresentation.HIDDEN
         }
@@ -134,8 +137,14 @@ object AndroidOnboardingHintPresenter {
                 complete = folder.state == FolderSetupSnapshotState.READY,
                 optional = true,
             ),
+            AndroidOnboardingChecklistStep(
+                kind = AndroidOnboardingStepKind.KEYBOARD,
+                label = "Enable voice keyboard · Optional",
+                complete = keyboardStatus != AndroidVoiceKeyboardStatus.DISABLED,
+                optional = true,
+            ),
         )
-        val action = nextAction(model, output, folder)
+        val action = nextAction(model, output, folder, keyboardStatus)
         return AndroidOnboardingHintPresentation(
             visible = true,
             steps = steps,
@@ -156,26 +165,33 @@ object AndroidOnboardingHintPresenter {
         model: ModelSetupSnapshot,
         output: OutputSetupSnapshot,
         folder: FolderSetupSnapshot,
+        keyboardStatus: AndroidVoiceKeyboardStatus,
+        keyboardKnown: Boolean,
     ): Boolean = lifecycle == AndroidOnboardingHintLifecycle.ACTIVE &&
-        setupKnown(hydration) &&
-        allStepsComplete(model, output, folder)
+        setupKnown(hydration, keyboardKnown) &&
+        allStepsComplete(model, output, folder, keyboardStatus)
 
-    private fun setupKnown(hydration: AndroidMainScreenHydration): Boolean =
-        hydration.modelKnown && hydration.outputKnown && hydration.folderKnown
+    private fun setupKnown(
+        hydration: AndroidMainScreenHydration,
+        keyboardKnown: Boolean,
+    ): Boolean = hydration.modelKnown && hydration.outputKnown && hydration.folderKnown && keyboardKnown
 
     private fun allStepsComplete(
         model: ModelSetupSnapshot,
         output: OutputSetupSnapshot,
         folder: FolderSetupSnapshot,
+        keyboardStatus: AndroidVoiceKeyboardStatus,
     ): Boolean =
         model.state == ModelSetupSnapshotState.READY &&
             output.state == OutputSetupSnapshotState.READY &&
-            folder.state == FolderSetupSnapshotState.READY
+            folder.state == FolderSetupSnapshotState.READY &&
+            keyboardStatus != AndroidVoiceKeyboardStatus.DISABLED
 
     private fun nextAction(
         model: ModelSetupSnapshot,
         output: OutputSetupSnapshot,
         folder: FolderSetupSnapshot,
+        keyboardStatus: AndroidVoiceKeyboardStatus,
     ): AndroidOnboardingHintAction = when {
         model.state == ModelSetupSnapshotState.INSTALLING -> AndroidOnboardingHintAction(
             label = "Installing speech model…",
@@ -205,6 +221,11 @@ object AndroidOnboardingHintPresenter {
             label = "Select audio folder",
             enabled = true,
             kind = TaskActionKind.SELECT_FOLDER,
+        )
+        keyboardStatus == AndroidVoiceKeyboardStatus.DISABLED -> AndroidOnboardingHintAction(
+            label = "Enable voice keyboard",
+            enabled = true,
+            kind = TaskActionKind.ENABLE_VOICE_KEYBOARD,
         )
         else -> AndroidOnboardingHintAction(
             label = "Ready to transcribe",

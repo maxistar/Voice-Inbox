@@ -78,8 +78,19 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
         the app scans direct children only and does not traverse nested folders.
       </p>
       <p>
-        On iOS, use the current manual import workflow to add audio files to the app-local catalog.
+        On iOS, import app-local files, receive audio through the Share Extension, or select a folder to
+        refresh its direct audio files into the queue.
       </p>
+    </div>
+
+    <div class="step">
+      <h2>Optional: dictate with the Android voice keyboard</h2>
+      <p>
+        Android can use the installed local speech model for short-phrase dictation in another app.
+        The keyboard needs microphone permission and a ready model; it is separate from importing or
+        scanning recordings into the Voice Inbox task list.
+      </p>
+      <p><a href={`${base}/docs/voice-keyboard/`}>Read the Android voice-keyboard setup guide →</a></p>
     </div>
 
     <div class="step">

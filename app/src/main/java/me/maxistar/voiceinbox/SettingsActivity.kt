@@ -24,6 +24,7 @@ import java.util.concurrent.Executors
 internal object VoiceInboxPublicLinks {
     const val WEBSITE = "https://voiceinbox.simpleditor.org/"
     const val DOCUMENTATION = "https://voiceinbox.simpleditor.org/docs/"
+    const val VOICE_KEYBOARD_DOCUMENTATION = "https://voiceinbox.simpleditor.org/docs/voice-keyboard/"
     const val LEGAL = "https://voiceinbox.simpleditor.org/legal/"
 }
 
@@ -39,6 +40,10 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var scheduledSwitch: SwitchCompat
     private lateinit var scheduledTime: TextView
     private lateinit var scheduledTimeDetail: TextView
+    private lateinit var keyboardStatusView: TextView
+    private lateinit var keyboardActionView: TextView
+    private lateinit var keyboardStatusProvider: AndroidVoiceKeyboardStatusProvider
+    private lateinit var keyboardSystemGateway: AndroidVoiceKeyboardSystemGateway
     private val selectionExecutor = Executors.newSingleThreadExecutor()
     private var settings = ScheduledTranscriptionSettings()
     private var activityDestroyed = false
@@ -87,6 +92,8 @@ class SettingsActivity : AppCompatActivity() {
         )
         documentAccess = DocumentAccess(contentResolver)
         folderScanner = AudioFolderScanner(contentResolver)
+        keyboardStatusProvider = AndroidVoiceKeyboardStatusProvider(this)
+        keyboardSystemGateway = AndroidVoiceKeyboardSystemGateway(this)
         settings = settingsStore.load()
         folderDetail = findViewById(R.id.settingsFolderDetail)
         outputDetail = findViewById(R.id.settingsOutputDetail)
@@ -94,6 +101,8 @@ class SettingsActivity : AppCompatActivity() {
         scheduledTime = findViewById(R.id.scheduledTime)
         scheduledTimeDetail = findViewById(R.id.scheduledTimeDetail)
         scheduledSwitch = findViewById(R.id.scheduledSwitch)
+        keyboardStatusView = findViewById(R.id.settingsVoiceKeyboardStatus)
+        keyboardActionView = findViewById(R.id.settingsVoiceKeyboardAction)
         findViewById<TextView>(R.id.settingsAboutVersion).text = getString(
             R.string.settings_about_version,
             appVersionName(),
@@ -109,6 +118,15 @@ class SettingsActivity : AppCompatActivity() {
                 Intent(this, MainActivity::class.java)
                     .putExtra("open-model-folder-picker", true),
             )
+        }
+        keyboardActionView.setOnClickListener {
+            val action = AndroidVoiceKeyboardActionPresenter.systemAction(keyboardStatusProvider.current())
+            if (!keyboardSystemGateway.perform(action)) {
+                Toast.makeText(this, R.string.voice_keyboard_system_action_error, Toast.LENGTH_LONG).show()
+            }
+        }
+        findViewById<View>(R.id.settingsVoiceKeyboardDocumentation).setOnClickListener {
+            openExternalUrl(VoiceInboxPublicLinks.VOICE_KEYBOARD_DOCUMENTATION)
         }
         findViewById<View>(R.id.settingsWebsiteRow).setOnClickListener {
             openExternalUrl(VoiceInboxPublicLinks.WEBSITE)
@@ -143,11 +161,13 @@ class SettingsActivity : AppCompatActivity() {
         }
         renderStorage()
         renderSchedule()
+        renderVoiceKeyboard()
     }
 
     override fun onResume() {
         super.onResume()
         renderStorage()
+        renderVoiceKeyboard()
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean =
@@ -252,6 +272,24 @@ class SettingsActivity : AppCompatActivity() {
         renderOutput()
         renderFolder()
         renderModel()
+    }
+
+    private fun renderVoiceKeyboard() {
+        val status = keyboardStatusProvider.current()
+        keyboardStatusView.setText(
+            when (status) {
+                AndroidVoiceKeyboardStatus.DISABLED -> R.string.settings_voice_keyboard_disabled
+                AndroidVoiceKeyboardStatus.ENABLED -> R.string.settings_voice_keyboard_enabled
+                AndroidVoiceKeyboardStatus.SELECTED -> R.string.settings_voice_keyboard_selected
+            },
+        )
+        keyboardActionView.setText(
+            when (status) {
+                AndroidVoiceKeyboardStatus.DISABLED -> R.string.settings_voice_keyboard_enable
+                AndroidVoiceKeyboardStatus.ENABLED -> R.string.settings_voice_keyboard_choose
+                AndroidVoiceKeyboardStatus.SELECTED -> R.string.settings_voice_keyboard_change
+            },
+        )
     }
 
     private fun renderModel() {

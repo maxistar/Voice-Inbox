@@ -2,8 +2,8 @@ package me.maxistar.voiceinbox
 
 enum class VoiceKeyboardPhase {
     IDLE,
-    PREPARING,
     RECORDING,
+    WAITING_FOR_MODEL,
     TRANSCRIBING,
     RESULT_PENDING,
     ERROR,
@@ -17,20 +17,20 @@ class VoiceKeyboardController {
     var pendingText: String? = null
         private set
 
-    fun beginPreparation(): Boolean {
+    fun beginRecording(): Boolean {
         if (phase !in setOf(VoiceKeyboardPhase.IDLE, VoiceKeyboardPhase.ERROR)) return false
-        phase = VoiceKeyboardPhase.PREPARING
-        return true
-    }
-
-    fun recordingStarted(): Boolean {
-        if (phase != VoiceKeyboardPhase.PREPARING) return false
         phase = VoiceKeyboardPhase.RECORDING
         return true
     }
 
     fun recordingStopped(): Boolean {
         if (phase != VoiceKeyboardPhase.RECORDING) return false
+        phase = VoiceKeyboardPhase.WAITING_FOR_MODEL
+        return true
+    }
+
+    fun modelReady(): Boolean {
+        if (phase != VoiceKeyboardPhase.WAITING_FOR_MODEL) return false
         phase = VoiceKeyboardPhase.TRANSCRIBING
         return true
     }

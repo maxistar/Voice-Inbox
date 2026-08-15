@@ -11,13 +11,26 @@ class VoiceKeyboardControllerTest {
     fun serializesRecordingAndTranscriptionRequests() {
         val controller = VoiceKeyboardController()
 
-        assertTrue(controller.beginPreparation())
-        assertFalse(controller.beginPreparation())
-        assertTrue(controller.recordingStarted())
-        assertFalse(controller.beginPreparation())
+        assertTrue(controller.beginRecording())
+        assertFalse(controller.beginRecording())
         assertTrue(controller.recordingStopped())
         assertFalse(controller.recordingStopped())
+        assertEquals(VoiceKeyboardPhase.WAITING_FOR_MODEL, controller.phase)
+        assertTrue(controller.modelReady())
         assertEquals(VoiceKeyboardPhase.TRANSCRIBING, controller.phase)
+    }
+
+    @Test
+    fun modelCompletionCannotAdvanceRecordingOrAStaleRequest() {
+        val controller = VoiceKeyboardController()
+
+        assertTrue(controller.beginRecording())
+        assertFalse(controller.modelReady())
+        assertEquals(VoiceKeyboardPhase.RECORDING, controller.phase)
+
+        controller.cancel()
+        assertFalse(controller.modelReady())
+        assertEquals(VoiceKeyboardPhase.IDLE, controller.phase)
     }
 
     @Test
@@ -58,11 +71,11 @@ class VoiceKeyboardControllerTest {
     fun recoverableSetupFailureReturnsToRecordableState() {
         val controller = VoiceKeyboardController()
 
-        assertTrue(controller.beginPreparation())
+        assertTrue(controller.beginRecording())
         controller.fail()
 
         assertEquals(VoiceKeyboardPhase.ERROR, controller.phase)
-        assertTrue(controller.beginPreparation())
+        assertTrue(controller.beginRecording())
     }
 
     @Test
@@ -78,8 +91,8 @@ class VoiceKeyboardControllerTest {
     }
 
     private fun transcribingController(): VoiceKeyboardController = VoiceKeyboardController().apply {
-        beginPreparation()
-        recordingStarted()
+        beginRecording()
         recordingStopped()
+        modelReady()
     }
 }

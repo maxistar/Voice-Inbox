@@ -36,6 +36,9 @@ data class AndroidMainScreenInput(
     val hydration: AndroidMainScreenHydration = AndroidMainScreenHydration(),
     val folderSync: AndroidFolderSyncPresentation = AndroidFolderSyncPresentation(),
     val onboardingLifecycle: AndroidOnboardingHintLifecycle = AndroidOnboardingHintLifecycle.DISMISSED,
+    val keyboardStatus: AndroidVoiceKeyboardStatus = AndroidVoiceKeyboardStatus.DISABLED,
+    val keyboardKnown: Boolean = false,
+    val keyboardDiscoveryLifecycle: AndroidVoiceKeyboardDiscoveryLifecycle = AndroidVoiceKeyboardDiscoveryLifecycle.SUPPRESSED,
 )
 
 data class AndroidMainScreenHydration(
@@ -70,6 +73,7 @@ data class AndroidMainScreenState(
     val importEnabled: Boolean,
     val folderSync: AndroidFolderSyncPresentation,
     val onboardingHint: AndroidOnboardingHintPresentation,
+    val keyboardDiscovery: AndroidVoiceKeyboardDiscoveryPresentation,
     val transcriptionActive: Boolean,
 ) {
     val refreshFolderVisible: Boolean get() = folderSync.visible
@@ -131,6 +135,16 @@ object AndroidTaskListSnapshotMapper {
                 model = input.model,
                 output = input.output,
                 folder = input.folder,
+                keyboardStatus = input.keyboardStatus,
+                keyboardKnown = input.keyboardKnown,
+            ),
+            keyboardDiscovery = AndroidVoiceKeyboardDiscoveryPresenter.present(
+                lifecycle = input.keyboardDiscoveryLifecycle,
+                filter = input.filter,
+                model = input.model,
+                modelKnown = input.hydration.modelKnown,
+                keyboardStatus = input.keyboardStatus,
+                keyboardKnown = input.keyboardKnown,
             ),
         )
     }
