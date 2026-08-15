@@ -1,0 +1,121 @@
+---
+import Layout from '../../layouts/Layout.astro';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const keyboardScreenshot = `${base}/screenshots/android-voice-keyboard-guide.png`;
+---
+<Layout
+  title="Android voice keyboard"
+  description="Enable and use the Android Voice Inbox keyboard for private, local short-phrase dictation."
+>
+  <style>
+    .intro { max-width: 800px; }
+    .intro p { font-size: 1.08rem; }
+    .steps { display: grid; gap: 18px; margin-top: 34px; }
+    .step { border: 1px solid var(--border); border-radius: 8px; background: var(--surface); padding: 24px; }
+    .step h2 { margin-bottom: 8px; font-size: 1.35rem; }
+    .evidence figure { margin: 0; }
+    .screenshot {
+      width: 100%;
+    }
+    .screenshot img { display: block; width: 100%; height: auto; }
+    figcaption { margin-top: 12px; color: var(--soft); line-height: 1.6; }
+  </style>
+
+  <section class="intro">
+    <p class="eyebrow">Android-only short-phrase dictation</p>
+    <h1>Dictate into an editable field with Voice Inbox.</h1>
+    <p>
+      Voice Inbox can appear as a compact Android input method. It records a short phrase, recognizes it
+      locally with your installed speech model, and inserts a non-empty result into the active editor.
+      It is not a full typing keyboard and is not currently available on iOS.
+    </p>
+  </section>
+
+  <section class="steps" aria-label="Voice keyboard setup and use">
+    <article class="step">
+      <h2>1. Prepare Voice Inbox</h2>
+      <p>
+        Open Voice Inbox and install a speech model first. The keyboard uses the same selected local model as
+        recording transcription. Recognition runs on your device after the model is ready.
+      </p>
+    </article>
+    <article class="step">
+      <h2>2. Enable the keyboard in Android</h2>
+      <p>
+        In Voice Inbox Settings, open <strong>Voice keyboard</strong> and choose the setup action. Android opens
+        its own input-method settings, where you explicitly enable Voice Inbox. Android controls this security
+        confirmation; Voice Inbox cannot enable itself.
+      </p>
+    </article>
+    <article class="step">
+      <h2>3. Select Voice Inbox</h2>
+      <p>
+        Tap the keyboard action again, or use Android&apos;s keyboard switcher, and select Voice Inbox. Open an app
+        with an editable text field before you start dictating.
+      </p>
+    </article>
+    <article class="step">
+      <h2>4. Allow microphone access</h2>
+      <p>
+        The keyboard needs Android microphone permission to capture your phrase. If permission or a valid model
+        is missing, return to Voice Inbox setup and follow the displayed recovery action.
+      </p>
+    </article>
+    <article class="step">
+      <h2>5. Wait for model preparation</h2>
+      <p>
+        The first use can show a preparation status while the local model is loaded. Recording becomes available
+        after warm-up succeeds. This can take noticeable time on some devices but does not upload your audio.
+      </p>
+    </article>
+    <article class="step">
+      <h2>6. Record a short phrase</h2>
+      <p>
+        Tap the main dictation control to start and tap again to stop, or hold it while speaking and release to
+        stop. Wait while the phrase is transcribed. A non-empty result is inserted into the active editable field.
+      </p>
+    </article>
+    <article class="step">
+      <h2>7. Return to your previous keyboard</h2>
+      <p>
+        Use the keyboard-switch control in Voice Inbox to return to the previous input method. If Android cannot
+        restore it directly, use the system keyboard picker.
+      </p>
+    </article>
+  </section>
+
+  <section class="section note">
+    <h2>What the keyboard does not promise</h2>
+    <p>
+      Voice Inbox is intended for short phrases, not continuous background listening or live partial
+      transcription. Some editors may restrict text insertion, and recognition quality and speed depend on the
+      selected model, language, audio, and device.
+    </p>
+  </section>
+
+  <section class="section evidence">
+    <p class="eyebrow">Android workflow</p>
+    <h2>Voice Inbox inside an editor</h2>
+    <figure>
+      <div class="screenshot">
+        <img
+          src={keyboardScreenshot}
+          alt="Four Android examples showing Voice Inbox listening, transcribing locally, available in the keyboard picker, and displaying microphone-permission recovery"
+        />
+      </div>
+      <figcaption>
+        Voice Inbox listening, transcribing locally, appearing in Android&apos;s keyboard picker, and guiding the
+        user back to setup when microphone permission is missing.
+      </figcaption>
+    </figure>
+  </section>
+
+  <section class="section">
+    <div class="button-row">
+      <a class="button primary" href={`${base}/setup/`}>Open app setup</a>
+      <a class="button" href={`${base}/docs/`}>Back to documentation</a>
+      <a class="button" href={`${base}/faq/`}>Troubleshooting FAQ</a>
+    </div>
+  </section>
+</Layout>

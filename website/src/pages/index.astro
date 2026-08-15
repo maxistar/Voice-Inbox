@@ -4,7 +4,8 @@ import Layout from '../layouts/Layout.astro';
 const githubUrl = 'https://github.com/maxistar/Voice-Inbox';
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const testingUrl = `${base}/testing/`;
-const androidScreenshot = `${base}/screenshots/android-main.jpg`;
+const androidScreenshot = `${base}/screenshots/android-inbox.jpg`;
+const androidWorkflowsIllustration = `${base}/screenshots/android-workflows.png`;
 ---
 <Layout
   title="Voice notes to Markdown"
@@ -46,6 +47,12 @@ const androidScreenshot = `${base}/screenshots/android-main.jpg`;
       color: var(--soft);
       font-size: 0.9rem;
       text-align: center;
+    }
+    .workflow-visual { margin: 0; }
+    .workflow-visual img {
+      display: block;
+      width: 100%;
+      height: auto;
     }
     .platform-card {
       display: grid;
@@ -103,8 +110,8 @@ const androidScreenshot = `${base}/screenshots/android-main.jpg`;
       <h1>Turn voice notes into a Markdown inbox.</h1>
       <p>
         Voice Inbox turns accumulated recordings into a readable text inbox. Android has the mature
-        task-list workflow today; iOS now has an active MVP for importing, previewing, transcribing,
-        and appending individual recordings locally.
+        task-list workflow and a compact voice keyboard for short phrases. iOS has an active MVP for
+        importing, previewing, batch transcribing, reviewing, and appending recordings locally.
       </p>
       <div class="button-row">
         <a class="button primary" href={testingUrl}>Join Android closed test</a>
@@ -117,7 +124,7 @@ const androidScreenshot = `${base}/screenshots/android-main.jpg`;
       <div class="screenshot-shell">
         <img src={androidScreenshot} alt="Voice Inbox Android app showing scanned audio files and playback actions" />
       </div>
-      <p class="caption">Android workflow screenshot. iOS MVP is evolving alongside the shared core.</p>
+      <p class="caption">Android task list with non-sensitive demonstration recordings ready for local transcription.</p>
     </div>
   </section>
 
@@ -128,12 +135,12 @@ const androidScreenshot = `${base}/screenshots/android-main.jpg`;
       <div class="card platform-card">
         <span class="status-badge">Android closed test</span>
         <h3>Flexible task workflow</h3>
-        <p>Import or receive individual recordings, optionally scan a selected audio folder, preview tasks, transcribe one file or a batch, retry failures, and schedule best-effort background runs.</p>
+        <p>Import or receive recordings, scan an optional folder, preview tasks, transcribe one file or a batch, retry failures, schedule best-effort background runs, or dictate a short phrase with the Android-only voice keyboard.</p>
       </div>
       <div class="card platform-card">
         <span class="status-badge">iOS MVP</span>
-        <h3>Manual import workflow</h3>
-        <p>Import audio files, preview them, download the speech model, transcribe locally, show recognized text, and append output. Folder automation and scheduling are still in progress.</p>
+        <h3>Foreground recording workflow</h3>
+        <p>Use app-local, Share Extension, or selected-folder import; preview audio; batch transcribe; review transcripts; append output; and choose startup processing behavior. Scheduled or background transcription is not supported on iOS.</p>
       </div>
       <div class="card platform-card">
         <span class="status-badge">Shared core</span>
@@ -145,7 +152,7 @@ const androidScreenshot = `${base}/screenshots/android-main.jpg`;
 
   <section class="section">
     <p class="eyebrow">What it does</p>
-    <h2>Built for accumulated recordings, not live dictation.</h2>
+    <h2>Process a recording inbox—or dictate a short phrase on Android.</h2>
     <div class="grid">
       <div class="card">
         <h3>Individual or folder transcription</h3>
@@ -171,7 +178,26 @@ const androidScreenshot = `${base}/screenshots/android-main.jpg`;
         <h3>Transparent history</h3>
         <p>Processed and failed files stay visible, and failed files can be retried individually.</p>
       </div>
+      <div class="card">
+        <h3>Android voice keyboard</h3>
+        <p>Record a short phrase in a compact Android input method and insert the locally recognized result into the active editable field. It is not a full typing keyboard and is not available on iOS.</p>
+        <a href={`${base}/docs/voice-keyboard/`}>Read the keyboard guide →</a>
+      </div>
     </div>
+  </section>
+
+  <section class="section">
+    <p class="eyebrow">Current product workflows</p>
+    <h2>Keep recordings organized or dictate where you are writing.</h2>
+    <figure class="workflow-visual">
+      <img
+        src={androidWorkflowsIllustration}
+        alt="Three Android Voice Inbox views showing the recording task list, startup and scheduled-processing settings, and the compact voice keyboard inside a text editor"
+      />
+      <figcaption class="caption">
+        Android recording, automation, and short-phrase dictation workflows shown with demonstration content.
+      </figcaption>
+    </figure>
   </section>
 
   <section class="section">

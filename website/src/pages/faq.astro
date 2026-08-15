@@ -1,5 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 <Layout title="FAQ" description="Common questions about Voice Inbox, privacy, model size, supported audio, and troubleshooting.">
   <style>
@@ -54,10 +55,20 @@ import Layout from '../layouts/Layout.astro';
     <details>
       <summary>Is iOS supported?</summary>
       <p>
-        iOS has an active MVP: import audio files, preview playback, speech model download, local transcription,
-        transcript display, selected-folder refresh, startup processing, and output append are available in the development app.
-        Scheduled background transcription and full Android parity are still in progress.
+        iOS has an active MVP: app-local file import, Share Extension import, selected-folder import, preview,
+        batch transcription, transcript review, output append, and startup processing are available in the
+        foreground development app. Scheduled or background transcription is not supported on iOS.
       </p>
+    </details>
+
+    <details>
+      <summary>Can I dictate directly into another app?</summary>
+      <p>
+        On Android, yes: Voice Inbox includes a compact voice keyboard for short phrases. Recognition runs
+        locally after the selected speech model is ready. It is not a full typing keyboard, does not listen
+        continuously, and is not currently available on iOS.
+      </p>
+      <p><a href={`${base}/docs/voice-keyboard/`}>Read the voice-keyboard guide →</a></p>
     </details>
 
     <details>
