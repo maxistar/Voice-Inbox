@@ -6,6 +6,8 @@
     <string name="voice_keyboard_preparing">Preparing speech model…</string>
     <string name="voice_keyboard_listening_held">Listening… Release to transcribe.</string>
     <string name="voice_keyboard_listening_latched">Listening… Tap Stop when finished.</string>
+    <string name="voice_keyboard_listening_held_countdown">Listening… Release to transcribe. %1$s left.</string>
+    <string name="voice_keyboard_listening_latched_countdown">Listening… Tap Stop when finished. %1$s left.</string>
     <string name="voice_keyboard_transcribing">Transcribing locally…</string>
     <string name="voice_keyboard_result_pending">Text is ready. Focus an editor to insert it, or dismiss it.</string>
     <string name="voice_keyboard_no_speech">No speech detected. Try again.</string>

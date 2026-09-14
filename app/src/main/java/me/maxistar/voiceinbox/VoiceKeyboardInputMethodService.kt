@@ -7,6 +7,7 @@ import android.inputmethodservice.InputMethodService
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.MotionEvent
@@ -29,6 +30,21 @@ import java.util.concurrent.Future
 class VoiceKeyboardInputMethodService : InputMethodService() {
     private val controller = VoiceKeyboardController()
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val recordingCountdown = VoiceKeyboardRecordingCountdown(
+        durationMillis = MAX_PHRASE_DURATION_MS,
+        clock = VoiceKeyboardMonotonicClock(SystemClock::elapsedRealtime),
+        scheduler = object : VoiceKeyboardCountdownScheduler {
+            override fun postDelayed(runnable: Runnable, delayMillis: Long) {
+                mainHandler.postDelayed(runnable, delayMillis)
+            }
+
+            override fun removeCallbacks(runnable: Runnable) {
+                mainHandler.removeCallbacks(runnable)
+            }
+        },
+        onTick = ::showRecordingCountdown,
+        onExpired = ::stopForDurationLimit,
+    )
     private val workExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val passiveWarmupScheduler = VoiceKeyboardWarmupScheduler(
         scheduler = object : VoiceKeyboardDelayScheduler {
@@ -62,7 +78,7 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
     private var inputViewActive = false
     private var requestGeneration = 0L
     private var requestPreparation: Future<Result<File>>? = null
-    private var durationLimitCallback: Runnable? = null
+    private var recordingStatusResource: Int? = null
     private var activeTouchPointerId: Int? = null
     private var activeTouchGeneration: Long? = null
     private var handledRecordingStopTouch = false
@@ -185,7 +201,7 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
         requestGeneration += 1
         inputViewActive = false
         passiveWarmupScheduler.cancel()
-        cancelDurationLimit()
+        cancelRecordingCountdown()
         backspaceRepeater.cancel()
         recordGestureCoordinator.clear()
         recorder.close()
@@ -268,7 +284,10 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
             HybridRecordRelease.LATCH -> {
                 if (generation == requestGeneration) {
                     when (controller.phase) {
-                        VoiceKeyboardPhase.RECORDING -> render(R.string.voice_keyboard_listening_latched)
+                        VoiceKeyboardPhase.RECORDING -> {
+                            recordingStatusResource = R.string.voice_keyboard_listening_latched_countdown
+                            recordingCountdown.remainingSeconds()?.let { showRecordingCountdown(generation, it) }
+                        }
                         else -> Unit
                     }
                 }
@@ -324,14 +343,13 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
             return
         }
         recorder.start().onSuccess {
-            render(
+            recordingStatusResource =
                 if (preparationAction == HybridRecordPreparationAction.START_HELD) {
-                    R.string.voice_keyboard_listening_held
+                    R.string.voice_keyboard_listening_held_countdown
                 } else {
-                    R.string.voice_keyboard_listening_latched
-                },
-            )
-            scheduleDurationLimit(generation)
+                    R.string.voice_keyboard_listening_latched_countdown
+                }
+            recordingCountdown.start(generation)
         }.onFailure {
             recordGestureCoordinator.finish(generation)
             requestPreparation = null
@@ -350,16 +368,18 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
         }
     }
 
-    private fun scheduleDurationLimit(generation: Long) {
-        cancelDurationLimit()
-        durationLimitCallback = Runnable { stopForDurationLimit(generation) }.also {
-            mainHandler.postDelayed(it, MAX_PHRASE_DURATION_MS)
-        }
+    private fun showRecordingCountdown(generation: Long, remainingSeconds: Long) {
+        if (generation != requestGeneration || controller.phase != VoiceKeyboardPhase.RECORDING) return
+        val status = recordingStatusResource ?: return
+        render(
+            status,
+            recordingTime = VoiceKeyboardRecordingCountdown.formatRemaining(remainingSeconds),
+        )
     }
 
-    private fun cancelDurationLimit() {
-        durationLimitCallback?.let(mainHandler::removeCallbacks)
-        durationLimitCallback = null
+    private fun cancelRecordingCountdown() {
+        recordingCountdown.cancel()
+        recordingStatusResource = null
     }
 
     private fun stopForDurationLimit(generation: Long) {
@@ -374,7 +394,7 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
         recordGestureCoordinator.finish(expectedGeneration)
         activeTouchPointerId = null
         activeTouchGeneration = null
-        cancelDurationLimit()
+        cancelRecordingCountdown()
         val generation = expectedGeneration
         val preparation = requestPreparation
         render(
@@ -452,7 +472,7 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
     private fun cancelCurrentRequest(expectedGeneration: Long = requestGeneration) {
         if (expectedGeneration != requestGeneration) return
         requestGeneration += 1
-        cancelDurationLimit()
+        cancelRecordingCountdown()
         if (controller.phase == VoiceKeyboardPhase.RECORDING) {
             workExecutor.execute { recorder.cancel() }
         }
@@ -535,8 +555,14 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
         )
     }
 
-    private fun render(status: Int, showSetup: Boolean = false) {
-        statusView?.setText(status)
+    private fun render(status: Int, showSetup: Boolean = false, recordingTime: String? = null) {
+        statusView?.apply {
+            if (recordingTime == null) {
+                setText(status)
+            } else {
+                text = getString(status, recordingTime)
+            }
+        }
         val phase = controller.phase
         recordButton?.apply {
             val busy = phase in setOf(VoiceKeyboardPhase.WAITING_FOR_MODEL, VoiceKeyboardPhase.TRANSCRIBING)
@@ -587,6 +613,6 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
 
     private companion object {
         const val PASSIVE_WARMUP_DELAY_MS = 400L
-        const val MAX_PHRASE_DURATION_MS = 30_000L
+        const val MAX_PHRASE_DURATION_MS = 60_000L
     }
 }
