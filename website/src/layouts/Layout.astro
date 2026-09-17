@@ -14,6 +14,8 @@ const githubUrl = 'https://github.com/maxistar/Voice-Inbox';
 const releaseUrl = `${githubUrl}/releases`;
 const nav = [
   ['Home', '/'],
+  ['About', '/about/'],
+  ['Download', '/download/'],
   ['Docs', '/docs/'],
   ['Setup', '/setup/'],
   ['Testing', '/testing/'],
@@ -113,11 +115,11 @@ const nav = [
         align-items: center;
         justify-content: flex-end;
         flex-wrap: wrap;
-        gap: 14px 18px;
+        gap: 12px 16px;
       }
       nav a {
         color: var(--muted);
-        font-size: 0.92rem;
+        font-size: 0.88rem;
         font-weight: 650;
       }
       nav a:hover {
@@ -301,6 +303,7 @@ const nav = [
         <span>Voice Inbox - local-first voice note transcription.</span>
         <span class="footer-links">
           <a href={releaseUrl} target="_blank" rel="noopener">Releases</a>
+          <a href={`${base}/contact/`}>Contact</a>
           <a href={`${base}/setup/`}>Setup</a>
           <a href={`${base}/faq/`}>FAQ</a>
           <a href={`${base}/privacy/`}>Privacy</a>

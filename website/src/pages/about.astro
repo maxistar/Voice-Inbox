@@ -1,0 +1,120 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const workflowsImage = `${base}/screenshots/android-workflows.png`;
+---
+<Layout
+  title="About Voice Inbox"
+  description="Why Voice Inbox turns existing audio and short Android dictation into local, readable transcripts."
+>
+  <style>
+    .intro {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(300px, 0.9fr);
+      align-items: center;
+      gap: 42px;
+    }
+    .intro-copy { max-width: 640px; }
+    .intro-copy p { font-size: 1.08rem; }
+    .workflow-image {
+      margin: 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      overflow: hidden;
+    }
+    .workflow-image img { display: block; width: 100%; height: auto; }
+    .workflow-image figcaption {
+      padding: 12px 16px;
+      color: var(--soft);
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+    .workflow-card { display: grid; gap: 10px; }
+    .scope {
+      display: inline-flex;
+      width: fit-content;
+      border-radius: 999px;
+      padding: 4px 9px;
+      color: var(--accent-strong);
+      background: var(--accent-soft);
+      font-size: 0.74rem;
+      font-weight: 800;
+    }
+    @media (max-width: 860px) {
+      .intro { grid-template-columns: 1fr; }
+    }
+  </style>
+
+  <section class="intro">
+    <div class="intro-copy">
+      <p class="eyebrow">About Voice Inbox</p>
+      <h1>Keep the audio you use. Read the text you need.</h1>
+      <p>
+        Voice Inbox is for the moment after a voice message, recorder note, meeting, or interview already exists.
+        Send or import the audio, run recognition on your device, and review a readable transcript in the app.
+      </p>
+      <p>
+        It does not replace your recorder, messenger, or note editor. It gives existing audio a local text workflow,
+        with optional export when a Markdown or plain-text document helps you stay organized.
+      </p>
+      <div class="button-row">
+        <a class="button primary" href={`${base}/download/`}>Check availability</a>
+        <a class="button" href={`${base}/setup/`}>Read setup guide</a>
+      </div>
+    </div>
+    <figure class="workflow-image">
+      <img
+        src={workflowsImage}
+        alt="Voice Inbox Android views for audio tasks, automation settings, and short-phrase dictation"
+      />
+      <figcaption>Recording transcription and Android short-phrase dictation are separate workflows.</figcaption>
+    </figure>
+  </section>
+
+  <section class="section">
+    <p class="eyebrow">Local-first</p>
+    <h2>Your recording is recognized on your device.</h2>
+    <div class="grid">
+      <article class="card">
+        <h3>Model once, local recognition after</h3>
+        <p>Download a compatible speech model, then recognize supported audio on the device instead of sending it to an app cloud transcription service.</p>
+      </article>
+      <article class="card">
+        <h3>Bring audio from the tools you already use</h3>
+        <p>Import a recording or use Share from another app. Voice Inbox receives the audio; it is not a general-purpose voice-note recorder.</p>
+      </article>
+      <article class="card">
+        <h3>Review first, export later</h3>
+        <p>Read a transcript in Voice Inbox, then optionally append successful results to a Markdown or plain-text document.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="section">
+    <p class="eyebrow">Two workflows</p>
+    <h2>Process recordings or dictate a short phrase.</h2>
+    <div class="grid">
+      <article class="card workflow-card">
+        <span class="scope">Android and iOS MVP</span>
+        <h3>Recording inbox</h3>
+        <p>Import or receive an audio file, preview it, transcribe one item or a batch, and review the resulting text. Folder workflows and scheduling are optional Android enhancements.</p>
+        <a href={`${base}/setup/`}>Explore recording setup</a>
+      </article>
+      <article class="card workflow-card">
+        <span class="scope">Android</span>
+        <h3>Voice Inbox keyboard</h3>
+        <p>Use a compact Android input method to dictate one short phrase and insert its locally recognized result into the active editable field.</p>
+        <a href={`${base}/docs/voice-keyboard/`}>Explore the keyboard guide</a>
+      </article>
+    </div>
+  </section>
+
+  <section class="section note">
+    <h2>Platform status</h2>
+    <p>
+      Android is currently distributed through Google Play closed testing. iOS is an active source-built MVP for foreground import and transcription workflows; it does not yet match Android automation or include the Android voice keyboard.
+    </p>
+  </section>
+</Layout>

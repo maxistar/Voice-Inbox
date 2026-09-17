@@ -30,9 +30,9 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     <p class="eyebrow">Setup guide</p>
     <h1>Get Voice Inbox ready for your recordings.</h1>
     <p>
-      Voice Inbox writes recognized speech to a user-selected output document and processes audio that you
-      import, share, or discover in an optional folder. Android has the mature task-list workflow today;
-      iOS is an active MVP. Model installation is large, but recognition runs locally after it completes.
+      Voice Inbox processes audio that you import, share, or discover in an optional folder, then lets you review
+      the recognized text in the app. Exporting transcripts to your own document is optional. Android has the mature
+      task-list workflow today; iOS is an active MVP. Model installation is large, but recognition runs locally after it completes.
     </p>
   </section>
 
@@ -62,24 +62,37 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     </div>
 
     <div class="step">
-      <h2>3. Select an output document</h2>
+      <h2>3. Add recordings</h2>
       <p>
-        Use <strong>Create New</strong> to create a writable <code>.txt</code> or <code>.md</code> document, or
-        <strong>Choose Existing</strong> to select one you already use. Voice Inbox appends new entries and
-        preserves existing content. On iOS, output selection uses the document picker and security-scoped access.
-      </p>
-    </div>
-
-    <div class="step">
-      <h2>4. Add recordings</h2>
-      <p>
-        On Android, use <strong>Import Audio Files</strong> for one or more recordings, or share an audio file to
-        Voice Inbox from another app. Selecting an audio folder is optional and useful for batch processing;
+        On Android, use <strong>Import Audio Files</strong> for one or more recordings, or use Share in another app
+        to send an existing audio file to Voice Inbox. Selecting an audio folder is optional and useful for batch processing;
         the app scans direct children only and does not traverse nested folders.
       </p>
       <p>
         On iOS, import app-local files, receive audio through the Share Extension, or select a folder to
         refresh its direct audio files into the queue.
+      </p>
+    </div>
+
+    <div class="step">
+      <h2>4. Review and transcribe</h2>
+      <p>
+        The main screen presents setup and audio work as a task list. Use Play to preview a recording, transcribe
+        it individually, or choose <strong>Transcribe All</strong> when multiple tasks are ready. Review each resulting
+        transcript in Voice Inbox.
+      </p>
+    </div>
+
+    <div class="step">
+      <h2>Optional: export transcripts</h2>
+      <p>
+        Use <strong>Create New</strong> to create a writable <code>.txt</code> or <code>.md</code> document, or
+        <strong>Choose Existing</strong> to select one you already use. Voice Inbox appends new entries and preserves
+        existing content. On iOS, output selection uses the document picker and security-scoped access.
+      </p>
+      <p>
+        You can keep using in-app transcript review without an output document. Configure export when an automatically
+        maintained Markdown or text file suits your workflow.
       </p>
     </div>
 
@@ -94,18 +107,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     </div>
 
     <div class="step">
-      <h2>5. Review and transcribe</h2>
-      <p>
-        The main screen presents setup and audio work as a task list. Use Play to preview a recording, transcribe
-        it individually, or choose <strong>Transcribe All</strong> when multiple tasks are ready.
-      </p>
-      <p>
-        Failed files move to the Processed tab with their latest error and a Retry action. Successful files are appended to the output document.
-      </p>
-    </div>
-
-    <div class="step">
-      <h2>6. Optional: startup processing</h2>
+      <h2>Optional: startup processing</h2>
       <p>
         In Settings, choose whether Voice Inbox should ask, transcribe automatically, or leave files queued when
         the app opens and finishes scanning. Ask is the default. Startup processing is available on Android and iOS.
@@ -113,7 +115,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     </div>
 
     <div class="step">
-      <h2>7. Optional: nightly transcription</h2>
+      <h2>Optional: nightly transcription on Android</h2>
       <p>
         On Android, open Settings to enable nightly transcription and choose a preferred time. Android may delay background work,
         so scheduled runs should be treated as best-effort rather than exact alarms.

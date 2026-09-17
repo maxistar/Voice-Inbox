@@ -1,0 +1,126 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const githubUrl = 'https://github.com/maxistar/Voice-Inbox';
+const releaseUrl = `${githubUrl}/releases`;
+const testingUrl = `${base}/testing/`;
+const setupUrl = `${base}/setup/`;
+const storeUrl = 'https://play.google.com/store/apps/details?id=me.maxistar.voiceinbox';
+const inboxImage = `${base}/screenshots/android-inbox.jpg`;
+---
+<Layout
+  title="Download and availability"
+  description="Current Voice Inbox availability, Android closed-test access, iOS MVP status, and first-use requirements."
+>
+  <style>
+    .intro {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(280px, 0.72fr);
+      align-items: center;
+      gap: 42px;
+    }
+    .intro-copy { max-width: 640px; }
+    .intro-copy p { font-size: 1.08rem; }
+    .preview {
+      margin: 0;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+    .preview img { display: block; width: 100%; height: auto; }
+    .status {
+      display: inline-flex;
+      width: fit-content;
+      border-radius: 999px;
+      padding: 5px 10px;
+      color: var(--accent-strong);
+      background: var(--accent-soft);
+      font-size: 0.78rem;
+      font-weight: 850;
+    }
+    .availability-card { display: grid; gap: 14px; }
+    .availability-card p { margin-bottom: 0; }
+    .requirements { margin: 0; padding-left: 20px; }
+    .requirements li { margin-bottom: 8px; }
+    @media (max-width: 860px) {
+      .intro { grid-template-columns: 1fr; }
+    }
+  </style>
+
+  <section class="intro">
+    <div class="intro-copy">
+      <p class="eyebrow">Download and availability</p>
+      <h1>Start with Voice Inbox on Android.</h1>
+      <p>
+        Android is available through a restricted Google Play closed test. Join with an eligible Google account,
+        install the app, then download a local speech model before your first transcript.
+      </p>
+      <div class="button-row">
+        <a class="button primary" href={testingUrl}>Read closed-test instructions</a>
+        <a class="button" href={storeUrl} target="_blank" rel="noopener">Open Google Play listing</a>
+      </div>
+    </div>
+    <figure class="preview">
+      <img src={inboxImage} alt="Voice Inbox Android task list ready for local transcription" />
+    </figure>
+  </section>
+
+  <section class="section">
+    <p class="eyebrow">Availability</p>
+    <h2>Choose the path that matches your platform.</h2>
+    <div class="grid">
+      <article class="card availability-card">
+        <span class="status">Android closed test</span>
+        <h3>Google Play access for eligible testers</h3>
+        <p>Voice Inbox is not a public production release. The detailed test page explains group membership, opt-in, and installation with the same Google account.</p>
+        <a href={testingUrl}>Join the Android closed test</a>
+      </article>
+      <article class="card availability-card">
+        <span class="status">Android source and APKs</span>
+        <h3>GitHub releases and source builds</h3>
+        <p>Source builds and published Android artifacts remain available for people who need an alternative to the restricted test route.</p>
+        <a href={releaseUrl} target="_blank" rel="noopener">Open GitHub Releases</a>
+      </article>
+      <article class="card availability-card">
+        <span class="status">iOS MVP</span>
+        <h3>Built from source, not an App Store release</h3>
+        <p>The iOS app is an active foreground-workflow MVP. It supports supported audio import and transcript review, but does not yet offer Android-equivalent automation or the Android keyboard.</p>
+        <a href={githubUrl} target="_blank" rel="noopener">View source and build context</a>
+      </article>
+    </div>
+  </section>
+
+  <section class="section">
+    <p class="eyebrow">Before first use</p>
+    <h2>Plan for the model, not a long setup checklist.</h2>
+    <div class="grid">
+      <article class="card">
+        <h3>Android device</h3>
+        <ul class="requirements">
+          <li>Android 7.0 (API 24) or later</li>
+          <li>ARM64 device</li>
+          <li>About 704 MiB free storage for model installation</li>
+        </ul>
+      </article>
+      <article class="card">
+        <h3>First model installation</h3>
+        <ul class="requirements">
+          <li>Normal download is about 640 MiB</li>
+          <li>Network access is needed for the normal download</li>
+          <li>Recognition runs locally after installation</li>
+        </ul>
+      </article>
+      <article class="card">
+        <h3>Then use the workflow you need</h3>
+        <p>Import or share audio and review the transcript. Export documents, folders, startup behavior, and Android scheduling are optional follow-up choices.</p>
+      </article>
+    </div>
+    <div class="button-row section">
+      <a class="button primary" href={setupUrl}>Open setup guide</a>
+      <a class="button" href={`${base}/faq/`}>Read requirements FAQ</a>
+    </div>
+  </section>
+</Layout>

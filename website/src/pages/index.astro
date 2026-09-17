@@ -8,8 +8,8 @@ const androidScreenshot = `${base}/screenshots/android-inbox.jpg`;
 const androidWorkflowsIllustration = `${base}/screenshots/android-workflows.png`;
 ---
 <Layout
-  title="Voice notes to Markdown"
-  description="Voice Inbox is a local-first app for turning accumulated voice recordings into a Markdown or plain-text inbox. Android is ready; iOS is an active MVP."
+  title="Local voice transcription"
+  description="Voice Inbox turns shared audio recordings and short Android dictation into readable local transcripts. Android is ready; iOS is an active MVP."
 >
   <style>
     .hero {
@@ -57,6 +57,26 @@ const androidWorkflowsIllustration = `${base}/screenshots/android-workflows.png`
     .platform-card {
       display: grid;
       gap: 12px;
+    }
+    .use-case-card {
+      display: grid;
+      align-content: start;
+      gap: 10px;
+      min-height: 184px;
+    }
+    .use-case-card p {
+      margin-bottom: 0;
+    }
+    .platform-tag {
+      display: inline-flex;
+      width: fit-content;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 4px 9px;
+      color: var(--soft);
+      background: var(--surface-strong);
+      font-size: 0.74rem;
+      font-weight: 800;
     }
     .status-badge {
       display: inline-flex;
@@ -107,11 +127,11 @@ const androidWorkflowsIllustration = `${base}/screenshots/android-workflows.png`
   <section class="hero">
     <div class="hero-copy">
       <p class="eyebrow">Local-first voice note transcription</p>
-      <h1>Turn voice notes into a Markdown inbox.</h1>
+      <h1>Turn audio into readable local transcripts.</h1>
       <p>
-        Voice Inbox turns accumulated recordings into a readable text inbox. Android has the mature
-        task-list workflow and a compact voice keyboard for short phrases. iOS has an active MVP for
-        importing, previewing, batch transcribing, reviewing, and appending recordings locally.
+        Send an existing recording to Voice Inbox, transcribe it on your device, and review the text in the app.
+        Android also has a compact voice keyboard for short phrases. iOS has an active MVP for importing,
+        previewing, batch transcribing, and reviewing recordings locally.
       </p>
       <div class="button-row">
         <a class="button primary" href={testingUrl}>Join Android closed test</a>
@@ -125,6 +145,38 @@ const androidWorkflowsIllustration = `${base}/screenshots/android-workflows.png`
         <img src={androidScreenshot} alt="Voice Inbox Android app showing scanned audio files and playback actions" />
       </div>
       <p class="caption">Android task list with non-sensitive demonstration recordings ready for local transcription.</p>
+    </div>
+  </section>
+
+  <section class="section">
+    <p class="eyebrow">Use cases</p>
+    <h2>Start with the audio you already have.</h2>
+    <div class="grid">
+      <article class="card use-case-card">
+        <span class="platform-tag">Android and iOS MVP</span>
+        <h3>Voice message from a messenger</h3>
+        <p>Use Share to send an already-recorded voice message to Voice Inbox, then read its local transcript.</p>
+      </article>
+      <article class="card use-case-card">
+        <span class="platform-tag">Android and iOS MVP</span>
+        <h3>Voice note from your recorder</h3>
+        <p>Keep recording in the app you already use, then import or share the audio when you want text.</p>
+      </article>
+      <article class="card use-case-card">
+        <span class="platform-tag">Android and iOS MVP</span>
+        <h3>Meeting, interview, or lecture</h3>
+        <p>Preview a recording, transcribe one file or a batch, and review the result before choosing an export.</p>
+      </article>
+      <article class="card use-case-card">
+        <span class="platform-tag">Android</span>
+        <h3>Folder of new recordings</h3>
+        <p>Select one folder and let Voice Inbox find new or changed audio files for an optional repeatable workflow.</p>
+      </article>
+      <article class="card use-case-card">
+        <span class="platform-tag">Android</span>
+        <h3>A thought while you are writing</h3>
+        <p>Switch to the Voice Inbox keyboard and dictate a short phrase directly into an active text field.</p>
+      </article>
     </div>
   </section>
 
@@ -163,8 +215,8 @@ const androidWorkflowsIllustration = `${base}/screenshots/android-workflows.png`
         <p>Download the model or install it from a compatible local folder. After installation, recognition runs on device instead of sending audio to an app cloud service.</p>
       </div>
       <div class="card">
-        <h3>Markdown or plain text output</h3>
-        <p>Create a new <code>.md</code> or <code>.txt</code> document, or choose an existing writable file. Each successful note is appended without replacing earlier content.</p>
+        <h3>Review first, export when useful</h3>
+        <p>Read each transcript in Voice Inbox. Optionally create or choose a <code>.md</code> or <code>.txt</code> document and append successful notes without replacing earlier content.</p>
       </div>
       <div class="card">
         <h3>Preview before processing</h3>
@@ -176,7 +228,7 @@ const androidWorkflowsIllustration = `${base}/screenshots/android-workflows.png`
       </div>
       <div class="card">
         <h3>Transparent history</h3>
-        <p>Processed and failed files stay visible, and failed files can be retried individually.</p>
+        <p>Processed and failed files stay visible with their latest transcript or error, and failed files can be retried individually.</p>
       </div>
       <div class="card">
         <h3>Android voice keyboard</h3>
@@ -202,13 +254,12 @@ const androidWorkflowsIllustration = `${base}/screenshots/android-workflows.png`
 
   <section class="section">
     <p class="eyebrow">Workflow</p>
-    <h2>From recordings to notes in five steps.</h2>
+    <h2>From existing audio to local text.</h2>
     <div class="grid flow">
       <div class="card"><h3>Install the model</h3><p>Download and verify the model, or install it from a compatible local folder.</p></div>
-      <div class="card"><h3>Prepare output</h3><p>Create or choose a writable Markdown or text document.</p></div>
-      <div class="card"><h3>Add recordings</h3><p>Import files, share audio to Voice Inbox, or optionally select an audio folder.</p></div>
-      <div class="card"><h3>Review tasks</h3><p>Preview recordings and check what is ready to process.</p></div>
-      <div class="card"><h3>Transcribe</h3><p>Append one entry per successful file with filename, recording time, and recognized text.</p></div>
+      <div class="card"><h3>Add audio</h3><p>Import a file, send one through Share, or optionally select an audio folder.</p></div>
+      <div class="card"><h3>Transcribe and review</h3><p>Preview the recording if needed, then read the recognized text in Voice Inbox.</p></div>
+      <div class="card"><h3>Export or automate later</h3><p>Optionally append transcripts to a Markdown or text document, choose startup behavior, or enable Android scheduling.</p></div>
     </div>
   </section>
 

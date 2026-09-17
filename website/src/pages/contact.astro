@@ -1,0 +1,85 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const githubIssuesUrl = 'https://github.com/maxistar/Voice-Inbox/issues';
+---
+<Layout
+  title="Contact and support"
+  description="Find the right Voice Inbox feedback route and prepare a useful, privacy-safe report."
+>
+  <style>
+    .intro { max-width: 760px; }
+    .intro p { font-size: 1.08rem; }
+    .route-card { display: grid; gap: 12px; }
+    .route-card p { margin-bottom: 0; }
+    .report-list { margin: 0; padding-left: 20px; }
+    .report-list li { margin-bottom: 8px; }
+    .warning {
+      border: 1px solid #f2c66d;
+      border-left: 4px solid #c98013;
+      border-radius: 8px;
+      background: #fff8e8;
+      padding: 20px;
+    }
+    .warning h2 { font-size: 1.3rem; margin-bottom: 8px; }
+    .warning p { margin-bottom: 0; color: #6f5218; }
+  </style>
+
+  <section class="intro">
+    <p class="eyebrow">Contact and support</p>
+    <h1>Send feedback through the route that fits it.</h1>
+    <p>
+      Voice Inbox is in active Android closed testing. A clear report helps most when it identifies what happened,
+      where it happened, and whether someone else can reproduce it without seeing your private audio.
+    </p>
+  </section>
+
+  <section class="section">
+    <div class="grid">
+      <article class="card route-card">
+        <h2>Reproducible public bug</h2>
+        <p>Use GitHub Issues for a bug that can be described without private recordings, transcript content, credentials, or document links.</p>
+        <a class="button primary" href={githubIssuesUrl} target="_blank" rel="noopener">Open Voice Inbox Issues</a>
+      </article>
+      <article class="card route-card">
+        <h2>Closed-test feedback</h2>
+        <p>For feedback unsuitable for a public issue, use Google Play private feedback or reply through the same channel where you received the testing invitation.</p>
+        <a class="button" href={`${base}/testing/`}>Review testing guidance</a>
+      </article>
+      <article class="card route-card">
+        <h2>Self-service first</h2>
+        <p>Setup, requirements, model behavior, audio support, transcript export, and common recovery actions are documented before you need to report a problem.</p>
+        <div class="button-row">
+          <a href={`${base}/faq/`}>Read FAQ</a>
+          <a href={`${base}/setup/`}>Read setup guide</a>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="section">
+    <p class="eyebrow">Useful report</p>
+    <h2>Include enough context to reproduce the issue.</h2>
+    <div class="grid">
+      <article class="card">
+        <ul class="report-list">
+          <li>Voice Inbox app version</li>
+          <li>Device model and Android or iOS version</li>
+          <li>What you expected and what happened instead</li>
+          <li>Steps that reproduce the issue</li>
+          <li>Visible error text and a non-sensitive screenshot when useful</li>
+        </ul>
+      </article>
+      <article class="warning">
+        <h2>Keep public reports private-safe.</h2>
+        <p>Do not post recordings, recognized text, access credentials, private document links, or other sensitive information in a public issue.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="section note">
+    <h2>Understand data handling first</h2>
+    <p>Voice Inbox recognizes audio locally after the model is installed. Read the <a href={`${base}/privacy/`}>privacy information</a> before sharing anything that could identify you or another person.</p>
+  </section>
+</Layout>

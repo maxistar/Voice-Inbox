@@ -10,6 +10,7 @@ const baseModelUrl = 'https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3';
 const convertedModelUrl = 'https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx';
 const modelRevisionUrl = `${convertedModelUrl}/tree/8f23f0c03c8761650bdb5b40aaf3e40d2c15f1ce`;
 const ccByUrl = 'https://creativecommons.org/licenses/by/4.0/';
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 <Layout title="Legal" description="Voice Inbox legal, support, privacy, and publication information.">
   <style>
@@ -57,7 +58,7 @@ const ccByUrl = 'https://creativecommons.org/licenses/by/4.0/';
         <div class="row"><strong>Android package</strong><span><code>me.maxistar.voiceinbox</code></span></div>
         <div class="row"><strong>iOS bundle status</strong><span>iOS MVP in development; final bundle identifier and store listing details must be confirmed before release.</span></div>
         <div class="row"><strong>Developer / publisher</strong><span>TODO: maintainer legal or publisher name</span></div>
-        <div class="row"><strong>Support contact</strong><span>TODO: support email or support URL</span></div>
+        <div class="row"><strong>Support contact</strong><span><a href={`${base}/contact/`}>Contact and support page</a></span></div>
         <div class="row"><strong>Privacy policy</strong><span><a href="../privacy/">Privacy page</a></span></div>
         <div class="row"><strong>Source code</strong><span><a href={githubUrl} target="_blank" rel="noopener">{githubUrl}</a></span></div>
         <div class="row"><strong>Downloads</strong><span><a href={releaseUrl} target="_blank" rel="noopener">GitHub Releases</a></span></div>
