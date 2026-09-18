@@ -16,14 +16,14 @@ class SpeechModelImportWorker(
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         val treeUri = inputData.getString(KEY_TREE_URI)?.let(Uri::parse)
-            ?: return failure("No model folder was selected")
+            ?: return failure(applicationContext.getString(R.string.error_model_folder_missing))
         val catalogId = inputData.getString(KEY_CATALOG_ID)
-            ?: return failure("No speech model was selected")
+            ?: return failure(applicationContext.getString(R.string.error_model_missing))
         val modelVersion = inputData.getString(KEY_MODEL_VERSION)
-            ?: return failure("No speech model version was selected")
+            ?: return failure(applicationContext.getString(R.string.error_model_version_missing))
         val descriptor = SpeechModelCatalog.resolveInstallation(catalogId, modelVersion)
             ?.takeIf { it.distribution.localImportAvailable }
-            ?: return failure("The selected speech model is no longer supported")
+            ?: return failure(applicationContext.getString(R.string.error_model_unsupported))
         val repository = SpeechModelRepository(
             root = applicationContext.noBackupFilesDir.resolve("models"),
             descriptor = descriptor,
@@ -33,14 +33,14 @@ class SpeechModelImportWorker(
                 worker = this,
                 context = applicationContext,
                 progress = 0,
-                message = "Preparing local speech model",
+                message = applicationContext.getString(R.string.model_import_preparing),
                 source = SpeechModelInstallationWork.Source.LOCAL_IMPORT,
             )
             val installed = SpeechModelLocalImporter(
                 resolver = applicationContext.contentResolver,
                 repository = repository,
             ).import(treeUri.toString()) { progress -> publishProgress(progress, repository) }.getOrElse {
-                return failure(it.message ?: "Could not import speech model")
+                return failure(it.message ?: applicationContext.getString(R.string.error_model_import))
             }
             SpeechModelWarmup.invalidate()
             Result.success(
@@ -63,16 +63,30 @@ class SpeechModelImportWorker(
             workDataOf(
                 SpeechModelInstallationWork.KEY_BYTES_DOWNLOADED to progress.bytesCopied,
                 SpeechModelInstallationWork.KEY_TOTAL_BYTES to total,
-                SpeechModelInstallationWork.KEY_MESSAGE to progress.message,
+                SpeechModelInstallationWork.KEY_MESSAGE to localizedProgressMessage(progress.message),
             ),
         )
         SpeechModelInstallationWork.promote(
             worker = this,
             context = applicationContext,
             progress = percent,
-            message = progress.message,
+            message = localizedProgressMessage(progress.message),
             source = SpeechModelInstallationWork.Source.LOCAL_IMPORT,
         )
+    }
+
+    private fun localizedProgressMessage(message: String): String = when {
+        message == "Preparing local speech model" -> applicationContext.getString(R.string.model_import_preparing)
+        message == "Activating speech model" -> applicationContext.getString(R.string.model_activating)
+        message.startsWith("Copying ") -> applicationContext.getString(
+            R.string.model_file_downloading,
+            message.removePrefix("Copying "),
+        )
+        message.startsWith("Verified ") -> applicationContext.getString(
+            R.string.model_file_verified,
+            message.removePrefix("Verified "),
+        )
+        else -> message
     }
 
     private fun failure(message: String): Result = Result.failure(

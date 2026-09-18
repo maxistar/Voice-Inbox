@@ -202,10 +202,10 @@ class MainActivityInstrumentedTest {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { it.findViewById<android.widget.Button>(R.id.processedTab).performClick() }
             awaitActivity(scenario) { activity ->
-                val rows = audioRows(activity).associateBy { it.task.title }
+                val rows = audioRows(activity).associateBy { it.task.title.fallback }
                 rows.keys == setOf("failed.ogg", "silent.ogg", "done.ogg") &&
                     rows.getValue("failed.ogg").task.actions.any { it.kind == TaskActionKind.RETRY_TRANSCRIPTION } &&
-                    rows.getValue("silent.ogg").task.badge == "No speech" &&
+                    rows.getValue("silent.ogg").task.badge.fallback == "No speech" &&
                     rows.getValue("done.ogg").task.actions.any { it.kind == TaskActionKind.SHOW_TEXT }
             }
         }
@@ -430,7 +430,7 @@ class MainActivityInstrumentedTest {
                 assertTrue(items.take(hintIndex).all { it is TaskListDisplayItem.Setup })
                 val hint = items[hintIndex] as TaskListDisplayItem.OnboardingHint
                 assertEquals(TaskActionKind.DOWNLOAD_MODEL, hint.presentation.action?.kind)
-                assertTrue(hint.presentation.downloadDisclosure?.contains("downloads") == true)
+                assertEquals(R.string.onboarding_download_disclosure, hint.presentation.downloadDisclosureRes)
             }
 
             scenario.onActivity { activity ->
@@ -454,7 +454,7 @@ class MainActivityInstrumentedTest {
                 val hint = items.filterIsInstance<TaskListDisplayItem.OnboardingHint>().single()
                 assertTrue(model.task.progress != null)
                 assertTrue(model.task.actions.any { it.kind == TaskActionKind.CANCEL_MODEL_DOWNLOAD })
-                assertEquals("Installing speech model…", hint.presentation.action?.label)
+                assertEquals(R.string.onboarding_action_installing, hint.presentation.action?.labelRes)
             }
 
             scenario.onActivity { activity ->
@@ -694,7 +694,7 @@ class MainActivityInstrumentedTest {
     private fun audioRows(activity: MainActivity): List<TaskListDisplayItem.Audio> =
         displayItems(activity).filterIsInstance<TaskListDisplayItem.Audio>()
 
-    private fun audioTitles(activity: MainActivity): List<String> = audioRows(activity).map { it.task.title }
+    private fun audioTitles(activity: MainActivity): List<String> = audioRows(activity).map { it.task.title.fallback }
 
     private fun descendants(root: android.view.ViewGroup): Sequence<android.view.View> = sequence {
         for (index in 0 until root.childCount) {

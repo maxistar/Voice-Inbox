@@ -75,22 +75,22 @@ enum class AndroidOnboardingStepKind {
 
 data class AndroidOnboardingChecklistStep(
     val kind: AndroidOnboardingStepKind,
-    val label: String,
+    val labelRes: Int,
     val complete: Boolean,
     val optional: Boolean = false,
 )
 
 data class AndroidOnboardingHintAction(
-    val label: String,
+    val labelRes: Int,
     val enabled: Boolean,
     val kind: TaskActionKind,
 )
 
 data class AndroidOnboardingHintPresentation(
     val visible: Boolean = false,
-    val title: String = "Set up Voice Inbox",
-    val explanation: String = "Follow these steps, or use the setup tasks above in any order.",
-    val downloadDisclosure: String? = null,
+    val titleRes: Int = R.string.onboarding_title,
+    val explanationRes: Int = R.string.onboarding_explanation,
+    val downloadDisclosureRes: Int? = null,
     val steps: List<AndroidOnboardingChecklistStep> = emptyList(),
     val action: AndroidOnboardingHintAction? = null,
 ) {
@@ -122,24 +122,24 @@ object AndroidOnboardingHintPresenter {
         val steps = listOf(
             AndroidOnboardingChecklistStep(
                 kind = AndroidOnboardingStepKind.MODEL,
-                label = "Install speech model",
+                labelRes = R.string.onboarding_step_model,
                 complete = model.state == ModelSetupSnapshotState.READY,
             ),
             AndroidOnboardingChecklistStep(
                 kind = AndroidOnboardingStepKind.OUTPUT,
-                label = "Configure automatic transcript export · Optional",
+                labelRes = R.string.onboarding_step_output,
                 complete = output.state == OutputSetupSnapshotState.READY,
                 optional = true,
             ),
             AndroidOnboardingChecklistStep(
                 kind = AndroidOnboardingStepKind.FOLDER,
-                label = "Select audio folder · Optional",
+                labelRes = R.string.onboarding_step_folder,
                 complete = folder.state == FolderSetupSnapshotState.READY,
                 optional = true,
             ),
             AndroidOnboardingChecklistStep(
                 kind = AndroidOnboardingStepKind.KEYBOARD,
-                label = "Enable voice keyboard · Optional",
+                labelRes = R.string.onboarding_step_keyboard,
                 complete = keyboardStatus != AndroidVoiceKeyboardStatus.DISABLED,
                 optional = true,
             ),
@@ -148,7 +148,7 @@ object AndroidOnboardingHintPresenter {
         return AndroidOnboardingHintPresentation(
             visible = true,
             steps = steps,
-            downloadDisclosure = "Start setup downloads the speech model to this device."
+            downloadDisclosureRes = R.string.onboarding_download_disclosure
                 .takeIf {
                     action.enabled && action.kind in setOf(
                         TaskActionKind.DOWNLOAD_MODEL,
@@ -194,12 +194,12 @@ object AndroidOnboardingHintPresenter {
         keyboardStatus: AndroidVoiceKeyboardStatus,
     ): AndroidOnboardingHintAction = when {
         model.state == ModelSetupSnapshotState.INSTALLING -> AndroidOnboardingHintAction(
-            label = "Installing speech model…",
+            labelRes = R.string.onboarding_action_installing,
             enabled = false,
             kind = TaskActionKind.DOWNLOAD_MODEL,
         )
         model.state != ModelSetupSnapshotState.READY && model.downloadAvailable -> AndroidOnboardingHintAction(
-            label = if (model.state == ModelSetupSnapshotState.INVALID) "Retry setup" else "Start setup",
+            labelRes = if (model.state == ModelSetupSnapshotState.INVALID) R.string.onboarding_action_retry else R.string.onboarding_action_start,
             enabled = true,
             kind = if (model.state == ModelSetupSnapshotState.INVALID) {
                 TaskActionKind.RETRY_MODEL_DOWNLOAD
@@ -208,27 +208,27 @@ object AndroidOnboardingHintPresenter {
             },
         )
         model.state != ModelSetupSnapshotState.READY -> AndroidOnboardingHintAction(
-            label = "Install model from folder",
+            labelRes = R.string.onboarding_action_import_model,
             enabled = true,
             kind = TaskActionKind.IMPORT_MODEL,
         )
         output.state != OutputSetupSnapshotState.READY -> AndroidOnboardingHintAction(
-            label = "Choose export document",
+            labelRes = R.string.onboarding_action_select_output,
             enabled = true,
             kind = TaskActionKind.SELECT_OUTPUT,
         )
         folder.state != FolderSetupSnapshotState.READY -> AndroidOnboardingHintAction(
-            label = "Select audio folder",
+            labelRes = R.string.onboarding_action_select_folder,
             enabled = true,
             kind = TaskActionKind.SELECT_FOLDER,
         )
         keyboardStatus == AndroidVoiceKeyboardStatus.DISABLED -> AndroidOnboardingHintAction(
-            label = "Enable voice keyboard",
+            labelRes = R.string.onboarding_action_enable_keyboard,
             enabled = true,
             kind = TaskActionKind.ENABLE_VOICE_KEYBOARD,
         )
         else -> AndroidOnboardingHintAction(
-            label = "Ready to transcribe",
+            labelRes = R.string.onboarding_action_ready,
             enabled = false,
             kind = TaskActionKind.IMPORT_AUDIO,
         )

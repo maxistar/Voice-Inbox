@@ -1,5 +1,6 @@
 package me.maxistar.voiceinbox
 
+import android.content.res.Resources
 import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
@@ -60,6 +61,18 @@ data class AudioImportSummary(
             append(" • $rejectedCount rejected")
         }
         if (outcomes.isEmpty()) append(" • no audio received")
+    }
+
+    fun localizedMessage(resources: Resources): String = buildString {
+        append(resources.getString(R.string.audio_import_summary, importedCount))
+        if (duplicateCount > 0) append(" • ${resources.getString(R.string.audio_import_duplicates, duplicateCount)}")
+        if (rejectedCount == 1) {
+            val rejection = outcomes.filterIsInstance<AudioImportItemOutcome.Rejected>().single()
+            append(" • ${resources.getString(R.string.audio_import_rejected_reason, rejection.reason)}")
+        } else if (rejectedCount > 1) {
+            append(" • ${resources.getString(R.string.audio_import_rejected_count, rejectedCount)}")
+        }
+        if (outcomes.isEmpty()) append(" • ${resources.getString(R.string.audio_import_none_received)}")
     }
 }
 

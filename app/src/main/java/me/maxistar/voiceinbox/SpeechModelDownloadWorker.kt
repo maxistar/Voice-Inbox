@@ -29,7 +29,7 @@ class SpeechModelDownloadWorker(
                 modelVersion = inputData.getString(KEY_MODEL_VERSION).orEmpty(),
             ),
             SpeechModelPlatform.ANDROID,
-        ) ?: throw IllegalArgumentException("Selected speech model is unavailable for download")
+        ) ?: throw IllegalArgumentException(applicationContext.getString(R.string.error_model_unavailable_download))
     }
     private val repository = SpeechModelRepository(
         root = applicationContext.noBackupFilesDir.resolve("models"),
@@ -45,7 +45,7 @@ class SpeechModelDownloadWorker(
         return try {
             installModel()
         } catch (error: IllegalArgumentException) {
-            failure(error.message ?: "Selected speech model is unavailable for download")
+            failure(error.message ?: applicationContext.getString(R.string.error_model_unavailable_download))
         } catch (error: ForegroundPromotionException) {
             failure(error.userMessage)
         }
@@ -56,17 +56,17 @@ class SpeechModelDownloadWorker(
             worker = this,
             context = applicationContext,
             progress = 0,
-            message = "Preparing model download",
+            message = applicationContext.getString(R.string.model_download_preparing),
             source = SpeechModelInstallationWork.Source.NETWORK_DOWNLOAD,
         )
         repository.prepareForInstall().getOrElse {
-            return failure(it.message ?: "Model installation preflight failed")
+            return failure(it.message ?: applicationContext.getString(R.string.error_model_preflight))
         }
 
         var completedBytes = repository.manifest.files
             .filter(repository::isValidStagingFile)
             .sumOf { it.sizeBytes }
-        publishProgress(completedBytes, "Downloading speech model")
+        publishProgress(completedBytes, applicationContext.getString(R.string.model_downloading))
 
         for (entry in repository.manifest.files) {
             currentCoroutineContext().ensureActive()
@@ -84,7 +84,7 @@ class SpeechModelDownloadWorker(
                         "Failed to accept ${entry.name}"
                     }
                     completedBytes += entry.sizeBytes
-                    publishProgress(completedBytes, "Verified ${entry.name}")
+                    publishProgress(completedBytes, applicationContext.getString(R.string.model_file_verified, entry.name))
                     lastFailure = null
                     break
                 } catch (error: ForegroundPromotionException) {
@@ -101,14 +101,14 @@ class SpeechModelDownloadWorker(
             }
             if (lastFailure != null) {
                 return failure(
-                    "Failed to download ${entry.name}: ${lastFailure.message ?: "unknown error"}",
+                    applicationContext.getString(R.string.error_model_download, entry.name, lastFailure.message ?: applicationContext.getString(R.string.unknown_error)),
                 )
             }
         }
 
-        publishProgress(repository.manifest.totalSizeBytes, "Activating speech model")
+        publishProgress(repository.manifest.totalSizeBytes, applicationContext.getString(R.string.model_activating))
         val installedDirectory = repository.activate().getOrElse {
-            return failure(it.message ?: "Failed to activate speech model")
+            return failure(it.message ?: applicationContext.getString(R.string.error_model_activate))
         }
         SpeechModelWarmup.invalidate()
         return Result.success(workDataOf(KEY_MODEL_PATH to installedDirectory.absolutePath))
@@ -139,7 +139,7 @@ class SpeechModelDownloadWorker(
                         if (fileBytes - lastReported >= PROGRESS_STEP_BYTES) {
                             publishProgress(
                                 completedBytes + fileBytes,
-                                "Downloading ${entry.name}",
+                                applicationContext.getString(R.string.model_file_downloading, entry.name),
                             )
                             lastReported = fileBytes
                         }
@@ -187,7 +187,7 @@ class SpeechModelDownloadWorker(
         private const val PROGRESS_STEP_BYTES = 2L * 1024L * 1024L
         fun enqueue(context: Context, descriptor: SpeechModelDescriptor = SpeechModelCatalog.defaultModel) {
             require(descriptor.distribution.networkDownloadAvailable) {
-                "Selected speech model is unavailable for download"
+                context.getString(R.string.error_model_unavailable_download)
             }
             val request = OneTimeWorkRequestBuilder<SpeechModelDownloadWorker>()
                 .setInputData(

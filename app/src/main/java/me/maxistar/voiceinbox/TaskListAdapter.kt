@@ -19,6 +19,7 @@ import me.maxistar.voiceinbox.core.TaskActionPresentation
 import me.maxistar.voiceinbox.core.TaskListState
 import me.maxistar.voiceinbox.core.TaskPresentation
 import me.maxistar.voiceinbox.core.TaskProgressPresentation
+import me.maxistar.voiceinbox.core.TaskText
 
 sealed class TaskListDisplayItem {
     abstract val stableKey: String
@@ -67,7 +68,7 @@ sealed class TaskListDisplayItem {
     }
 
     data class Empty(
-        val message: String,
+        val message: TaskText,
         val actions: List<TaskActionPresentation>,
     ) : TaskListDisplayItem() {
         override val stableKey: String = STABLE_KEY
@@ -248,12 +249,12 @@ class TaskListAdapter(
         private var boundActions: List<TaskActionPresentation>? = null
 
         protected fun bindTask(task: TaskPresentation, entryId: Long?) {
-            itemView.contentDescription = task.title
-            title.text = task.title
-            badge.text = task.badge
-            bindOptional(detail, task.detail)
+            itemView.contentDescription = AndroidTaskTextResolver.resolve(itemView.resources, task.title)
+            title.text = AndroidTaskTextResolver.resolve(itemView.resources, task.title)
+            badge.text = AndroidTaskTextResolver.resolve(itemView.resources, task.badge)
+            bindOptional(detail, task.detail?.let { AndroidTaskTextResolver.resolve(itemView.resources, it) })
             bindProgress(task.progress)
-            bindOptional(error, task.errorMessage)
+            bindOptional(error, task.errorMessage?.let { AndroidTaskTextResolver.resolve(itemView.resources, it) })
             val dismissAction = task.actions.firstOrNull { it.kind == TaskActionKind.HIDE_OUTPUT }
             dismiss.isVisible = dismissAction != null
             dismiss.setOnClickListener {
@@ -271,7 +272,7 @@ class TaskListAdapter(
                 progressMeta.isVisible = false
                 return
             }
-            progressPhase.text = value.phase
+            progressPhase.text = AndroidTaskTextResolver.resolve(itemView.resources, value.phase)
             progress.isIndeterminate = value.percent == null
             progress.progress = value.percent ?: 0
             bindOptional(progressMeta, progressMetadata(value))
@@ -290,7 +291,7 @@ class TaskListAdapter(
             visibleActions.forEachIndexed { index, action ->
                 actions.addView(
                     MaterialButton(actions.context).apply {
-                        text = action.label
+                        text = AndroidTaskTextResolver.resolve(actions.resources, action.text)
                         isEnabled = action.enabled
                         layoutParams = LinearLayout.LayoutParams(
                             ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -354,15 +355,15 @@ class TaskListAdapter(
 
         fun bind(item: TaskListDisplayItem.OnboardingHint) {
             val presentation = item.presentation
-            title.text = presentation.title
-            explanation.text = presentation.explanation
-            disclosure.text = presentation.downloadDisclosure.orEmpty()
-            disclosure.isVisible = presentation.downloadDisclosure != null
+            title.setText(presentation.titleRes)
+            explanation.setText(presentation.explanationRes)
+            presentation.downloadDisclosureRes?.let(disclosure::setText)
+            disclosure.isVisible = presentation.downloadDisclosureRes != null
             bindStep(modelStep, presentation.steps.firstOrNull { it.kind == AndroidOnboardingStepKind.MODEL })
             bindStep(outputStep, presentation.steps.firstOrNull { it.kind == AndroidOnboardingStepKind.OUTPUT })
             bindStep(folderStep, presentation.steps.firstOrNull { it.kind == AndroidOnboardingStepKind.FOLDER })
             bindStep(keyboardStep, presentation.steps.firstOrNull { it.kind == AndroidOnboardingStepKind.KEYBOARD })
-            action.text = presentation.action?.label.orEmpty()
+            presentation.action?.labelRes?.let(action::setText)
             action.isEnabled = presentation.action?.enabled == true
             action.isVisible = presentation.action != null
             action.setOnClickListener {
@@ -377,11 +378,11 @@ class TaskListAdapter(
             step ?: return
             view.text = itemView.resources.getString(
                 if (step.complete) R.string.onboarding_step_complete else R.string.onboarding_step_incomplete,
-                step.label,
+                itemView.resources.getString(step.labelRes),
             )
             view.contentDescription = itemView.resources.getString(
                 if (step.complete) R.string.onboarding_step_complete_accessibility else R.string.onboarding_step_incomplete_accessibility,
-                step.label,
+                itemView.resources.getString(step.labelRes),
             )
         }
     }
@@ -402,10 +403,10 @@ class TaskListAdapter(
 
         fun bind(item: TaskListDisplayItem.KeyboardDiscovery) {
             val presentation = item.presentation
-            title.text = presentation.title
-            explanation.text = presentation.explanation
-            setup.text = presentation.setupLabel
-            documentation.text = presentation.documentationLabel
+            title.setText(presentation.titleRes)
+            explanation.setText(presentation.explanationRes)
+            setup.setText(presentation.setupLabelRes)
+            documentation.setText(presentation.documentationLabelRes)
             setup.setOnClickListener {
                 onAction(AndroidTaskActionRequest(item.stableKey, null, presentation.setupAction))
             }
@@ -429,12 +430,12 @@ class TaskListAdapter(
         private val actions: LinearLayout = itemView.findViewById(R.id.emptyActions)
 
         fun bind(item: TaskListDisplayItem.Empty) {
-            message.text = item.message
+            message.text = AndroidTaskTextResolver.resolve(itemView.resources, item.message)
             actions.removeAllViews()
             item.actions.forEachIndexed { index, action ->
                 actions.addView(
                     MaterialButton(actions.context).apply {
-                        text = action.label
+                        text = AndroidTaskTextResolver.resolve(actions.resources, action.text)
                         isEnabled = action.enabled
                         layoutParams = LinearLayout.LayoutParams(
                             ViewGroup.LayoutParams.WRAP_CONTENT,

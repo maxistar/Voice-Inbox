@@ -41,14 +41,14 @@ object SpeechModelInstallationWork {
             manager.createNotificationChannel(
                 NotificationChannel(
                     NOTIFICATION_CHANNEL,
-                    "Speech model installation",
+                    context.getString(R.string.notification_model_installation),
                     NotificationManager.IMPORTANCE_LOW,
                 ),
             )
         }
         val notification = NotificationCompat.Builder(context, NOTIFICATION_CHANNEL)
             .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setContentTitle("Voice Inbox")
+            .setContentTitle(context.getString(R.string.app_name))
             .setContentText(message)
             .setOnlyAlertOnce(true)
             .setOngoing(true)

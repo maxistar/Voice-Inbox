@@ -34,15 +34,15 @@ class TranscriptionWorker(
         try {
             SpeechModelInstallationWork.promote(
                 worker = this@TranscriptionWorker,
-                foregroundInfo = foreground("Preparing transcription", 0, true),
+                foregroundInfo = foreground(applicationContext.getString(R.string.transcription_preparing), 0, true),
                 source = SpeechModelInstallationWork.Source.TRANSCRIPTION,
             )
             val modelRepository = SpeechModelRepository.forActive(
                 applicationContext.noBackupFilesDir.resolve("models"),
             )
-            publish("Preparing speech model", null, null, 0, 0, null, null)
+            publish(applicationContext.getString(R.string.transcription_preparing_model), null, null, 0, 0, null, null)
             SpeechModelWarmup.prepare(modelRepository, retryFailed = true).get()
-                .getOrElse { return@withContext failure(it.message ?: "Speech model preparation failed") }
+                .getOrElse { return@withContext failure(it.message ?: applicationContext.getString(R.string.error_speech_model_preparation_failed)) }
 
             val batch = BatchTranscriptionUseCase(
                 catalog = catalog,
@@ -78,7 +78,7 @@ class TranscriptionWorker(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Throwable) {
-            failure(error.message ?: "Transcription failed")
+            failure(error.message ?: applicationContext.getString(R.string.error_transcription_failed))
         }
     }
 
@@ -117,7 +117,7 @@ class TranscriptionWorker(
 
     private fun publishAsync(progress: BatchTranscriptionProgress) {
         publishAsync(
-            phase = progress.phase,
+            phase = localizedPhase(progress),
             activeEntryId = progress.activeEntryId,
             filename = progress.filename,
             completed = progress.completed,
@@ -127,6 +127,22 @@ class TranscriptionWorker(
             durationUs = progress.durationUs,
             progress = progress.progress,
         )
+    }
+
+    private fun localizedPhase(progress: BatchTranscriptionProgress): String = when {
+        progress.filename == null && progress.failed > 0 -> applicationContext.getString(
+            R.string.transcription_summary_failed,
+            progress.completed,
+            progress.total,
+            progress.failed,
+        )
+        progress.filename == null -> applicationContext.getString(
+            R.string.transcription_summary,
+            progress.completed,
+            progress.total,
+        )
+        progress.phase == "Transcribing" -> applicationContext.getString(R.string.transcription_progress)
+        else -> progress.phase
     }
 
     private fun publishAsync(
@@ -192,13 +208,13 @@ class TranscriptionWorker(
         manager.createNotificationChannel(
             NotificationChannel(
                 NOTIFICATION_CHANNEL,
-                "Audio transcription",
+                applicationContext.getString(R.string.notification_audio_transcription),
                 NotificationManager.IMPORTANCE_LOW,
             ),
         )
         val notification = NotificationCompat.Builder(applicationContext, NOTIFICATION_CHANNEL)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setContentTitle("Voice Inbox")
+            .setContentTitle(applicationContext.getString(R.string.app_name))
             .setContentText(message)
             .setOnlyAlertOnce(true)
             .setOngoing(true)
@@ -219,7 +235,7 @@ class TranscriptionWorker(
     }
 
     private fun failure(message: String): Result =
-        Result.failure(workDataOf(KEY_ERROR to message, KEY_PHASE to "Failed"))
+        Result.failure(workDataOf(KEY_ERROR to message, KEY_PHASE to applicationContext.getString(R.string.task_failed)))
 
     private class AndroidBatchEntryTranscriber(
         private val transcriber: SingleFileTranscriber,

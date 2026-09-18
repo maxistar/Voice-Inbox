@@ -169,10 +169,10 @@ struct ContentView: View {
 
                     if let emptyMessage = screen.state.emptyMessage {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(emptyMessage)
+                            Text(emptyMessage.fallback)
                                 .foregroundStyle(.secondary)
                             ForEach(Array(screen.state.emptyActions.enumerated()), id: \.offset) { _, action in
-                                Button(action.label) {
+                                Button(action.text.fallback) {
                                     perform(action: action, task: nil, screen: screen)
                                 }
                                 .buttonStyle(.borderless)
@@ -610,16 +610,16 @@ private struct TaskListRow: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(task.title)
+                    Text(task.title.fallback)
                         .font(.headline)
-                    if let detail = task.detail, !detail.isEmpty {
-                        Text(detail)
+                    if let detail = task.detail, !detail.fallback.isEmpty {
+                        Text(detail.fallback)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
                 }
                 Spacer()
-                Text(task.badge)
+                Text(task.badge.fallback)
                     .font(.caption)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -637,8 +637,8 @@ private struct TaskListRow: View {
                 }
             }
 
-            if let error = task.errorMessage, !error.isEmpty {
-                Text(error)
+            if let error = task.errorMessage, !error.fallback.isEmpty {
+                Text(error.fallback)
                     .font(.footnote)
                     .foregroundStyle(.red)
             }
@@ -661,7 +661,7 @@ private struct TaskListRow: View {
             if !visibleActions.isEmpty {
                 HStack {
                     ForEach(Array(visibleActions.enumerated()), id: \.offset) { _, action in
-                        Button(action.label) { onAction(action) }
+                        Button(action.text.fallback) { onAction(action) }
                             .disabled(!action.enabled)
                             .accessibilityIdentifier("task-action-\(task.stableId)-\(action.kind.name.lowercased())")
                     }
@@ -674,7 +674,7 @@ private struct TaskListRow: View {
     }
 
     private func progressLabel(_ progress: TaskProgressPresentation) -> String {
-        var parts = [progress.phase]
+        var parts = [progress.phase.fallback]
         if let completed = progress.completedFiles?.int32Value,
            let total = progress.totalFiles?.int32Value,
            total > 0 {

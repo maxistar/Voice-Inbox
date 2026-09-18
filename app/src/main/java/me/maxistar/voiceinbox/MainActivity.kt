@@ -86,7 +86,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private var currentSessionTranscriptionWorkId: UUID? = null
     private var currentSessionObservedActiveTranscription = false
     private val transcriptionHandoff = AndroidTranscriptionHandoffCoordinator()
-    private var modelMessage = "Checking speech model"
+    private var modelMessage = ""
     private var modelDownloadAvailable = false
     private var modelDownloadProgress: Int? = null
     private var modelInstallCanCancel = false
@@ -448,7 +448,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                         PersistedSelectionAccessState.TEMPORARILY_UNAVAILABLE -> {
                             outputAccessReady = false
                             outputAccessError = result.error?.message
-                                ?: "Output file is temporarily unavailable"
+                                ?: getString(R.string.error_output_temporarily_unavailable)
                             startupCoordinator.setOutputReady(false)
                             outputDisplayName = null
                         }
@@ -458,7 +458,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                             outputAccessReady = false
                             outputDisplayName = null
                             outputAccessError = result.error?.message
-                                ?: "Output file access was revoked; select it again"
+                                ?: getString(R.string.error_output_access_revoked)
                             startupCoordinator.setOutputReady(false)
                         }
                     }
@@ -530,9 +530,9 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                         }
                     }
                     PersistedSelectionAccessState.TEMPORARILY_UNAVAILABLE -> {
-                        folderAccessReady = false
-                        folderAccessError = result.error?.message
-                            ?: "Audio folder is temporarily unavailable"
+                            folderAccessReady = false
+                            folderAccessError = result.error?.message
+                                ?: getString(R.string.error_folder_temporarily_unavailable)
                         startupCoordinator.setFolderReady(false)
                         folderDisplayName = null
                         taskStateHost.folderSyncCoordinator.fail(folderSyncGeneration)
@@ -542,8 +542,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                         folderUri = null
                         folderAccessReady = false
                         folderDisplayName = null
-                        folderAccessError = result.error?.message
-                            ?: "Audio folder access was revoked; select it again"
+                            folderAccessError = result.error?.message
+                                ?: getString(R.string.error_folder_access_revoked)
                         pendingFolderSyncGeneration = null
                         startupCoordinator.setFolderReady(false)
                         taskStateHost.folderSyncCoordinator.fail(folderSyncGeneration)
@@ -614,7 +614,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                         activityDestroyed ||
                         validationGeneration != outputValidationGeneration
                     ) return@runOnUiThread
-                    outputAccessError = it.message ?: "Output file is not writable"
+                    outputAccessError = it.message ?: getString(R.string.error_output_not_writable)
                     outputPresentationKnown = true
                     publishTaskState()
                     updateControls()
@@ -677,7 +677,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                     ) return@runOnUiThread
                     folderChecking = false
                     folderPresentationKnown = true
-                    folderAccessError = it.message ?: "Audio folder is not readable"
+                    folderAccessError = it.message ?: getString(R.string.error_audio_folder_not_readable)
                     taskStateHost.folderSyncCoordinator.fail(folderSyncGeneration)
                     publishTaskState()
                     updateControls()
@@ -702,7 +702,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
             modelReady = false
             modelSetupState = ModelSetupSnapshotState.INVALID
             setModelUi(
-                "The selected model folder cannot be accessed after the picker closes",
+                getString(R.string.error_model_folder_access),
                 canDownload = true,
             )
             updateControls()
@@ -727,7 +727,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                     modelReady = false
                     modelSetupState = ModelSetupSnapshotState.INVALID
                     setModelUi(
-                        error.message ?: "The selected model folder is not readable",
+                        error.message ?: getString(R.string.error_model_folder_not_readable),
                         canDownload = true,
                     )
                     updateControls()
@@ -748,14 +748,14 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         val size = SpeechModelRepository.formatBytes(descriptor.approximateDownloadBytes)
         val maturity = descriptor.maturity.name.lowercase().replaceFirstChar(Char::uppercase)
         val dialog = MaterialAlertDialogBuilder(this)
-            .setTitle("Install ${descriptor.displayName}?")
-            .setMessage("$maturity model · ${descriptor.languages.summary} · approximately $size")
+            .setTitle(getString(R.string.confirm_install_model, descriptor.displayName))
+            .setMessage(getString(R.string.confirm_install_model_detail, maturity, descriptor.languages.summary, size))
             .setNegativeButton(android.R.string.cancel) { _, _ ->
                 pendingModelPackageUri = null
                 pendingModelPackageCatalogId = null
                 SpeechModelImportPermission.releaseOwnedIfUnused(this)
             }
-            .setPositiveButton("Install", null)
+            .setPositiveButton(R.string.model_install, null)
             .create()
         dialog.setOnShowListener {
             val confirm = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
@@ -767,7 +767,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                 modelPresentationKnown = true
                 modelReady = false
                 modelSetupState = ModelSetupSnapshotState.INSTALLING
-                setModelUi("Installing ${descriptor.displayName}", canDownload = false)
+                setModelUi(getString(R.string.installing_model_named, descriptor.displayName), canDownload = false)
                 updateControls()
                 SpeechModelImportWorker.enqueue(this, uri, descriptor)
                 dialog.dismiss()
@@ -819,7 +819,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                 if (activityDestroyed) return@runOnUiThread
                 folderScanQueued = false
                 scanning = true
-                scanMessage = "Scanning folder"
+                scanMessage = getString(R.string.folder_scanning)
                 taskStateHost.folderSyncCoordinator.transition(
                     folderSyncGeneration,
                     AndroidFolderSyncPhase.SCANNING,
@@ -837,7 +837,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                     folderScanQueued = false
                     scanning = false
                     folderAccessError = null
-                    scanMessage = "Scan complete: $count audio files"
+                    scanMessage = getString(R.string.folder_scan_complete, count)
                     taskStateHost.folderSyncCoordinator.transition(
                         folderSyncGeneration,
                         AndroidFolderSyncPhase.REFRESHING_CATALOG,
@@ -849,7 +849,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                     if (activityDestroyed) return@runOnUiThread
                     folderScanQueued = false
                     scanning = false
-                    folderAccessError = error.message ?: "Folder scan failed"
+                    folderAccessError = error.message ?: getString(R.string.error_folder_scan_failed)
                     folderPresentationKnown = true
                     taskStateHost.folderSyncCoordinator.fail(folderSyncGeneration)
                     startupGeneration?.let(startupCoordinator::onStartupScanFailed)
@@ -924,7 +924,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                     if (folderSyncGeneration != null &&
                         taskStateHost.folderSyncCoordinator.fail(folderSyncGeneration)
                     ) {
-                        folderAccessError = error.message ?: "Audio catalog refresh failed"
+                        folderAccessError = error.message ?: getString(R.string.error_audio_catalog_refresh_failed)
                         folderPresentationKnown = true
                         startupGeneration?.let(startupCoordinator::onStartupScanFailed)
                         publishTaskState()
@@ -975,25 +975,25 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
             SpeechModelReadinessState.Checking -> {
                 modelReady = false
                 modelPresentationKnown = false
-                setModelUi("Checking speech model", canDownload = false)
+                setModelUi(getString(R.string.model_checking), canDownload = false)
             }
             is SpeechModelReadinessState.Ready -> {
                 modelPresentationKnown = true
                 modelReady = true
                 modelSetupState = ModelSetupSnapshotState.READY
-                setModelUi("Speech model ready", canDownload = false)
+                setModelUi(getString(R.string.model_ready), canDownload = false)
             }
             SpeechModelReadinessState.Missing -> {
                 modelPresentationKnown = true
                 modelReady = false
                 modelSetupState = ModelSetupSnapshotState.REQUIRED
-                setModelUi("Speech model is not installed", canDownload = true)
+                setModelUi(getString(R.string.model_missing), canDownload = true)
             }
             is SpeechModelReadinessState.Invalid -> {
                 modelPresentationKnown = true
                 modelReady = false
                 modelSetupState = ModelSetupSnapshotState.INVALID
-                setModelUi("Invalid speech model: ${state.reason}", canDownload = true)
+                setModelUi(getString(R.string.model_invalid, state.reason), canDownload = true)
             }
             is SpeechModelReadinessState.Failed -> {
                 modelPresentationKnown = true
@@ -1039,7 +1039,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                         )
                         modelMessage =
                             info.progress.getString(SpeechModelInstallationWork.KEY_MESSAGE)
-                                ?: "Installing speech model"
+                                ?: getString(R.string.model_installing)
                         modelDownloadAvailable = false
                         modelInstallCanCancel = info.tags.any { tag ->
                             tag.endsWith(SpeechModelDownloadWorker::class.java.simpleName)
@@ -1065,7 +1065,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                         startupCoordinator.setModelReady(false)
                         setModelUi(
                             info.outputData.getString(SpeechModelInstallationWork.KEY_ERROR)
-                                ?: "Speech model installation failed",
+                                ?: getString(R.string.model_installation_failed),
                             canDownload = true,
                         )
                         updateControls()
@@ -1142,9 +1142,9 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                     observedActive = workActive,
                     activeEntryId = transcriptionEntryId,
                 ) ?: when (info.state) {
-                    WorkInfo.State.SUCCEEDED -> "Completed"
+                    WorkInfo.State.SUCCEEDED -> getString(R.string.transcription_completed)
                     WorkInfo.State.FAILED ->
-                        data.getString(TranscriptionWorker.KEY_ERROR) ?: "Failed"
+                        data.getString(TranscriptionWorker.KEY_ERROR) ?: getString(R.string.task_failed)
                     else -> info.state.name
                 }
                 transcriptionIndeterminate =
@@ -1333,14 +1333,14 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
             }
             player.setOnErrorListener { failed, _, _ ->
                 if (previewPlayer == failed) {
-                    showError("Cannot play ${entry.displayName}")
+                    showError(getString(R.string.error_cannot_play, entry.displayName))
                     stopPreviewPlayback(render = true)
                 }
                 true
             }
             player.prepareAsync()
         }.onFailure {
-            showError("Cannot play ${entry.displayName}")
+            showError(getString(R.string.error_cannot_play, entry.displayName))
             stopPreviewPlayback(render = true)
         }
     }
@@ -1610,7 +1610,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         val choices = SpeechModelCatalog.modelsFor(SpeechModelPlatform.ANDROID)
             .filter { it.distribution.networkDownloadAvailable }
         MaterialAlertDialogBuilder(this)
-            .setTitle("Download speech model")
+            .setTitle(R.string.download_speech_model)
             .setSingleChoiceItems(
                 choices.map { it.displayName }.toTypedArray(),
                 choices.indexOfFirst { it.catalogId == selectedDownloadModel.catalogId },
@@ -1765,8 +1765,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                     AudioImportSummary(
                         listOf(
                             AudioImportItemOutcome.Rejected(
-                                displayName = "shared audio",
-                                reason = error.message ?: "Audio import failed",
+                                displayName = getString(R.string.audio_import_default_name),
+                                reason = error.message ?: getString(R.string.audio_import_failed),
                             ),
                         ),
                     )
@@ -1777,7 +1777,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
             runOnUiThread {
                 if (activityDestroyed) return@runOnUiThread
                 ingestionActive = false
-                Toast.makeText(this, summary.message(), Toast.LENGTH_LONG).show()
+                Toast.makeText(this, summary.localizedMessage(resources), Toast.LENGTH_LONG).show()
                 refreshCatalog()
                 if (queuedImportUris.isNotEmpty()) {
                     val queued = queuedImportUris.toList()
