@@ -111,9 +111,9 @@ struct IosSpeechModelStatus {
 
     var summary: String {
         if isReady {
-            return "Speech model installed"
+            return L10n.text("model.installed", fallback: "Speech model installed")
         }
-        return "Speech model is not installed"
+        return L10n.text("model.notInstalled", fallback: "Speech model is not installed")
     }
 
     var detail: String? {
@@ -123,7 +123,7 @@ struct IosSpeechModelStatus {
         guard !missingFiles.isEmpty else {
             return nil
         }
-        return "Missing: \(missingFiles.joined(separator: ", "))"
+        return L10n.format("model.missing", fallback: "Missing: %@", missingFiles.joined(separator: ", "))
     }
 }
 
@@ -321,7 +321,7 @@ final class IosSpeechModelStore: ObservableObject {
         replacementAllowed: Bool = true
     ) {
         guard replacementAllowed else {
-            message = "Wait for the current transcription to finish before replacing the speech model."
+            message = L10n.text("model.waitForCurrentTranscription", fallback: "Wait for the current transcription to finish before replacing the speech model.")
             return
         }
         guard let candidate = confirmedCandidate ?? pendingCandidate, !isBusy else { return }
@@ -333,7 +333,7 @@ final class IosSpeechModelStore: ObservableObject {
         isInstalling = true
         installationError = nil
         downloadProgress = nil
-        message = "Installing \(candidate.descriptor.displayName)..."
+        message = L10n.format("model.installing", fallback: "Installing %@...", candidate.descriptor.displayName)
 
         Task {
             let result = await Task.detached(priority: .userInitiated) {
@@ -378,18 +378,18 @@ final class IosSpeechModelStore: ObservableObject {
             catalogId: descriptor.catalogId,
             modelVersion: descriptor.modelVersion
         )?.networkDownloadAvailable == true else {
-            message = "Selected speech model is not available for download."
+            message = L10n.text("model.notAvailableForDownload", fallback: "Selected speech model is not available for download.")
             return
         }
         guard descriptor.networkDownloadAvailable else {
-            message = "Network download is not available for this model."
+            message = L10n.text("model.networkUnavailable", fallback: "Network download is not available for this model.")
             return
         }
 
         isInstalling = true
-        message = "Preparing speech model download..."
+        message = L10n.text("model.preparingDownload", fallback: "Preparing speech model download...")
         downloadProgress = IosSpeechModelDownloadProgress(
-            message: "Preparing speech model download...",
+            message: L10n.text("model.preparingDownload", fallback: "Preparing speech model download..."),
             bytesDownloaded: 0,
             totalBytes: descriptor.totalSizeBytes
         )
@@ -422,7 +422,7 @@ final class IosSpeechModelStore: ObservableObject {
         downloadTask = nil
         isInstalling = false
         downloadProgress = nil
-        message = "Speech model download cancelled."
+        message = L10n.text("model.downloadCancelled", fallback: "Speech model download cancelled.")
     }
 
     func prepareForTranscription() async -> URL? {
@@ -432,7 +432,7 @@ final class IosSpeechModelStore: ObservableObject {
             task = existing
         } else {
             runtimeState = .loading
-            message = "Preparing speech model..."
+            message = L10n.text("model.preparing", fallback: "Preparing speech model...")
             let directory = modelDirectory
             let validateInstallation = validateInstallation
             let prepareNative = prepareNative
@@ -455,7 +455,7 @@ final class IosSpeechModelStore: ObservableObject {
                         directory: nil,
                         invalidInstallation: false,
                         message: nativeError()
-                            ?? "Speech model failed to load."
+                            ?? L10n.text("model.loadFailed", fallback: "Speech model failed to load.")
                     )
                 }
                 recordVerified()

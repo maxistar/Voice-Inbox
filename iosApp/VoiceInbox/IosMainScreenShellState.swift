@@ -10,9 +10,9 @@ enum IosShellCatalogSelection: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .new: "New"
-        case .processed: "Processed"
-        case .all: "All"
+        case .new: L10n.text("catalog.new", fallback: "New")
+        case .processed: L10n.text("catalog.processed", fallback: "Processed")
+        case .all: L10n.text("catalog.all", fallback: "All")
         }
     }
 

@@ -11,22 +11,22 @@ enum IosStartupProcessingPolicy: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .ask:
-            "Ask"
+            L10n.text("settings.startup.ask", fallback: "Ask")
         case .yes:
-            "Yes"
+            L10n.text("settings.startup.yes", fallback: "Yes")
         case .no:
-            "No"
+            L10n.text("settings.startup.no", fallback: "No")
         }
     }
 
     var detail: String {
         switch self {
         case .ask:
-            "Ask before processing queued files when Voice Inbox starts."
+            L10n.text("settings.startup.askDetail", fallback: "Ask before processing queued files when Voice Inbox starts.")
         case .yes:
-            "Automatically process queued files when Voice Inbox starts."
+            L10n.text("settings.startup.yesDetail", fallback: "Automatically process queued files when Voice Inbox starts.")
         case .no:
-            "Do not process queued files automatically at startup."
+            L10n.text("settings.startup.noDetail", fallback: "Do not process queued files automatically at startup.")
         }
     }
 }
@@ -70,9 +70,9 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("Storage") {
+            Section(L10n.text("settings.storage", fallback: "Storage")) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Audio inbox folder")
+                    Text(L10n.text("settings.audioInbox", fallback: "Audio inbox folder"))
                         .font(.headline)
                     Text(importStore.inboxFolderStatus.title)
                     if let message = importStore.inboxFolderStatus.message {
@@ -89,14 +89,16 @@ struct SettingsView: View {
                     selectInboxFolder()
                 } label: {
                     Label(
-                        importStore.inboxFolderStatus.needsSelection ? "Select Audio Folder" : "Change Audio Folder",
+                        importStore.inboxFolderStatus.needsSelection
+                            ? L10n.text("settings.selectAudioFolder", fallback: "Select Audio Folder")
+                            : L10n.text("settings.changeAudioFolder", fallback: "Change Audio Folder"),
                         systemImage: "folder"
                     )
                 }
                 .disabled(importStore.isScanningFolder)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Transcript output file")
+                    Text(L10n.text("settings.outputFile", fallback: "Transcript output file"))
                         .font(.headline)
                     Text(outputStore.status.title)
                     Text(outputStore.status.message)
@@ -108,18 +110,20 @@ struct SettingsView: View {
                     selectOutputFile()
                 } label: {
                     Label(
-                        outputStore.isReady ? "Change Output File" : "Select Output File",
+                        outputStore.isReady
+                            ? L10n.text("settings.changeOutput", fallback: "Change Output File")
+                            : L10n.text("settings.selectOutput", fallback: "Select Output File"),
                         systemImage: "doc.badge.plus"
                     )
                 }
 
-                Button("Do not export", role: .destructive) {
+                Button(L10n.text("settings.doNotExport", fallback: "Do not export"), role: .destructive) {
                     disableExport()
                 }
             }
 
-            Section("Startup Processing") {
-                Picker("When queued files are found", selection: $startupPolicyStore.policy) {
+            Section(L10n.text("settings.startup", fallback: "Startup Processing")) {
+                Picker(L10n.text("settings.whenQueued", fallback: "When queued files are found"), selection: $startupPolicyStore.policy) {
                     ForEach(IosStartupProcessingPolicy.allCases) { policy in
                         Text(policy.title).tag(policy)
                     }
@@ -130,7 +134,7 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("Speech Model") {
+            Section(L10n.text("settings.speechModel", fallback: "Speech Model")) {
                 if let active = speechModelStore.activeDescriptor {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(active.displayName).font(.headline)
@@ -139,24 +143,24 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                 } else {
-                    Text("No speech model installed")
+                    Text(L10n.text("settings.noModel", fallback: "No speech model installed"))
                 }
                 Button {
                     installModelPackage()
                 } label: {
-                    Label("Install model package from folder", systemImage: "folder.badge.plus")
+                    Label(L10n.text("settings.installModel", fallback: "Install model package from folder"), systemImage: "folder.badge.plus")
                 }
                 .disabled(speechModelStore.isBusy)
             }
 
-            Section("About") {
-                LabeledContent("Version", value: appVersion)
-                Link("Website", destination: websiteURL)
-                Link("Documentation", destination: documentationURL)
-                Link("Legal information", destination: legalURL)
+            Section(L10n.text("settings.about", fallback: "About")) {
+                LabeledContent(L10n.text("settings.version", fallback: "Version"), value: appVersion)
+                Link(L10n.text("settings.website", fallback: "Website"), destination: websiteURL)
+                Link(L10n.text("settings.documentation", fallback: "Documentation"), destination: documentationURL)
+                Link(L10n.text("settings.legal", fallback: "Legal information"), destination: legalURL)
             }
         }
-        .navigationTitle("Settings")
+        .navigationTitle(L10n.text("settings.title", fallback: "Settings"))
     }
 
     private var appVersion: String {
@@ -168,6 +172,6 @@ struct SettingsView: View {
         if let build, !build.isEmpty {
             return build
         }
-        return "Unknown"
+        return L10n.text("settings.unknown", fallback: "Unknown")
     }
 }

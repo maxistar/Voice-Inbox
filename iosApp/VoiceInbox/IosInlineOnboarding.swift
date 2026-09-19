@@ -66,8 +66,10 @@ struct IosOnboardingChecklistStep: Identifiable {
     var id: String { kind.rawValue }
 
     var accessibilityLabel: String {
-        let state = complete ? "Completed" : "Not completed"
-        let optionalSuffix = optional ? ", optional" : ""
+        let state = complete
+            ? L10n.text("onboarding.completed", fallback: "Completed")
+            : L10n.text("onboarding.notCompleted", fallback: "Not completed")
+        let optionalSuffix = optional ? ", \(L10n.text("onboarding.optional", fallback: "optional"))" : ""
         return "\(state): \(label)\(optionalSuffix)"
     }
 }
@@ -91,8 +93,8 @@ struct IosOnboardingHintPresentation {
 
     init(
         visible: Bool = false,
-        title: String = "Set up Voice Inbox",
-        explanation: String = "Follow these steps, or use the setup tasks above in any order.",
+        title: String = L10n.text("onboarding.title", fallback: "Set up Voice Inbox"),
+        explanation: String = L10n.text("onboarding.explanation", fallback: "Follow these steps, or use the setup tasks above in any order."),
         downloadDisclosure: String? = nil,
         steps: [IosOnboardingChecklistStep] = [],
         action: IosOnboardingHintAction? = nil
@@ -127,24 +129,24 @@ enum IosOnboardingHintPresenter {
         return IosOnboardingHintPresentation(
             visible: true,
             downloadDisclosure: networkActions.contains { $0 == action.kind } && action.enabled
-                ? "This action downloads the speech model to this device."
+                ? L10n.text("onboarding.downloadDisclosure", fallback: "This action downloads the speech model to this device.")
                 : nil,
             steps: [
                 IosOnboardingChecklistStep(
                     kind: .model,
-                    label: "Install speech model",
+                    label: L10n.text("onboarding.installModel", fallback: "Install speech model"),
                     complete: model.state == .ready,
                     optional: false
                 ),
                 IosOnboardingChecklistStep(
                     kind: .output,
-                    label: "Configure automatic transcript export",
+                    label: L10n.text("onboarding.configureExport", fallback: "Configure automatic transcript export"),
                     complete: output.state == .ready,
                     optional: true
                 ),
                 IosOnboardingChecklistStep(
                     kind: .folder,
-                    label: "Select audio folder",
+                    label: L10n.text("onboarding.selectFolder", fallback: "Select audio folder"),
                     complete: folder.state == .ready,
                     optional: true
                 ),
@@ -180,7 +182,7 @@ enum IosOnboardingHintPresenter {
     ) -> IosOnboardingHintAction {
         if model.state == .installing {
             return IosOnboardingHintAction(
-                label: "Installing speech model…",
+                label: L10n.text("onboarding.installingModel", fallback: "Installing speech model…"),
                 enabled: false,
                 kind: .downloadModel
             )
@@ -188,27 +190,29 @@ enum IosOnboardingHintPresenter {
         if model.state != .ready, model.downloadAvailable {
             let retry = model.state == .invalid
             return IosOnboardingHintAction(
-                label: retry ? "Retry setup" : "Start setup",
+                label: retry
+                    ? L10n.text("onboarding.retrySetup", fallback: "Retry setup")
+                    : L10n.text("onboarding.startSetup", fallback: "Start setup"),
                 enabled: true,
                 kind: retry ? .retryModelDownload : .downloadModel
             )
         }
         if model.state != .ready {
             return IosOnboardingHintAction(
-                label: "Install model from folder",
+                label: L10n.text("onboarding.installModelFromFolder", fallback: "Install model from folder"),
                 enabled: true,
                 kind: .importModel
             )
         }
         if output.state != .ready {
             return IosOnboardingHintAction(
-                label: "Select Output File",
+                label: L10n.text("onboarding.selectOutput", fallback: "Select Output File"),
                 enabled: true,
                 kind: .selectOutput
             )
         }
         return IosOnboardingHintAction(
-            label: "Select audio folder (optional)",
+            label: L10n.text("onboarding.selectOptionalFolder", fallback: "Select audio folder (optional)"),
             enabled: folder.state != .scanning,
             kind: .selectFolder
         )
@@ -251,7 +255,7 @@ struct IosInlineOnboardingRow: View {
                     Image(systemName: "xmark")
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Dismiss setup guide")
+                .accessibilityLabel(L10n.text("onboarding.dismiss", fallback: "Dismiss setup guide"))
                 .accessibilityIdentifier("onboarding-dismiss")
             }
 
@@ -271,7 +275,7 @@ struct IosInlineOnboardingRow: View {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Image(systemName: step.complete ? "checkmark.circle.fill" : "circle")
                             .foregroundStyle(step.complete ? .green : .secondary)
-                        Text(step.optional ? "\(step.label) · Optional" : step.label)
+                        Text(step.optional ? "\(step.label) · \(L10n.text("onboarding.optionalLabel", fallback: "Optional"))" : step.label)
                     }
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(step.accessibilityLabel)

@@ -43,13 +43,13 @@ enum IosImportedAudioStatus: String, Codable {
     var badge: String {
         switch self {
         case .pending:
-            "New"
+            L10n.text("catalog.new", fallback: "New")
         case .processing:
-            "Processing"
+            L10n.text("task.processing", fallback: "Processing")
         case .processed:
-            "Processed"
+            L10n.text("catalog.processed", fallback: "Processed")
         case .failed:
-            "Failed"
+            L10n.text("task.failed", fallback: "Failed")
         }
     }
 }
@@ -130,7 +130,7 @@ struct IosAudioImportSummary {
         if imported > 0 { parts.append("\(imported) imported") }
         if skipped > 0 { parts.append("\(skipped) skipped") }
         if failed > 0 { parts.append("\(failed) failed") }
-        return parts.isEmpty ? "No files imported" : parts.joined(separator: ", ")
+        return parts.isEmpty ? L10n.text("import.none", fallback: "No files imported") : parts.joined(separator: ", ")
     }
 
     var alertMessage: String? {
@@ -161,7 +161,7 @@ struct IosInboxFolderStatus {
     }
 
     var title: String {
-        displayName ?? "No audio folder selected"
+        displayName ?? L10n.text("folder.noneSelected", fallback: "No audio folder selected")
     }
 }
 
@@ -170,7 +170,7 @@ final class IosAudioImportStore: ObservableObject {
     @Published private(set) var files: [IosImportedAudioFile] = []
     @Published private(set) var inboxFolderStatus = IosInboxFolderStatus(
         displayName: nil,
-        message: "Choose a folder to use it as your audio inbox.",
+        message: L10n.text("folder.choose", fallback: "Choose a folder to use it as your audio inbox."),
         needsSelection: true
     )
     @Published private(set) var isScanningFolder = false

@@ -58,13 +58,13 @@ struct ContentView: View {
                             )
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                            Text("Installing this model replaces the currently installed model.")
+                            Text(L10n.text("model.replacementWarning", fallback: "Installing this model replaces the currently installed model."))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
 
                         HStack {
-                            Button("Install") {
+                            Button(L10n.text("common.install", fallback: "Install")) {
                                 speechModelStore.confirmPendingInstallation(
                                     candidate: candidate,
                                     replacementAllowed: !transcriber.isActive
@@ -73,7 +73,7 @@ struct ContentView: View {
                             .buttonStyle(.borderedProminent)
                             .disabled(speechModelStore.isBusy || transcriber.isActive)
 
-                            Button("Cancel", role: .cancel) {
+                            Button(L10n.text("common.cancel", fallback: "Cancel"), role: .cancel) {
                                 speechModelStore.cancelPendingInstallation()
                             }
                             .buttonStyle(.bordered)
@@ -96,22 +96,20 @@ struct ContentView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             if speechModelStore.activeDescriptor != nil {
-                                Text("Downloading this model replaces the currently installed model.")
+                                Text(L10n.text("model.downloadReplacementWarning", fallback: "Downloading this model replaces the currently installed model."))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
                         }
-                        Button("Download") {
+                        Button(L10n.text("common.download", fallback: "Download")) {
                             speechModelStore.downloadModel(speechModelStore.selectedDownloadModel)
                         }
                         .buttonStyle(.borderedProminent)
                         .disabled(speechModelStore.isBusy)
 
-                        let modelTask = screen.state.tasks
-                            .compactMap({ $0 as? SetupTaskPresentation })
-                            .first(where: { $0.kind == .model })
-                        if let error = modelTask?.errorMessage, !error.isEmpty {
-                            Text(error)
+                        let modelTask = modelSetupTask(in: screen)
+                        if let error = modelTask?.errorMessage, !error.fallback.isEmpty {
+                            Text(IosTaskTextResolver.resolve(error))
                                 .font(.footnote)
                                 .foregroundStyle(.red)
                         }
@@ -151,7 +149,7 @@ struct ContentView: View {
                             transcribeAll()
                         } label: {
                             Label(
-                                "Transcribe All (\(screen.state.batchAction.eligibleCount))",
+                                L10n.plural("catalog.transcribeAll", count: Int(screen.state.batchAction.eligibleCount), fallback: "Transcribe All (%d)"),
                                 systemImage: "text.badge.checkmark"
                             )
                         }
@@ -169,10 +167,10 @@ struct ContentView: View {
 
                     if let emptyMessage = screen.state.emptyMessage {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(emptyMessage.fallback)
+                            Text(IosTaskTextResolver.resolve(emptyMessage))
                                 .foregroundStyle(.secondary)
                             ForEach(Array(screen.state.emptyActions.enumerated()), id: \.offset) { _, action in
-                                Button(action.text.fallback) {
+                                Button(IosTaskTextResolver.resolve(action.text)) {
                                     perform(action: action, task: nil, screen: screen)
                                 }
                                 .buttonStyle(.borderless)
@@ -186,20 +184,20 @@ struct ContentView: View {
                     Button {
                         presentPicker(.audioFiles)
                     } label: {
-                        Label("Import Audio Files", systemImage: "square.and.arrow.down")
+                        Label(L10n.text("catalog.importAudio", fallback: "Import Audio Files"), systemImage: "square.and.arrow.down")
                     }
                     if !importStore.inboxFolderStatus.needsSelection {
                         Button {
                             importStore.refreshInboxFolder()
                             selectedTab = .new
                         } label: {
-                            Label("Refresh Audio Folder", systemImage: "arrow.clockwise")
+                        Label(L10n.text("catalog.refreshFolder", fallback: "Refresh Audio Folder"), systemImage: "arrow.clockwise")
                         }
                         .disabled(importStore.isScanningFolder)
                     }
                 }
             }
-            .navigationTitle("Voice Inbox")
+            .navigationTitle(L10n.text("app.title", fallback: "Voice Inbox"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -220,7 +218,7 @@ struct ContentView: View {
                             },
                             installModelPackage: {
                                 guard !transcriber.isActive else {
-                                    speechModelStore.message = "Wait for transcription to finish before replacing the speech model."
+                                    speechModelStore.message = L10n.text("model.waitForTranscription", fallback: "Wait for transcription to finish before replacing the speech model.")
                                     return
                                 }
                                 presentPicker(.speechModelFolder)
@@ -229,7 +227,7 @@ struct ContentView: View {
                     } label: {
                         Image(systemName: "gearshape")
                     }
-                    .accessibilityLabel("Settings")
+                    .accessibilityLabel(L10n.text("settings.title", fallback: "Settings"))
                 }
             }
             .sheet(item: $presentedPicker) { picker in
@@ -314,7 +312,7 @@ struct ContentView: View {
                 Alert(
                     title: Text(message.title),
                     message: Text(message.text),
-                    dismissButton: .default(Text("OK"))
+                    dismissButton: .default(Text(L10n.text("common.ok", fallback: "OK")))
                 )
             }
         }
@@ -562,15 +560,15 @@ struct ContentView: View {
     private func startStartupProcessing() {
         guard importStore.pendingCount > 0 else { return }
         guard !transcriber.isActive else {
-            importStore.importMessage = "Found files to process, but transcription is already running."
+            importStore.importMessage = L10n.text("startup.alreadyRunning", fallback: "Found files to process, but transcription is already running.")
             return
         }
         guard transcriber.backendConfigured else {
-            importStore.importMessage = "Found files to process, but the iOS transcription backend is not configured."
+            importStore.importMessage = L10n.text("startup.backendUnavailable", fallback: "Found files to process, but the iOS transcription backend is not configured.")
             return
         }
         guard speechModelStore.isReady, !speechModelStore.isBusy else {
-            importStore.importMessage = "Found files to process, but the speech model is not ready."
+            importStore.importMessage = L10n.text("startup.modelNotReady", fallback: "Found files to process, but the speech model is not ready.")
             return
         }
         let outputDocument = outputStore.currentDocument()
@@ -586,6 +584,16 @@ struct ContentView: View {
                 selectedTab = .processed
             }
         )
+    }
+
+    private func modelSetupTask(in screen: IosTaskListScreen) -> SetupTaskPresentation? {
+        for task in screen.state.tasks {
+            guard let setupTask = task as? SetupTaskPresentation else { continue }
+            if setupTask.kind == .model {
+                return setupTask
+            }
+        }
+        return nil
     }
 
 }
@@ -610,16 +618,16 @@ private struct TaskListRow: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(task.title.fallback)
+                    Text(IosTaskTextResolver.resolve(task.title))
                         .font(.headline)
                     if let detail = task.detail, !detail.fallback.isEmpty {
-                        Text(detail.fallback)
+                        Text(IosTaskTextResolver.resolve(detail))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
                 }
                 Spacer()
-                Text(task.badge.fallback)
+                Text(IosTaskTextResolver.resolve(task.badge))
                     .font(.caption)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -632,13 +640,13 @@ private struct TaskListRow: View {
                         Image(systemName: "xmark")
                     }
                     .buttonStyle(.borderless)
-                    .accessibilityLabel("Hide automatic transcript export")
+                    .accessibilityLabel(L10n.text("catalog.hideExport", fallback: "Hide automatic transcript export"))
                     .accessibilityIdentifier("task-dismiss-\(task.stableId)")
                 }
             }
 
             if let error = task.errorMessage, !error.fallback.isEmpty {
-                Text(error.fallback)
+                Text(IosTaskTextResolver.resolve(error))
                     .font(.footnote)
                     .foregroundStyle(.red)
             }
@@ -661,7 +669,7 @@ private struct TaskListRow: View {
             if !visibleActions.isEmpty {
                 HStack {
                     ForEach(Array(visibleActions.enumerated()), id: \.offset) { _, action in
-                        Button(action.text.fallback) { onAction(action) }
+                        Button(IosTaskTextResolver.resolve(action.text)) { onAction(action) }
                             .disabled(!action.enabled)
                             .accessibilityIdentifier("task-action-\(task.stableId)-\(action.kind.name.lowercased())")
                     }
@@ -674,17 +682,18 @@ private struct TaskListRow: View {
     }
 
     private func progressLabel(_ progress: TaskProgressPresentation) -> String {
-        var parts = [progress.phase.fallback]
+        var parts = [IosTaskTextResolver.resolve(progress.phase)]
         if let completed = progress.completedFiles?.int32Value,
            let total = progress.totalFiles?.int32Value,
            total > 0 {
-            parts.append("\(completed) / \(total) files")
+            parts.append(L10n.format("task.progressFiles", fallback: "%d / %d files", completed, total))
         }
         if let failed = progress.failedFiles?.int32Value, failed > 0 {
-            parts.append("\(failed) failed")
+            parts.append(L10n.format("task.progressFailed", fallback: "%d failed", failed))
         }
         return parts.joined(separator: " • ")
     }
+
 }
 
 private struct IosGlobalMessage: Identifiable {
@@ -709,7 +718,7 @@ private struct StartupProcessingPromptView: View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Found files to process. Process now?")
+                    Text(L10n.text("startup.prompt", fallback: "Found files to process. Process now?"))
                         .font(.title3)
                         .fontWeight(.semibold)
                     Text(summary)
@@ -721,15 +730,15 @@ private struct StartupProcessingPromptView: View {
                 Spacer()
             }
             .padding()
-            .navigationTitle("Process Files")
+            .navigationTitle(L10n.text("startup.processFiles", fallback: "Process Files"))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("No") {
+                    Button(L10n.text("settings.startup.no", fallback: "No")) {
                         onNo(alwaysAtStartup)
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Yes") {
+                    Button(L10n.text("settings.startup.yes", fallback: "Yes")) {
                         onYes(alwaysAtStartup)
                     }
                     .buttonStyle(.borderedProminent)
@@ -743,6 +752,6 @@ private struct StartupProcessingPromptView: View {
         if pendingCount == 1 {
             return "1 file is waiting in New."
         }
-        return "\(pendingCount) files are waiting in New."
+        return L10n.plural("startup.filesWaiting", count: pendingCount, fallback: "%d files are waiting in New.")
     }
 }

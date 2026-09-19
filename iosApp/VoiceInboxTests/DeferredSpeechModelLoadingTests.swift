@@ -369,7 +369,7 @@ final class DeferredSpeechModelLoadingTests: XCTestCase {
             return XCTFail("Expected an audio task")
         }
         XCTAssertEqual(task.state, .pending)
-        XCTAssertEqual(task.errorMessage, "Model could not be loaded")
+        XCTAssertEqual(task.errorMessage?.fallback, "Model could not be loaded")
     }
 
     func testTypedActionsHaveExplicitIosRoutes() {

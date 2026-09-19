@@ -91,9 +91,9 @@ final class IosTranscriptReviewTests: XCTestCase {
         )
         let allScreen = screen(selection: .all, files: [pending, processed])
 
-        XCTAssertEqual(newDetail, audioTask(in: allScreen, id: 3).detail)
-        XCTAssertEqual(processedDetail, audioTask(in: allScreen, id: 4).detail)
-        XCTAssertTrue(newDetail.contains(" • "))
+        XCTAssertEqual(newDetail.fallback, audioTask(in: allScreen, id: 3).detail?.fallback)
+        XCTAssertEqual(processedDetail.fallback, audioTask(in: allScreen, id: 4).detail?.fallback)
+        XCTAssertTrue(newDetail.fallback.contains(" • "))
     }
 
     private func file(

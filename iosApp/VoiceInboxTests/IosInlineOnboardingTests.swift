@@ -4,6 +4,15 @@ import XCTest
 @testable import VoiceInbox
 
 final class IosInlineOnboardingTests: XCTestCase {
+    func testRussianPluralSelectionCoversOneFewAndMany() {
+        XCTAssertEqual(L10n.pluralForm(for: 1, languageCode: "ru"), "one")
+        XCTAssertEqual(L10n.pluralForm(for: 2, languageCode: "ru"), "few")
+        XCTAssertEqual(L10n.pluralForm(for: 5, languageCode: "ru"), "many")
+        XCTAssertEqual(L10n.pluralForm(for: 11, languageCode: "ru"), "many")
+        XCTAssertEqual(L10n.pluralForm(for: 21, languageCode: "ru"), "one")
+        XCTAssertEqual(L10n.pluralForm(for: 2, languageCode: "en"), "other")
+    }
+
     func testLifecycleStoreDefaultsUnknownValuesToActiveAndPersistsTerminalStates() throws {
         let suiteName = "IosInlineOnboardingTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
