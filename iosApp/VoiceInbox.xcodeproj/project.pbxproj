@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E60000000000000000000001 /* ShareExtensionLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = E60000000000000000000002 /* ShareExtensionLocalization.swift */; };
+		E60000000000000000000005 /* ShareExtensionLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = E60000000000000000000002 /* ShareExtensionLocalization.swift */; };
+		E60000000000000000000003 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = E60000000000000000000004 /* Localizable.xcstrings */; };
 		E50000000000000000000001 /* IosLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = E50000000000000000000002 /* IosLocalization.swift */; };
 		E50000000000000000000003 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = E50000000000000000000004 /* Localizable.xcstrings */; };
 		101010101010101010101001 /* VoiceInboxApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101010101010101010101011 /* VoiceInboxApp.swift */; };
@@ -66,6 +69,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		E60000000000000000000002 /* ShareExtensionLocalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareExtensionLocalization.swift; sourceTree = "<group>"; };
+		E60000000000000000000004 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		E50000000000000000000002 /* IosLocalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosLocalization.swift; sourceTree = "<group>"; };
 		E50000000000000000000004 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		101010101010101010101003 /* VoiceInbox.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VoiceInbox.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -173,6 +178,8 @@
 			isa = PBXGroup;
 			children = (
 				A2A88E9CFF2023E878C6EC22 /* ShareViewController.swift */,
+				E60000000000000000000002 /* ShareExtensionLocalization.swift */,
+				E60000000000000000000004 /* Localizable.xcstrings */,
 				CD030301C0E14C9932DCBFE6 /* IosSharedImportStaging.swift */,
 				F63411837D138D0E90F5BA1D /* Info.plist */,
 				A3B22C5C663FBCBBFAB0A81F /* VoiceInboxShareExtension.entitlements */,
@@ -303,6 +310,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E60000000000000000000003 /* Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -368,6 +376,7 @@
 				101010101010101010101001 /* VoiceInboxApp.swift in Sources */,
 				101010101010101010101002 /* ContentView.swift in Sources */,
 				E50000000000000000000001 /* IosLocalization.swift in Sources */,
+				E60000000000000000000005 /* ShareExtensionLocalization.swift in Sources */,
 				101010101010101010101028 /* IosAudioDocumentPicker.swift in Sources */,
 				101010101010101010101027 /* IosAudioImportStore.swift in Sources */,
 				101010101010101010101031 /* IosAudioPreviewPlayer.swift in Sources */,
@@ -389,6 +398,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				361EE03677F4524C001986C0 /* ShareViewController.swift in Sources */,
+				E60000000000000000000001 /* ShareExtensionLocalization.swift in Sources */,
 				9FAC76B26E6BD4116D968475 /* IosSharedImportStaging.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
