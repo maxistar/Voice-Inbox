@@ -17,13 +17,21 @@ class AndroidLocalizationInstrumentedTest {
     fun taskTextResolverAndPluralResourcesFollowTheRequestedLocale() {
         val english = localizedContext(Locale.US)
         val russian = localizedContext(Locale("ru", "RU"))
+        val german = localizedContext(Locale("de", "DE"))
         val taskTitle = TaskText(TaskTextKey.INSTALL_SPEECH_MODEL, "Install Speech Model")
 
         assertEquals("Install Speech Model", AndroidTaskTextResolver.resolve(english.resources, taskTitle))
         assertEquals("Установить речевую модель", AndroidTaskTextResolver.resolve(russian.resources, taskTitle))
+        assertEquals("Sprachmodell installieren", AndroidTaskTextResolver.resolve(german.resources, taskTitle))
+        assertEquals("Клавиатура Voice Inbox", russian.getString(R.string.voice_keyboard_name))
+        assertEquals("Voice-Inbox-Tastatur", german.getString(R.string.voice_keyboard_name))
+        assertEquals("Sprachmodell aus Ordner installieren", german.getString(R.string.settings_model_import_title))
         assertEquals("Расшифровать все (1 файл)", russian.resources.getQuantityString(R.plurals.transcribe_all_count, 1, 1))
         assertEquals("Расшифровать все (2 файла)", russian.resources.getQuantityString(R.plurals.transcribe_all_count, 2, 2))
         assertEquals("Расшифровать все (5 файлов)", russian.resources.getQuantityString(R.plurals.transcribe_all_count, 5, 5))
+        assertEquals("Alle transkribieren (1 Datei)", german.resources.getQuantityString(R.plurals.transcribe_all_count, 1, 1))
+        assertEquals("Alle transkribieren (2 Dateien)", german.resources.getQuantityString(R.plurals.transcribe_all_count, 2, 2))
+        assertEquals("Alle transkribieren (5 Dateien)", german.resources.getQuantityString(R.plurals.transcribe_all_count, 5, 5))
     }
 
     private fun localizedContext(locale: Locale): Context {

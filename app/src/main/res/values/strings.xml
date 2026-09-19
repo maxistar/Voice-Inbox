@@ -52,6 +52,7 @@
     <string name="settings_about_legal">Legal information</string>
     <string name="settings_about_link_error">No app can open this link.</string>
     <string name="settings_model_active">Active: %1$s. Select a supported local model package to replace it.</string>
+    <string name="settings_model_import_title">Install speech model from folder</string>
     <string name="settings_model_select">Select a supported local model package.</string>
     <string name="error_output_not_writable">Output file is not writable</string>
     <string name="error_audio_folder_not_readable">Audio folder is not readable</string>
@@ -199,6 +200,7 @@
     <string name="folder_scan_complete">Scan complete: %1$d audio files</string>
     <string name="error_folder_scan_failed">Folder scan failed</string>
     <string name="error_audio_catalog_refresh_failed">Audio catalog refresh failed</string>
+    <string name="error_foreground_work">Could not continue background work. Please try again.</string>
     <string name="transcription_completed">Completed</string>
     <string name="transcription_progress">Transcribing</string>
     <string name="transcription_summary">Completed %1$d of %2$d</string>
@@ -206,6 +208,8 @@
     <string name="error_cannot_play">Cannot play %1$s</string>
     <string name="audio_import_default_name">shared audio</string>
     <string name="audio_import_failed">Audio import failed</string>
+    <string name="audio_import_empty_file">Audio file is empty</string>
+    <string name="audio_import_unsupported_format">Unsupported audio format</string>
     <string name="audio_import_summary">Imported %1$d</string>
     <string name="audio_import_duplicates">%1$d already added</string>
     <string name="audio_import_rejected_reason">rejected: %1$s</string>

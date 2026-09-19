@@ -269,7 +269,7 @@ class MainActivityInstrumentedTest {
                 assertEquals(android.view.View.VISIBLE, action.visibility)
                 assertTrue(action.isEnabled)
                 assertEquals(
-                    AndroidFolderSyncPresentation.ACCESSIBILITY_REFRESH,
+                    activity.getString(R.string.refresh_state_idle),
                     action.contentDescription,
                 )
             }
@@ -282,7 +282,7 @@ class MainActivityInstrumentedTest {
             awaitActivity(scenario) { activity -> !refreshAction(activity).isEnabled }
             scenario.onActivity { activity ->
                 assertEquals(
-                    AndroidFolderSyncPresentation.ACCESSIBILITY_REFRESH,
+                    activity.getString(R.string.refresh_state_idle),
                     refreshAction(activity).contentDescription,
                 )
             }
@@ -320,7 +320,7 @@ class MainActivityInstrumentedTest {
                 val action = refreshAction(activity)
                 assertFalse(action.isEnabled)
                 assertEquals(
-                    AndroidFolderSyncPresentation.ACCESSIBILITY_REFRESHING,
+                    activity.getString(R.string.refresh_state_refreshing),
                     action.contentDescription,
                 )
                 val before = stateHost(activity).currentInput.folderSync

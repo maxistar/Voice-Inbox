@@ -52,6 +52,7 @@
     <string name="settings_about_legal">Правовая информация</string>
     <string name="settings_about_link_error">Нет приложения для открытия этой ссылки.</string>
     <string name="settings_model_active">Активна: %1$s. Выберите поддерживаемый локальный пакет модели, чтобы заменить её.</string>
+    <string name="settings_model_import_title">Установить речевую модель из папки</string>
     <string name="settings_model_select">Выберите поддерживаемый локальный пакет модели.</string>
     <string name="error_output_not_writable">В файл вывода нельзя записать</string>
     <string name="error_audio_folder_not_readable">Папка с аудио недоступна для чтения</string>
@@ -201,6 +202,7 @@
     <string name="folder_scan_complete">Сканирование завершено: аудиофайлов %1$d</string>
     <string name="error_folder_scan_failed">Не удалось просканировать папку</string>
     <string name="error_audio_catalog_refresh_failed">Не удалось обновить каталог аудио</string>
+    <string name="error_foreground_work">Не удалось продолжить фоновую работу. Попробуйте ещё раз.</string>
     <string name="transcription_completed">Готово</string>
     <string name="transcription_progress">Расшифровка</string>
     <string name="transcription_summary">Готово: %1$d из %2$d</string>
@@ -208,6 +210,8 @@
     <string name="error_cannot_play">Не удалось воспроизвести %1$s</string>
     <string name="audio_import_default_name">переданное аудио</string>
     <string name="audio_import_failed">Не удалось импортировать аудио</string>
+    <string name="audio_import_empty_file">Аудиофайл пуст</string>
+    <string name="audio_import_unsupported_format">Неподдерживаемый формат аудио</string>
     <string name="audio_import_summary">Импортировано: %1$d</string>
     <string name="audio_import_duplicates">Уже добавлено: %1$d</string>
     <string name="audio_import_rejected_reason">Отклонено: %1$s</string>

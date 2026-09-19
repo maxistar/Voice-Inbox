@@ -95,14 +95,14 @@
                     android:id="@+id/settingsModelDetail"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Install speech model from folder"
+                    android:text="@string/settings_model_import_title"
                     android:textStyle="bold" />
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="Select a supported local model package" />
+                    android:text="@string/settings_model_select" />
             </LinearLayout>
 
             <TextView

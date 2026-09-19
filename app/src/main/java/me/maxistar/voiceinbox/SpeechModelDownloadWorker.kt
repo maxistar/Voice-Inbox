@@ -47,7 +47,7 @@ class SpeechModelDownloadWorker(
         } catch (error: IllegalArgumentException) {
             failure(error.message ?: applicationContext.getString(R.string.error_model_unavailable_download))
         } catch (error: ForegroundPromotionException) {
-            failure(error.userMessage)
+            failure(applicationContext.getString(R.string.error_foreground_work))
         }
     }
 

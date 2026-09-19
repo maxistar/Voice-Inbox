@@ -47,7 +47,7 @@ class SpeechModelImportWorker(
                 workDataOf(SpeechModelInstallationWork.KEY_MODEL_PATH to installed.absolutePath),
             )
         } catch (error: ForegroundPromotionException) {
-            failure(error.userMessage)
+            failure(applicationContext.getString(R.string.error_foreground_work))
         } finally {
             SpeechModelImportPermission.releaseOwnedIfUnused(applicationContext)
         }

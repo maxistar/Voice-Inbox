@@ -28,11 +28,10 @@ object SpeechModelInstallationWork {
 
     enum class Source(
         val diagnosticName: String,
-        val userFacingName: String,
     ) {
-        NETWORK_DOWNLOAD("network-download", "model download"),
-        LOCAL_IMPORT("local-import", "local model import"),
-        TRANSCRIPTION("transcription", "transcription"),
+        NETWORK_DOWNLOAD("network-download"),
+        LOCAL_IMPORT("local-import"),
+        TRANSCRIPTION("transcription"),
     }
 
     fun foregroundInfo(context: Context, progress: Int, message: String): ForegroundInfo {
@@ -146,13 +145,13 @@ object SpeechModelInstallationWork {
             error,
         )
         return ForegroundPromotionException(
-            userMessage = "Could not keep ${source.userFacingName} running in the foreground. Please try again.",
+            source = source,
             cause = error,
         )
     }
 }
 
 class ForegroundPromotionException(
-    val userMessage: String,
+    val source: SpeechModelInstallationWork.Source,
     cause: Throwable,
-) : RuntimeException(userMessage, cause)
+) : RuntimeException(cause)

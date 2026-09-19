@@ -1651,7 +1651,9 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         val view = refreshActionView ?: return
         view.visibility = if (sync.visible) View.VISIBLE else View.GONE
         view.isEnabled = sync.enabled
-        view.contentDescription = sync.accessibilityLabel
+        view.contentDescription = getString(
+            if (sync.active) R.string.refresh_state_refreshing else R.string.refresh_state_idle,
+        )
         ViewCompat.setStateDescription(
             view,
             if (sync.active) getString(R.string.refresh_state_refreshing) else getString(R.string.refresh_state_idle),

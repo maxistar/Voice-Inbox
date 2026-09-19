@@ -68,11 +68,18 @@ data class AudioImportSummary(
         if (duplicateCount > 0) append(" • ${resources.getString(R.string.audio_import_duplicates, duplicateCount)}")
         if (rejectedCount == 1) {
             val rejection = outcomes.filterIsInstance<AudioImportItemOutcome.Rejected>().single()
-            append(" • ${resources.getString(R.string.audio_import_rejected_reason, rejection.reason)}")
+            append(" • ${resources.getString(R.string.audio_import_rejected_reason, localizedRejectionReason(resources, rejection.reason))}")
         } else if (rejectedCount > 1) {
             append(" • ${resources.getString(R.string.audio_import_rejected_count, rejectedCount)}")
         }
         if (outcomes.isEmpty()) append(" • ${resources.getString(R.string.audio_import_none_received)}")
+    }
+
+    private fun localizedRejectionReason(resources: Resources, reason: String): String = when (reason) {
+        "Audio file is empty" -> resources.getString(R.string.audio_import_empty_file)
+        "Unsupported audio format" -> resources.getString(R.string.audio_import_unsupported_format)
+        "Audio import failed" -> resources.getString(R.string.audio_import_failed)
+        else -> reason
     }
 }
 
