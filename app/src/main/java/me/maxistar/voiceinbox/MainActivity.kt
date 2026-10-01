@@ -950,9 +950,17 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
             .setTitle(review.filename)
             .setView(content)
             .setNegativeButton(R.string.transcript_close, null)
+            .setNeutralButton(R.string.transcript_copy_all, null)
             .setPositiveButton(R.string.transcript_share, null)
             .create()
         dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).apply {
+                contentDescription = getString(R.string.transcript_copy_accessibility)
+                setOnClickListener {
+                    copyTranscriptToClipboard(this@MainActivity, review)
+                    Toast.makeText(this@MainActivity, R.string.transcript_copied, Toast.LENGTH_SHORT).show()
+                }
+            }
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 startActivity(AndroidTranscriptShareIntent.chooser(review))
             }

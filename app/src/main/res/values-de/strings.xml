@@ -125,6 +125,9 @@
     <string name="import_audio">Audio importieren</string>
     <string name="importing_audio">Audio wird importiert…</string>
     <string name="no_shared_audio">Es wurde kein lesbares Audio geteilt.</string>
+    <string name="transcript_copy_all">Alles kopieren</string>
+    <string name="transcript_copy_accessibility">Vollständiges Transkript kopieren</string>
+    <string name="transcript_copied">Transkript kopiert</string>
     <string name="transcript_share">Teilen</string>
     <string name="transcript_close">Schließen</string>
     <string name="transcript_text_accessibility">Auswählbarer Transkripttext</string>

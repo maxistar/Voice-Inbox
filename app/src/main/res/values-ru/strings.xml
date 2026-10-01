@@ -127,6 +127,9 @@
     <string name="import_audio">Импортировать аудио</string>
     <string name="importing_audio">Импорт аудио…</string>
     <string name="no_shared_audio">Не удалось прочитать переданное аудио.</string>
+    <string name="transcript_copy_all">Скопировать всё</string>
+    <string name="transcript_copy_accessibility">Скопировать всю расшифровку</string>
+    <string name="transcript_copied">Расшифровка скопирована</string>
     <string name="transcript_share">Поделиться</string>
     <string name="transcript_close">Закрыть</string>
     <string name="transcript_text_accessibility">Текст расшифровки с возможностью выделения</string>

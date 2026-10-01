@@ -2338,6 +2338,57 @@
         }
       }
     },
+    "transcript.copyAccessibility" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy full transcript"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скопировать всю расшифровку"
+          }
+        }
+      }
+    },
+    "transcript.copyAll" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy All"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скопировать всё"
+          }
+        }
+      }
+    },
+    "transcript.copied" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transcript copied"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Расшифровка скопирована"
+          }
+        }
+      }
+    },
     "transcript.done" : {
       "extractionState" : "stale",
       "localizations" : {

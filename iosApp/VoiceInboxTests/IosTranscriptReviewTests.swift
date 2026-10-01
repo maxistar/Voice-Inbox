@@ -1,5 +1,6 @@
 import Foundation
 import Shared
+import UIKit
 import XCTest
 @testable import VoiceInbox
 
@@ -51,7 +52,7 @@ final class IosTranscriptReviewTests: XCTestCase {
         )
     }
 
-    func testTranscriptPresentationPreservesExactShareTextAndFilenameContext() throws {
+    func testTranscriptPresentationPreservesExactShareAndClipboardTextAndFilenameContext() throws {
         let text = "  recognized text\n"
         let presentation = try XCTUnwrap(IosDisplayedTranscript(
             entryId: 7,
@@ -60,10 +61,22 @@ final class IosTranscriptReviewTests: XCTestCase {
         ))
 
         XCTAssertEqual(presentation.id, 7)
+        XCTAssertEqual(presentation.clipboardText, text)
         XCTAssertEqual(presentation.shareText, text)
         XCTAssertEqual(presentation.shareSubject, "voice.m4a")
         XCTAssertFalse(presentation.shareText.contains(presentation.filename))
         XCTAssertNil(IosDisplayedTranscript(entryId: 8, filename: "empty.m4a", text: " \n "))
+    }
+
+    func testTranscriptClipboardWritesExactText() throws {
+        let pasteboardName = UIPasteboard.Name("VoiceInboxTests.TranscriptClipboard.\(UUID().uuidString)")
+        let pasteboard = try XCTUnwrap(UIPasteboard(name: pasteboardName, create: true))
+        defer { UIPasteboard.remove(withName: pasteboardName) }
+        let text = "  exact transcript\n"
+
+        IosTranscriptClipboard.copy(text, to: pasteboard)
+
+        XCTAssertEqual(pasteboard.string, text)
     }
 
     func testTranscriptReviewRejectsMissingOrStaleCatalogText() throws {
