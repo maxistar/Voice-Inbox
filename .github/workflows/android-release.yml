@@ -1,36 +1,73 @@
-name: Android Release
+name: Publish Tagged Android Release
 
 on:
+  push:
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
-      tag_name:
-        description: "Release tag. Defaults to v<versionName>."
-        required: false
+      tag:
+        description: Existing immutable release tag to publish
+        required: true
         type: string
-      prerelease:
-        description: "Mark GitHub release as a prerelease."
-        required: false
-        default: false
-        type: boolean
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 jobs:
-  signed-release:
-    name: Build signed release artifacts
+  publish:
     runs-on: ubuntu-latest
-
     env:
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - name: Resolve requested tag
+        id: requested
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_TAG: ${{ github.ref_name }}
+        run: |
+          if [ -n "$INPUT_TAG" ]; then TAG="$INPUT_TAG"; else TAG="$REF_TAG"; fi
+          case "$TAG" in v[0-9]*.[0-9]*.[0-9]*) ;; *) echo "::error::Invalid release tag: $TAG"; exit 2 ;; esac
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.requested.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Verify tag and release identity
+        env:
+          TAG: ${{ steps.requested.outputs.tag }}
+        run: |
+          git fetch origin --tags
+          test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "$TAG")"
+          test "$(git cat-file -t "$TAG")" = "tag"
+          test "$(python3 scripts/release_tool.py metadata | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag"])')" = "$TAG"
+          python3 scripts/release_tool.py validate --skip-branch --allow-existing-tag
+
+      - name: Detect an existing complete GitHub Release
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.requested.outputs.tag }}
+        run: |
+          mkdir -p release-artifacts
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release download "$TAG" --dir release-artifacts
+            (cd release-artifacts && sha256sum --check SHA256SUMS)
+            echo "complete=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "complete=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Validate signing secrets
+        if: steps.existing.outputs.complete != 'true'
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
@@ -46,23 +83,28 @@ jobs:
           fi
 
       - name: Set up JDK
+        if: steps.existing.outputs.complete != 'true'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Set up Android SDK
+        if: steps.existing.outputs.complete != 'true'
         uses: android-actions/setup-android@v3
 
       - name: Install Android SDK packages
+        if: steps.existing.outputs.complete != 'true'
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;30.0.14904198"
 
       - name: Set up Rust
+        if: steps.existing.outputs.complete != 'true'
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android
 
       - name: Cache Rust artifacts
+        if: steps.existing.outputs.complete != 'true'
         uses: actions/cache@v4
         with:
           path: |
@@ -74,12 +116,20 @@ jobs:
             rust-${{ runner.os }}-
 
       - name: Install cargo-ndk
+        if: steps.existing.outputs.complete != 'true'
         run: cargo install cargo-ndk --locked
 
       - name: Set up Gradle
+        if: steps.existing.outputs.complete != 'true'
         uses: gradle/actions/setup-gradle@v4
 
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
       - name: Decode release keystore
+        if: steps.existing.outputs.complete != 'true'
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
@@ -87,64 +137,45 @@ jobs:
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore"
           echo "ANDROID_KEYSTORE_FILE=$keystore" >> "$GITHUB_ENV"
 
-      - name: Build signed release APK
-        run: ./gradlew :app:assembleRelease
-
-      - name: Build signed release AAB
-        run: ./gradlew :app:bundleRelease
-
-      - name: Stage release files
-        id: release_files
+      - name: Build signed APK and AAB once
+        if: steps.existing.outputs.complete != 'true'
         run: |
-          version=$(grep 'versionName =' app/build.gradle.kts | head -n1 | cut -d '"' -f2)
-          if [ -z "$version" ]; then
-            echo "::error::Unable to read versionName from app/build.gradle.kts"
+          ./gradlew :app:assembleRelease :app:bundleRelease --no-daemon
+          version=$(python3 scripts/release_tool.py metadata | python3 -c 'import json,sys; print(json.load(sys.stdin)["versionName"])')
+          cp app/build/outputs/apk/release/app-release.apk "release-artifacts/voice-inbox-$version.apk"
+          cp app/build/outputs/bundle/release/app-release.aab "release-artifacts/voice-inbox-$version.aab"
+          (cd release-artifacts && sha256sum "voice-inbox-$version.apk" "voice-inbox-$version.aab" > SHA256SUMS)
+          (cd release-artifacts && sha256sum --check SHA256SUMS)
+
+      - name: Publish GitHub Release and immutable assets
+        if: steps.existing.outputs.complete != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.requested.outputs.tag }}
+        run: |
+          CODE=$(python3 scripts/release_tool.py metadata | python3 -c 'import json,sys; print(json.load(sys.stdin)["versionCode"])')
+          NOTES="fastlane/metadata/android/en-US/changelogs/$CODE.txt"
+          gh release create "$TAG" release-artifacts/* --verify-tag --title "Voice Inbox $TAG" --notes-file "$NOTES"
+
+      - name: Decode Google Play service account
+        env:
+          SERVICE_ACCOUNT_BASE64: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$SERVICE_ACCOUNT_BASE64" ]; then
+            echo "::error::GOOGLE_PLAY_SERVICE_ACCOUNT is required for Google Play upload"
             exit 1
           fi
-          tag="${{ inputs.tag_name }}"
-          if [ -z "$tag" ]; then
-            tag="v$version"
-          fi
+          printf '%s' "$SERVICE_ACCOUNT_BASE64" | base64 --decode > service-account.json
 
-          mkdir -p release-dist
-          cp app/build/outputs/apk/release/app-release.apk "release-dist/voice-inbox-$version.apk"
-          cp app/build/outputs/bundle/release/app-release.aab "release-dist/voice-inbox-$version.aab"
-
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "apk=release-dist/voice-inbox-$version.apk" >> "$GITHUB_OUTPUT"
-          echo "aab=release-dist/voice-inbox-$version.aab" >> "$GITHUB_OUTPUT"
-
-      - name: Upload signed release APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: voice-inbox-release-apk
-          path: ${{ steps.release_files.outputs.apk }}
-          if-no-files-found: error
-
-      - name: Upload signed release AAB
-        uses: actions/upload-artifact@v4
-        with:
-          name: voice-inbox-release-aab
-          path: ${{ steps.release_files.outputs.aab }}
-          if-no-files-found: error
-
-      - name: Create GitHub release
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ steps.release_files.outputs.tag }}
-          RELEASE_VERSION: ${{ steps.release_files.outputs.version }}
-          PRERELEASE: ${{ inputs.prerelease }}
+      - name: Upload the published AAB to Play Internal testing
         run: |
-          prerelease_args=""
-          if [ "$PRERELEASE" = "true" ]; then
-            prerelease_args="--prerelease"
-          fi
-
-          gh release create "$RELEASE_TAG" \
-            "${{ steps.release_files.outputs.apk }}" \
-            "${{ steps.release_files.outputs.aab }}" \
-            --target "$GITHUB_SHA" \
-            --title "Voice Inbox $RELEASE_VERSION" \
-            --notes "Signed Android release artifacts for Voice Inbox $RELEASE_VERSION." \
-            $prerelease_args
+          TAG="${{ steps.requested.outputs.tag }}"
+          CODE=$(python3 scripts/release_tool.py metadata | python3 -c 'import json,sys; print(json.load(sys.stdin)["versionCode"])')
+          TRACK=$(python3 scripts/release_tool.py metadata | python3 -c 'import json,sys; print(json.load(sys.stdin)["playTrack"])')
+          AAB=$(find release-artifacts -maxdepth 1 -name 'voice-inbox-*.aab' | head -n1)
+          bundle exec fastlane android upload_release \
+            aab:"$AAB" \
+            version_code:"$CODE" \
+            metadata_path:"${{ github.workspace }}/fastlane/metadata/android" \
+            json_key:"${{ github.workspace }}/service-account.json" \
+            track:"$TRACK"

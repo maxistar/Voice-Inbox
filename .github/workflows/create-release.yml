@@ -1,0 +1,112 @@
+name: Create Android Release
+
+on:
+  pull_request_target:
+    branches: [master]
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      head_branch:
+        description: Merged release/* or hotfix/* branch for recovery
+        required: true
+        type: string
+      commit_sha:
+        description: Exact merge commit contained in master
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  checks: read
+  pull-requests: read
+
+concurrency:
+  group: android-release-${{ github.event.pull_request.merge_commit_sha || inputs.commit_sha }}
+  cancel-in-progress: false
+
+jobs:
+  create-tag:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true &&
+      (startsWith(github.event.pull_request.head.ref, 'release/') ||
+      startsWith(github.event.pull_request.head.ref, 'hotfix/')))
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.identity.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || inputs.commit_sha }}
+          fetch-depth: 0
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - name: Fetch stable history and tags
+        run: git fetch origin master --tags
+
+      - name: Require successful protected pull-request checks
+        if: github.event_name == 'pull_request_target'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: gh pr checks "$PR_NUMBER" --required
+
+      - name: Resolve merged release identity
+        id: identity
+        env:
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref || inputs.head_branch }}
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref || 'master' }}
+          MERGE_COMMIT: ${{ github.event.pull_request.merge_commit_sha || inputs.commit_sha }}
+          MERGED: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.merged }}
+        run: |
+          python3 scripts/release_tool.py candidate \
+            --head-branch "$HEAD_BRANCH" \
+            --base-branch "$BASE_BRANCH" \
+            --merge-commit "$MERGE_COMMIT" \
+            --merged "$MERGED" > release-candidate.json
+          tag=$(python3 -c 'import json; print(json.load(open("release-candidate.json"))["tag"])')
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Decode Google Play service account
+        env:
+          SERVICE_ACCOUNT_BASE64: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$SERVICE_ACCOUNT_BASE64" ]; then
+            echo "::error::GOOGLE_PLAY_SERVICE_ACCOUNT is required for release publishing"
+            exit 1
+          fi
+          printf '%s' "$SERVICE_ACCOUNT_BASE64" | base64 --decode > service-account.json
+
+      - name: Repeat repository and Google Play validation
+        run: >-
+          python3 scripts/release_tool.py validate --skip-branch --check-play
+          --service-account service-account.json
+
+      - name: Create immutable annotated tag
+        env:
+          TAG: ${{ steps.identity.outputs.tag }}
+          MERGE_COMMIT: ${{ github.event.pull_request.merge_commit_sha || inputs.commit_sha }}
+        run: |
+          test -z "$(git tag --list "$TAG")"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" "$MERGE_COMMIT" -m "Release $TAG"
+          git push origin "refs/tags/$TAG"
+
+  publish:
+    needs: create-tag
+    uses: ./.github/workflows/android-release.yml
+    with:
+      tag: ${{ needs.create-tag.outputs.tag }}
+    secrets: inherit
+
+  sync-development:
+    needs: [create-tag, publish]
+    uses: ./.github/workflows/sync-master-to-develop.yml
+    with:
+      tag: ${{ needs.create-tag.outputs.tag }}
+    secrets: inherit
