@@ -53,7 +53,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: gh pr checks "$PR_NUMBER" --required
+        run: |
+          if ! output=$(gh pr checks "$PR_NUMBER" --required 2>&1); then
+            if printf '%s' "$output" | grep -q "no required checks reported"; then
+              echo "No required checks are configured; skipping required-check gate."
+            else
+              printf '%s\n' "$output"
+              exit 1
+            fi
+          fi
 
       - name: Resolve merged release identity
         id: identity

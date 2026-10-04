@@ -185,7 +185,7 @@ jobs:
           TAG="${{ steps.requested.outputs.tag }}"
           CODE=$(python3 scripts/release_tool.py metadata | python3 -c 'import json,sys; print(json.load(sys.stdin)["versionCode"])')
           TRACK=$(python3 scripts/release_tool.py metadata | python3 -c 'import json,sys; print(json.load(sys.stdin)["playTrack"])')
-          AAB=$(find release-artifacts -maxdepth 1 -name 'voice-inbox-*.aab' | head -n1)
+          AAB=$(find "${{ github.workspace }}/release-artifacts" -maxdepth 1 -name 'voice-inbox-*.aab' | head -n1)
           bundle exec fastlane android upload_release \
             aab:"$AAB" \
             version_code:"$CODE" \
