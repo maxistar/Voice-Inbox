@@ -1,0 +1,14 @@
+---
+import Layout from '../../layouts/Layout.astro';
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+<Layout title="Документация" description="Выберите workflow Voice Inbox: расшифровка записей или Android-голосовая клавиатура, затем откройте настройку и помощь.">
+  <p class="eyebrow">Документация</p>
+  <h1>Два workflow: записи и короткая Android-диктовка.</h1>
+  <p>Voice Inbox помогает обрабатывать существующие аудиозаписи в текстовый inbox. На Android также есть отдельная голосовая клавиатура для коротких фраз.</p>
+  <div class="grid section">
+    <article class="card"><h2>Расшифровка записей</h2><p>Установите модель, импортируйте аудио или выберите папку, запустите расшифровку и проверьте текст в приложении.</p><a href={`${base}/ru/setup/`}>Настройка →</a></article>
+    <article class="card"><h2>Голосовая клавиатура Android</h2><p>Включите input method Voice Inbox и диктуйте короткие фразы в активное текстовое поле. Функция Android-only.</p><a href={`${base}/ru/docs/voice-keyboard/`}>Руководство →</a></article>
+    <article class="card"><h2>Вопросы и приватность</h2><p>FAQ, сведения о локальном распознавании, модели, ограничениях расписания и безопасной отправке обратной связи.</p><a href={`${base}/ru/faq/`}>FAQ →</a></article>
+  </div>
+</Layout>

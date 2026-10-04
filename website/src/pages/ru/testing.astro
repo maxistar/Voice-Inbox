@@ -1,0 +1,18 @@
+---
+import Layout from '../../layouts/Layout.astro';
+const groupUrl = 'https://groups.google.com/g/watch-face-beta-testers';
+const optInUrl = 'https://play.google.com/apps/testing/me.maxistar.voiceinbox';
+const storeUrl = 'https://play.google.com/store/apps/details?id=me.maxistar.voiceinbox';
+---
+<Layout title="Закрытое тестирование Android" description="Как вступить в закрытый тест Voice Inbox в Google Play, установить Android-приложение и отправить полезную обратную связь.">
+  <p class="eyebrow">Android closed testing</p>
+  <h1>Присоединитесь к закрытому тестированию Voice Inbox.</h1>
+  <p>Voice Inbox для Android распространяется через закрытое тестирование Google Play, а не как публичный production-релиз. Используйте один и тот же Google-аккаунт для группы, opt-in и Google Play.</p>
+  <div class="grid section">
+    <article class="card"><h2>1. Вступите в группу</h2><p>Откройте общую группу тестеров maintainer'а и вступите в неё.</p><a href={groupUrl} target="_blank" rel="noopener">Открыть группу →</a></article>
+    <article class="card"><h2>2. Пройдите opt-in</h2><p>После вступления в группу подтвердите участие в тестировании Voice Inbox.</p><a href={optInUrl} target="_blank" rel="noopener">Страница opt-in →</a></article>
+    <article class="card"><h2>3. Установите приложение</h2><p>После opt-in откройте страницу приложения в Google Play и установите или обновите Voice Inbox.</p><a href={storeUrl} target="_blank" rel="noopener">Открыть Google Play →</a></article>
+  </div>
+  <section class="section"><h2>Что проверить</h2><ul><li>Установка модели и первая расшифровка.</li><li>Импорт или Share аудио.</li><li>Просмотр текста в приложении и опциональный output-документ.</li><li>Восстановление состояния после перезапуска.</li><li>Опциональная обработка папки и Android-клавиатура, если они вам нужны.</li></ul></section>
+  <section class="section note">Если страница недоступна, проверьте членство в группе, совпадение аккаунтов, завершение opt-in и подождите, пока Google Play обновит доступ.</section>
+</Layout>

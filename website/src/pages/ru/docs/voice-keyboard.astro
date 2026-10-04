@@ -1,0 +1,28 @@
+---
+import Layout from '../../../layouts/Layout.astro';
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const keyboardScreenshot = `${base}/screenshots/android-voice-keyboard-guide.png`;
+---
+<Layout title="Голосовая клавиатура Android" description="Как включить и использовать клавиатуру Voice Inbox для приватной локальной диктовки коротких фраз на Android.">
+  <p class="eyebrow">Android-only</p>
+  <h1>Голосовая клавиатура Voice Inbox для коротких фраз.</h1>
+  <p>Голосовая клавиатура — отдельный Android input method. Она записывает короткую фразу, распознаёт её локально после установки модели и вставляет текст в активное редактируемое поле. Это не полноценная клавиатура и не функция iOS.</p>
+
+  <section class="section">
+    <figure>
+      <img src={keyboardScreenshot} alt="Руководство по Android-голосовой клавиатуре Voice Inbox" style="width: 100%; height: auto; border: 1px solid var(--border); border-radius: 12px;" />
+      <figcaption class="note">Скриншот показывает compact voice keyboard workflow с демонстрационным содержимым.</figcaption>
+    </figure>
+  </section>
+
+  <section class="section grid">
+    <article class="card"><h2>Перед началом</h2><p>Установите и проверьте модель распознавания в Voice Inbox. Для обычной загрузки модели нужна сеть; после установки распознавание выполняется на устройстве.</p></article>
+    <article class="card"><h2>Разрешение микрофона</h2><p>Клавиатуре требуется доступ к микрофону для записи короткой фразы. Не выдавайте разрешение, если не планируете использовать диктовку.</p></article>
+    <article class="card"><h2>Включение клавиатуры</h2><p>Откройте настройки Android input methods, включите Voice Inbox keyboard, затем выберите её в поле ввода, где хотите продиктовать текст.</p></article>
+    <article class="card"><h2>Использование</h2><p>Нажмите запись, произнесите короткую фразу, дождитесь локального распознавания и вставки текста. Для длинных записей используйте основной workflow импорта аудио.</p></article>
+  </section>
+
+  <section class="section note">
+    Голосовая клавиатура не отправляет аудио в облако приложения для распознавания после установки модели, но системные клавиатуры, приложения и провайдеры ввода могут иметь собственные правила приватности.
+  </section>
+</Layout>
