@@ -207,7 +207,7 @@ class SettingsActivity : AppCompatActivity() {
                     if (activityDestroyed) return@runOnUiThread
                     Toast.makeText(
                         this,
-                        error.message ?: "Output file is not writable",
+                        error.message ?: getString(R.string.error_output_not_writable),
                         Toast.LENGTH_LONG,
                     ).show()
                     renderStorage()
@@ -259,7 +259,7 @@ class SettingsActivity : AppCompatActivity() {
                     if (activityDestroyed) return@runOnUiThread
                     Toast.makeText(
                         this,
-                        error.message ?: "Audio folder is not readable",
+                        error.message ?: getString(R.string.error_audio_folder_not_readable),
                         Toast.LENGTH_LONG,
                     ).show()
                     renderStorage()
@@ -296,8 +296,8 @@ class SettingsActivity : AppCompatActivity() {
         modelDetail.text = when (val state = SpeechModelRepository.forActive(
             noBackupFilesDir.resolve("models"),
         ).inspectLightweight()) {
-            is InstalledSpeechModelState.Ready -> "Active: ${state.descriptor.displayName}. Select a supported local model package to replace it."
-            else -> "Select a supported local model package."
+            is InstalledSpeechModelState.Ready -> getString(R.string.settings_model_active, state.descriptor.displayName)
+            else -> getString(R.string.settings_model_select)
         }
     }
 
@@ -310,7 +310,7 @@ class SettingsActivity : AppCompatActivity() {
         outputDetail.text = runCatching {
             getString(R.string.output_selected, documentAccess.metadata(stored).displayName)
         }.getOrElse {
-            getString(R.string.output_selected, stored.lastPathSegment ?: "document")
+            getString(R.string.output_selected, stored.lastPathSegment ?: getString(R.string.output_default_name))
         }
     }
 
@@ -323,7 +323,7 @@ class SettingsActivity : AppCompatActivity() {
         folderDetail.text = runCatching {
             getString(R.string.folder_selected, folderScanner.folderName(stored))
         }.getOrElse {
-            getString(R.string.folder_selected, stored.lastPathSegment ?: "audio folder")
+            getString(R.string.folder_selected, stored.lastPathSegment ?: getString(R.string.audio_folder_default_name))
         }
     }
 
@@ -365,7 +365,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun appVersionName(): String =
         runCatching {
-            packageManager.getPackageInfo(packageName, 0).versionName ?: "Unknown"
-        }.getOrDefault("Unknown")
+            packageManager.getPackageInfo(packageName, 0).versionName ?: getString(R.string.unknown_value)
+        }.getOrDefault(getString(R.string.unknown_value))
 
 }

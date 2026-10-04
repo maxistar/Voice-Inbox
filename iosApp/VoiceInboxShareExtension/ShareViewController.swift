@@ -17,10 +17,10 @@ final class ShareViewController: UIViewController {
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
         statusLabel.numberOfLines = 0
         statusLabel.textAlignment = .center
-        statusLabel.text = "Importing audio..."
+        statusLabel.text = ShareExtensionL10n.text("share.importing", fallback: "Importing audio...")
 
         doneButton.translatesAutoresizingMaskIntoConstraints = false
-        doneButton.setTitle("Done", for: .normal)
+        doneButton.setTitle(ShareExtensionL10n.text("share.done", fallback: "Done"), for: .normal)
         doneButton.addTarget(self, action: #selector(closeExtension), for: .touchUpInside)
         doneButton.isHidden = true
 
@@ -164,9 +164,29 @@ private struct ShareImportResult {
 
     var message: String {
         var parts: [String] = []
-        if imported > 0 { parts.append("\(imported) staged for Voice Inbox") }
-        if skipped > 0 { parts.append("\(skipped) skipped") }
-        if failed > 0 { parts.append("\(failed) failed") }
-        return parts.isEmpty ? "No supported audio files found." : parts.joined(separator: ", ")
+        if imported > 0 {
+            parts.append(ShareExtensionL10n.plural(
+                "share.imported",
+                count: imported,
+                fallback: "%d file added to Voice Inbox"
+            ))
+        }
+        if skipped > 0 {
+            parts.append(ShareExtensionL10n.plural(
+                "share.skipped",
+                count: skipped,
+                fallback: "%d file skipped"
+            ))
+        }
+        if failed > 0 {
+            parts.append(ShareExtensionL10n.plural(
+                "share.failed",
+                count: failed,
+                fallback: "%d file failed"
+            ))
+        }
+        return parts.isEmpty
+            ? ShareExtensionL10n.text("share.noSupportedAudio", fallback: "No supported audio files found.")
+            : parts.joined(separator: ", ")
     }
 }

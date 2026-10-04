@@ -7,6 +7,7 @@ struct IosDisplayedTranscript: Identifiable, Equatable {
     let text: String
 
     var id: Int64 { entryId }
+    var clipboardText: String { text }
     var shareText: String { text }
     var shareSubject: String { filename }
 
@@ -38,34 +39,63 @@ enum IosTranscriptReview {
 struct IosTranscriptViewer: View {
     let transcript: IosDisplayedTranscript
     let onDismiss: () -> Void
+    @State private var copyConfirmationVisible = false
 
     var body: some View {
         NavigationStack {
             IosSelectableTranscriptTextView(
                 text: transcript.text,
-                accessibilityLabel: "Transcript text for \(transcript.filename)"
+                accessibilityLabel: L10n.format("transcript.textAccessibility", fallback: "Transcript text for %@", transcript.filename)
             )
             .accessibilityIdentifier("transcript-text")
             .navigationTitle(transcript.filename)
             .navigationBarTitleDisplayMode(.inline)
+            .overlay(alignment: .bottom) {
+                if copyConfirmationVisible {
+                    Text(L10n.text("transcript.copied", fallback: "Transcript copied"))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(.regularMaterial, in: Capsule())
+                        .padding(.bottom, 20)
+                        .accessibilityIdentifier("transcript-copy-confirmation")
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Done", action: onDismiss)
-                        .accessibilityLabel("Close transcript")
+                    Button(L10n.text("transcript.done", fallback: "Done"), action: onDismiss)
+                        .accessibilityLabel(L10n.text("transcript.close", fallback: "Close transcript"))
                         .accessibilityIdentifier("transcript-close")
                 }
-                ToolbarItem(placement: .primaryAction) {
+                ToolbarItemGroup(placement: .primaryAction) {
+                    Button {
+                        IosTranscriptClipboard.copy(transcript.clipboardText)
+                        copyConfirmationVisible = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            copyConfirmationVisible = false
+                        }
+                    } label: {
+                        Label(L10n.text("transcript.copyAll", fallback: "Copy All"), systemImage: "doc.on.doc")
+                    }
+                    .accessibilityLabel(L10n.text("transcript.copyAccessibility", fallback: "Copy full transcript"))
+                    .accessibilityIdentifier("transcript-copy")
+
                     ShareLink(
                         item: transcript.shareText,
                         subject: Text(transcript.shareSubject)
                     ) {
-                        Label("Share", systemImage: "square.and.arrow.up")
+                        Label(L10n.text("transcript.share", fallback: "Share"), systemImage: "square.and.arrow.up")
                     }
-                    .accessibilityLabel("Share transcript")
+                    .accessibilityLabel(L10n.text("transcript.shareAccessibility", fallback: "Share transcript"))
                     .accessibilityIdentifier("transcript-share")
                 }
             }
         }
+    }
+}
+
+enum IosTranscriptClipboard {
+    static func copy(_ text: String, to pasteboard: UIPasteboard = .general) {
+        pasteboard.string = text
     }
 }
 

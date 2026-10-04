@@ -87,7 +87,7 @@ final class IosSingleFileTranscriptionController: ObservableObject {
     @Published var message: String?
 
     private var task: Task<Void, Never>?
-    static let backendUnavailableMessage = "iOS transcription backend is not configured yet."
+    static let backendUnavailableMessage = L10n.text("transcription.backendUnavailable", fallback: "iOS transcription backend is not configured yet.")
 
     var activeFileId: Int64? {
         state.active ? state.fileId : nil
@@ -117,7 +117,7 @@ final class IosSingleFileTranscriptionController: ObservableObject {
             active: true,
             fileId: file.id,
             fileName: file.displayName,
-            phase: "Preparing speech model",
+            phase: L10n.text("transcription.preparingModel", fallback: "Preparing speech model"),
             processedUs: 0,
             durationUs: 0,
             completedFiles: 0,
@@ -134,7 +134,7 @@ final class IosSingleFileTranscriptionController: ObservableObject {
                 claim: { store.markProcessing(fileId: file.id) }
             )
             guard prepared else {
-                let error = modelStore.message ?? "Speech model preparation failed."
+                let error = modelStore.message ?? L10n.text("transcription.modelPreparationFailed", fallback: "Speech model preparation failed.")
                 prerequisiteError = error
                 message = error
                 state = .idle
@@ -183,10 +183,10 @@ final class IosSingleFileTranscriptionController: ObservableObject {
                     transcriptText: result.transcriptText,
                     durationUs: result.durationUs?.int64Value
                 )
-                message = "Transcribed \(file.displayName)"
+                message = L10n.format("transcription.transcribed", fallback: "Transcribed %@", file.displayName)
                 onSuccess?(result.transcriptText)
             } else {
-                let error = outcome.errorMessage ?? "iOS transcription failed."
+                let error = outcome.errorMessage ?? L10n.text("transcription.failed", fallback: "iOS transcription failed.")
                 store.markFailed(fileId: file.id, error: error)
                 message = error
             }
@@ -217,7 +217,7 @@ final class IosSingleFileTranscriptionController: ObservableObject {
             active: true,
             fileId: nil,
             fileName: nil,
-            phase: "Preparing speech model",
+            phase: L10n.text("transcription.preparingModel", fallback: "Preparing speech model"),
             processedUs: 0,
             durationUs: 0,
             completedFiles: 0,
@@ -230,7 +230,7 @@ final class IosSingleFileTranscriptionController: ObservableObject {
 
         task = Task {
             guard await modelStore.prepareForTranscription() != nil else {
-                let error = modelStore.message ?? "Speech model preparation failed."
+                let error = modelStore.message ?? L10n.text("transcription.modelPreparationFailed", fallback: "Speech model preparation failed.")
                 prerequisiteError = error
                 message = error
                 state = .idle

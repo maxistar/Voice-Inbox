@@ -40,7 +40,7 @@ class AndroidInlineOnboardingTest {
     @Test
     fun modelActionUsesDownloadRetryManualImportAndNeutralInstallingState() {
         assertEquals(TaskActionKind.DOWNLOAD_MODEL, present().action?.kind)
-        assertEquals("Start setup", present().action?.label)
+        assertEquals(R.string.onboarding_action_start, present().action?.labelRes)
 
         val invalid = present(
             model = ModelSetupSnapshot(ModelSetupSnapshotState.INVALID, downloadAvailable = true),
@@ -56,7 +56,7 @@ class AndroidInlineOnboardingTest {
             model = ModelSetupSnapshot(ModelSetupSnapshotState.INSTALLING, downloadAvailable = true),
         )
         assertFalse(installing.action!!.enabled)
-        assertEquals("Installing speech model…", installing.action?.label)
+        assertEquals(R.string.onboarding_action_installing, installing.action?.labelRes)
     }
 
     @Test

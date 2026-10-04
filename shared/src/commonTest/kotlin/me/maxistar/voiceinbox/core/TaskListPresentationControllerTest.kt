@@ -22,7 +22,8 @@ class TaskListPresentationControllerTest {
                 ),
             ).tasks.single(),
         )
-        assertTrue(required.detail?.contains("Whisper Tiny Multilingual") == true)
+        assertEquals(TaskTextKey.SELECTED_MODEL_DETAIL, required.detail?.key)
+        assertEquals("Whisper Tiny Multilingual", required.detail?.arguments?.first())
         assertTrue(required.actions.any { it.kind == TaskActionKind.SELECT_DOWNLOAD_MODEL })
 
         val installing = assertIs<SetupTaskPresentation>(
@@ -73,7 +74,7 @@ class TaskListPresentationControllerTest {
             state(output = OutputSetupSnapshot(OutputSetupSnapshotState.REQUIRED)).tasks.single(),
         )
 
-        assertEquals("Automatic Transcript Export", task.title)
+        assertEquals(TaskTextKey.AUTOMATIC_TRANSCRIPT_EXPORT, task.title.key)
         assertEquals(
             listOf(
                 TaskActionKind.CREATE_OUTPUT,
@@ -82,12 +83,16 @@ class TaskListPresentationControllerTest {
             ),
             task.actions.map { it.kind },
         )
-        assertEquals(listOf("Create New", "Choose Existing", "Hide"), task.actions.map { it.label })
+        assertEquals(
+            listOf(TaskTextKey.CREATE_NEW, TaskTextKey.CHOOSE_EXISTING, TaskTextKey.HIDE),
+            task.actions.map { it.text.key },
+        )
 
         val invalid = assertIs<SetupTaskPresentation>(
             state(output = OutputSetupSnapshot(OutputSetupSnapshotState.INVALID, "Access expired")).tasks.single(),
         )
-        assertEquals("Access expired", invalid.errorMessage)
+        assertEquals(TaskTextKey.OPAQUE, invalid.errorMessage?.key)
+        assertEquals("Access expired", invalid.errorMessage?.arguments?.single())
         assertEquals(
             listOf(TaskActionKind.CREATE_OUTPUT, TaskActionKind.SELECT_OUTPUT),
             invalid.actions.map { it.kind },
@@ -117,8 +122,9 @@ class TaskListPresentationControllerTest {
             ).tasks.single(),
         )
 
-        assertEquals("Installing", download.badge)
-        assertEquals("Downloading encoder.onnx", download.progress?.phase)
+        assertEquals(TaskTextKey.INSTALLING, download.badge.key)
+        assertEquals(TaskTextKey.OPAQUE, download.progress?.phase?.key)
+        assertEquals("Downloading encoder.onnx", download.progress?.phase?.arguments?.single())
         assertEquals(42, download.progress?.percent)
         assertEquals(listOf(TaskActionKind.CANCEL_MODEL_DOWNLOAD), download.actions.map { it.kind })
 
@@ -133,13 +139,14 @@ class TaskListPresentationControllerTest {
             ).tasks.single(),
         )
         assertNull(localImport.detail)
-        assertEquals("Verifying local model", localImport.progress?.phase)
+        assertEquals(TaskTextKey.OPAQUE, localImport.progress?.phase?.key)
+        assertEquals("Verifying local model", localImport.progress?.phase?.arguments?.single())
         assertTrue(localImport.actions.isEmpty())
 
         val fallback = assertIs<SetupTaskPresentation>(
             state(model = ModelSetupSnapshot(ModelSetupSnapshotState.INSTALLING)).tasks.single(),
         )
-        assertEquals("Installing model", fallback.progress?.phase)
+        assertEquals(TaskTextKey.INSTALLING_MODEL, fallback.progress?.phase?.key)
         assertNull(fallback.progress?.percent)
     }
 
@@ -155,7 +162,8 @@ class TaskListPresentationControllerTest {
             ).tasks.single(),
         )
 
-        assertEquals("Verification failed", task.errorMessage)
+        assertEquals(TaskTextKey.OPAQUE, task.errorMessage?.key)
+        assertEquals("Verification failed", task.errorMessage?.arguments?.single())
         assertFalse(task.actions.single { it.kind == TaskActionKind.RETRY_MODEL_DOWNLOAD }.enabled)
         assertFalse(task.actions.any { it.kind == TaskActionKind.IMPORT_MODEL })
     }
@@ -201,7 +209,8 @@ class TaskListPresentationControllerTest {
 
         val task = assertIs<AudioTaskPresentation>(state.tasks.single())
         assertEquals(AudioTaskState.PENDING, task.state)
-        assertEquals("Model could not be loaded", task.errorMessage)
+        assertEquals(TaskTextKey.OPAQUE, task.errorMessage?.key)
+        assertEquals("Model could not be loaded", task.errorMessage?.arguments?.single())
         assertTrue(state(TaskListFilter.PROCESSED, audio = listOf(audio(7, AudioFileState.PENDING))).tasks.isEmpty())
     }
 
@@ -219,7 +228,8 @@ class TaskListPresentationControllerTest {
         val byId = state.tasks.associateBy(TaskPresentation::stableId)
         val active = assertIs<AudioTaskPresentation>(byId.getValue("audio:1"))
         assertEquals(AudioTaskState.PROCESSING, active.state)
-        assertEquals("Preparing speech model", active.progress?.phase)
+        assertEquals(TaskTextKey.OPAQUE, active.progress?.phase?.key)
+        assertEquals("Preparing speech model", active.progress?.phase?.arguments?.single())
         assertNull(assertIs<AudioTaskPresentation>(byId.getValue("audio:2")).progress)
         assertEquals("audio:1", active.stableId)
     }
@@ -298,13 +308,13 @@ class TaskListPresentationControllerTest {
         )
         val processed = state(TaskListFilter.PROCESSED)
 
-        assertEquals("No new tasks", newState.emptyMessage)
+        assertEquals(TaskTextKey.NO_NEW_TASKS, newState.emptyMessage?.key)
         assertEquals(listOf(TaskActionKind.IMPORT_AUDIO), newState.emptyActions.map { it.kind })
         assertEquals(
             listOf(TaskActionKind.IMPORT_AUDIO, TaskActionKind.SELECT_FOLDER),
             withoutFolder.emptyActions.map { it.kind },
         )
-        assertEquals("No processed audio files", processed.emptyMessage)
+        assertEquals(TaskTextKey.NO_PROCESSED_AUDIO, processed.emptyMessage?.key)
         assertTrue(processed.emptyActions.isEmpty())
     }
 

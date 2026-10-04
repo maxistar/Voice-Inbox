@@ -13,6 +13,8 @@ import me.maxistar.voiceinbox.core.TaskListFilter
 import me.maxistar.voiceinbox.core.TaskListInput
 import me.maxistar.voiceinbox.core.TaskListPresentationController
 import me.maxistar.voiceinbox.core.TaskProgressPresentation
+import me.maxistar.voiceinbox.core.TaskText
+import me.maxistar.voiceinbox.core.TaskTextKey
 import me.maxistar.voiceinbox.core.TranscriptionTaskSnapshot
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -59,7 +61,7 @@ class TaskListDisplayItemsTest {
 
         assertTrue(TaskListDisplayItemDiff.areItemsTheSame(idle, active))
         assertFalse(TaskListDisplayItemDiff.areContentsTheSame(idle, active))
-        assertEquals("Transcribing", (active as TaskListDisplayItem.Audio).task.progress?.phase)
+        assertEquals("Transcribing", (active as TaskListDisplayItem.Audio).task.progress?.phase?.fallback)
         assertEquals(20, active.task.progress?.percent)
 
         val processed = items(filter = TaskListFilter.PROCESSED, audio = listOf(pending(7)))
@@ -73,7 +75,7 @@ class TaskListDisplayItemsTest {
             .filterIsInstance<TaskListDisplayItem.Audio>()
             .single()
         val progress = TaskProgressPresentation(
-            phase = "Transcribing",
+            phase = TaskText(TaskTextKey.OPAQUE, "Transcribing", listOf("Transcribing")),
             percent = 35,
             processedUs = 3_000_000,
             durationUs = 10_000_000,
@@ -81,7 +83,9 @@ class TaskListDisplayItemsTest {
             totalFiles = 3,
         )
         val progressUpdate = original.copy(task = original.task.copy(progress = progress))
-        val badgeUpdate = progressUpdate.copy(task = progressUpdate.task.copy(badge = "Changed"))
+        val badgeUpdate = progressUpdate.copy(
+            task = progressUpdate.task.copy(badge = TaskText(TaskTextKey.OPAQUE, "Changed", listOf("Changed"))),
+        )
         val actionsUpdate = progressUpdate.copy(task = progressUpdate.task.copy(actions = emptyList()))
 
         assertEquals(
@@ -100,7 +104,7 @@ class TaskListDisplayItemsTest {
     fun emptyStateCarriesOnlyPresentedTypedActions() {
         val item = items().single() as TaskListDisplayItem.Empty
 
-        assertEquals("No new tasks", item.message)
+        assertEquals(TaskTextKey.NO_NEW_TASKS, item.message.key)
         assertEquals(
             listOf(TaskActionKind.IMPORT_AUDIO),
             item.actions.map { it.kind },
@@ -135,7 +139,7 @@ class TaskListDisplayItemsTest {
 
         val changedHint = hint.copy(
             steps = hint.steps.mapIndexed { index, step -> step.copy(complete = index == 0) },
-            action = AndroidOnboardingHintAction("Select output file", true, TaskActionKind.SELECT_OUTPUT),
+            action = AndroidOnboardingHintAction(R.string.onboarding_action_select_output, true, TaskActionKind.SELECT_OUTPUT),
         )
         val oldItem = empty.first()
         val newItem = items(onboardingHint = changedHint).first()
@@ -164,7 +168,7 @@ class TaskListDisplayItemsTest {
             ),
             withBoth.map { it.stableKey },
         )
-        val changed = discovery.copy(setupLabel = "Choose keyboard")
+        val changed = discovery.copy(setupLabelRes = R.string.settings_voice_keyboard_choose)
         assertTrue(
             TaskListDisplayItemDiff.areItemsTheSame(
                 withBoth[1],
@@ -205,12 +209,12 @@ class TaskListDisplayItemsTest {
     private fun onboardingHint() = AndroidOnboardingHintPresentation(
         visible = true,
         steps = listOf(
-            AndroidOnboardingChecklistStep(AndroidOnboardingStepKind.MODEL, "Install speech model", false),
-            AndroidOnboardingChecklistStep(AndroidOnboardingStepKind.OUTPUT, "Select transcript output", false),
-            AndroidOnboardingChecklistStep(AndroidOnboardingStepKind.FOLDER, "Select audio folder · Optional", false, true),
-            AndroidOnboardingChecklistStep(AndroidOnboardingStepKind.KEYBOARD, "Enable voice keyboard · Optional", false, true),
+            AndroidOnboardingChecklistStep(AndroidOnboardingStepKind.MODEL, R.string.onboarding_step_model, false),
+            AndroidOnboardingChecklistStep(AndroidOnboardingStepKind.OUTPUT, R.string.onboarding_step_output, false),
+            AndroidOnboardingChecklistStep(AndroidOnboardingStepKind.FOLDER, R.string.onboarding_step_folder, false, true),
+            AndroidOnboardingChecklistStep(AndroidOnboardingStepKind.KEYBOARD, R.string.onboarding_step_keyboard, false, true),
         ),
-        action = AndroidOnboardingHintAction("Start setup", true, TaskActionKind.DOWNLOAD_MODEL),
+        action = AndroidOnboardingHintAction(R.string.onboarding_action_start, true, TaskActionKind.DOWNLOAD_MODEL),
     )
 
     private fun pending(id: Long) = AudioTaskSnapshot(

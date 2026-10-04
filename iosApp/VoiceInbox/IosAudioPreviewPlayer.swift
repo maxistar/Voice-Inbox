@@ -37,14 +37,14 @@ final class IosAudioPreviewPlayer: NSObject, ObservableObject, AVAudioPlayerDele
             player.delegate = self
             player.prepareToPlay()
             guard player.play() else {
-                errorMessage = "Could not start audio playback."
+                errorMessage = L10n.text("playback.couldNotStart", fallback: "Could not start audio playback.")
                 return
             }
             self.player = player
             playingFileId = fileId
             errorMessage = nil
         } catch {
-            errorMessage = "Could not play \(url.lastPathComponent): \(error.localizedDescription)"
+            errorMessage = L10n.format("playback.couldNotPlay", fallback: "Could not play %@: %@", url.lastPathComponent, error.localizedDescription)
         }
     }
 
@@ -73,7 +73,7 @@ final class IosAudioPreviewPlayer: NSObject, ObservableObject, AVAudioPlayerDele
                 self.deactivateAudioSession()
             }
             if !flag {
-                self.errorMessage = "Playback stopped before the file finished."
+                self.errorMessage = L10n.text("playback.stoppedEarly", fallback: "Playback stopped before the file finished.")
             }
         }
     }
@@ -85,7 +85,7 @@ final class IosAudioPreviewPlayer: NSObject, ObservableObject, AVAudioPlayerDele
                 self.playingFileId = nil
                 self.deactivateAudioSession()
             }
-            self.errorMessage = error?.localizedDescription ?? "Could not decode audio for playback."
+            self.errorMessage = error?.localizedDescription ?? L10n.text("playback.decodeFailed", fallback: "Could not decode audio for playback.")
         }
     }
 }

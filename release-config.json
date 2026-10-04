@@ -1,0 +1,15 @@
+{
+  "branches": {
+    "development": "develop",
+    "stable": "master",
+    "releasePrefix": "release/",
+    "hotfixPrefix": "hotfix/"
+  },
+  "tagPrefix": "v",
+  "metadataRoot": "fastlane/metadata/android",
+  "requiredLocales": ["en-US", "ru-RU"],
+  "ignoredLocales": [],
+  "englishLocale": "en-US",
+  "placeholderMarkers": ["TODO: RELEASE NOTES", "TODO_RELEASE_NOTES"],
+  "playTrack": "internal"
+}

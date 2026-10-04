@@ -41,4 +41,18 @@ class TranscriptReviewInstrumentedTest {
             transcript.contentDescription,
         )
     }
+
+    @Test
+    fun copyActionPreparesExactTranscriptAndHasLocalizedAccessibilityText() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val review = AndroidTranscriptReview(9, "voice.ogg", "  exact transcript\n")
+
+        val copiedText = transcriptClipboardClip(review)
+            .getItemAt(0)
+            ?.coerceToText(context)
+            ?.toString()
+        assertEquals(review.text, copiedText)
+        assertTrue(context.getString(R.string.transcript_copy_accessibility).isNotBlank())
+        assertTrue(context.getString(R.string.transcript_copied).isNotBlank())
+    }
 }

@@ -147,11 +147,11 @@ class AndroidVoiceKeyboardDiscoveryStore(
 
 data class AndroidVoiceKeyboardDiscoveryPresentation(
     val visible: Boolean = false,
-    val title: String = "Dictate in any app",
-    val explanation: String = "Use Voice Inbox as a compact voice keyboard. Recognition runs locally after model setup.",
-    val setupLabel: String = "Set up keyboard",
+    val titleRes: Int = R.string.voice_keyboard_discovery_title,
+    val explanationRes: Int = R.string.voice_keyboard_discovery_explanation,
+    val setupLabelRes: Int = R.string.voice_keyboard_discovery_setup,
     val setupAction: TaskActionKind = TaskActionKind.ENABLE_VOICE_KEYBOARD,
-    val documentationLabel: String = "Learn more",
+    val documentationLabelRes: Int = R.string.voice_keyboard_discovery_documentation,
 ) {
     companion object {
         val HIDDEN = AndroidVoiceKeyboardDiscoveryPresentation()

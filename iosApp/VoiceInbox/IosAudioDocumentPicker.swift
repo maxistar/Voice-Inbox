@@ -156,7 +156,8 @@ struct IosOutputDocumentStatus {
     let ready: Bool
 
     var title: String {
-        displayName.map { "Output: \($0)" } ?? "Output file not selected"
+        displayName.map { L10n.format("output.selected", fallback: "Output: %@", $0) }
+            ?? L10n.text("output.noneSelected", fallback: "Output file not selected")
     }
 }
 
@@ -164,7 +165,7 @@ struct IosOutputDocumentStatus {
 final class IosOutputDocumentStore: ObservableObject {
     @Published private(set) var status = IosOutputDocumentStatus(
         displayName: nil,
-        message: "Choose a text or Markdown file for transcripts.",
+        message: L10n.text("output.choose", fallback: "Choose a text or Markdown file for transcripts."),
         ready: false
     )
 
@@ -193,7 +194,7 @@ final class IosOutputDocumentStore: ObservableObject {
         guard Self.isSupportedOutput(url) else {
             status = IosOutputDocumentStatus(
                 displayName: url.lastPathComponent,
-                message: "Choose a .txt, .md, or .markdown file.",
+                message: L10n.text("output.unsupported", fallback: "Choose a .txt, .md, or .markdown file."),
                 ready: false
             )
             return
@@ -223,14 +224,14 @@ final class IosOutputDocumentStore: ObservableObject {
             )
             status = IosOutputDocumentStatus(
                 displayName: url.lastPathComponent,
-                message: "Ready to append transcripts.",
+                message: L10n.text("output.ready", fallback: "Ready to append transcripts."),
                 ready: true
             )
         } catch {
             selectedDocument = nil
             status = IosOutputDocumentStatus(
                 displayName: url.lastPathComponent,
-                message: "Output file is not writable. Choose another file.",
+                message: L10n.text("output.notWritable", fallback: "Output file is not writable. Choose another file."),
                 ready: false
             )
         }
@@ -247,7 +248,7 @@ final class IosOutputDocumentStore: ObservableObject {
         selectedDocument = nil
         status = IosOutputDocumentStatus(
             displayName: nil,
-            message: "Automatic export is off. Transcripts stay in Voice Inbox.",
+            message: L10n.text("output.disabled", fallback: "Automatic export is off. Transcripts stay in Voice Inbox."),
             ready: false
         )
     }
@@ -262,7 +263,7 @@ final class IosOutputDocumentStore: ObservableObject {
             selectedDocument = nil
             status = IosOutputDocumentStatus(
                 displayName: nil,
-                message: "Choose a text or Markdown file for transcripts.",
+                message: L10n.text("output.choose", fallback: "Choose a text or Markdown file for transcripts."),
                 ready: false
             )
             return
@@ -281,7 +282,7 @@ final class IosOutputDocumentStore: ObservableObject {
                 selectedDocument = nil
                 status = IosOutputDocumentStatus(
                     displayName: savedName,
-                    message: "Output access needs to be refreshed. Choose the file again.",
+                    message: L10n.text("output.refreshAccess", fallback: "Output access needs to be refreshed. Choose the file again."),
                     ready: false
                 )
                 return
@@ -294,14 +295,14 @@ final class IosOutputDocumentStore: ObservableObject {
             )
             status = IosOutputDocumentStatus(
                 displayName: url.lastPathComponent,
-                message: "Ready to append transcripts.",
+                message: L10n.text("output.ready", fallback: "Ready to append transcripts."),
                 ready: true
             )
         } catch {
             selectedDocument = nil
             status = IosOutputDocumentStatus(
                 displayName: savedName,
-                message: "Could not write to the selected output file. Choose it again.",
+                message: L10n.text("output.writeFailed", fallback: "Could not write to the selected output file. Choose it again."),
                 ready: false
             )
         }
@@ -335,12 +336,12 @@ final class IosOutputDocumentStore: ObservableObject {
             }
             try handle.seekToEnd()
             guard let data = text.data(using: .utf8) else {
-                return "Transcript text could not be encoded as UTF-8."
+                return L10n.text("output.encodingFailed", fallback: "Transcript text could not be encoded as UTF-8.")
             }
             try handle.write(contentsOf: data)
             return nil
         } catch {
-            return "Could not append to the selected output file."
+            return L10n.text("output.appendFailed", fallback: "Could not append to the selected output file.")
         }
     }
 

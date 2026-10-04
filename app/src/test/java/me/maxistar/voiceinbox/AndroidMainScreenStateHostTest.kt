@@ -17,6 +17,7 @@ import me.maxistar.voiceinbox.core.PreviewTaskSnapshot
 import me.maxistar.voiceinbox.core.SetupTaskPresentation
 import me.maxistar.voiceinbox.core.TaskActionKind
 import me.maxistar.voiceinbox.core.TaskListFilter
+import me.maxistar.voiceinbox.core.TaskTextKey
 import me.maxistar.voiceinbox.core.TranscriptionTaskSnapshot
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -43,10 +44,10 @@ class AndroidMainScreenStateHostTest {
 
         val tasks = state.taskList.tasks.filterIsInstance<SetupTaskPresentation>()
         assertEquals(listOf("setup:model", "setup:output", "setup:folder"), tasks.map { it.stableId })
-        assertEquals("Verifying local model", tasks.first().progress?.phase)
+        assertEquals("Verifying local model", tasks.first().progress?.phase?.fallback)
         assertEquals(63, tasks.first().progress?.percent)
-        assertEquals("Output unavailable", tasks[1].errorMessage)
-        assertEquals("Scanning audio folder", tasks[2].progress?.phase)
+        assertEquals("Output unavailable", tasks[1].errorMessage?.fallback)
+        assertEquals(TaskTextKey.SCANNING_AUDIO_FOLDER, tasks[2].progress?.phase?.key)
     }
 
     @Test
@@ -70,7 +71,7 @@ class AndroidMainScreenStateHostTest {
             .single { it.stableId == "setup:model" }
 
         assertNull(task.detail)
-        assertEquals(message, task.progress?.phase)
+        assertEquals(message, task.progress?.phase?.fallback)
     }
 
     @Test
@@ -91,7 +92,7 @@ class AndroidMainScreenStateHostTest {
         assertEquals(listOf(5L, 4L, 3L, 2L, 1L), tasks.map { it.entryId })
         assertEquals(AudioTaskState.NO_SPEECH, tasks.single { it.entryId == 4L }.state)
         assertEquals(TaskActionKind.SHOW_TEXT, tasks.single { it.entryId == 3L }.actions.first().kind)
-        assertTrue(requireNotNull(tasks.single { it.entryId == 1L }.detail).endsWith(" • 1 KiB"))
+        assertTrue(requireNotNull(tasks.single { it.entryId == 1L }.detail).fallback.endsWith(" • 1 KiB"))
     }
 
     @Test
@@ -117,7 +118,7 @@ class AndroidMainScreenStateHostTest {
         val tasks = state.taskList.tasks.filterIsInstance<AudioTaskPresentation>()
         val active = tasks.single { it.entryId == 1L }
         assertEquals(AudioTaskState.PROCESSING, active.state)
-        assertEquals("Transcribing", active.progress?.phase)
+        assertEquals("Transcribing", active.progress?.phase?.fallback)
         assertEquals(25, active.progress?.percent)
         val preview = tasks.single { it.entryId == 2L }
         assertEquals(TaskActionKind.STOP, preview.actions.last().kind)
@@ -163,7 +164,7 @@ class AndroidMainScreenStateHostTest {
         assertNull(tasks.single { it.entryId == 1L }.progress)
         val owner = tasks.single { it.entryId == 2L }
         assertEquals(AudioTaskState.PROCESSING, owner.state)
-        assertEquals("Preparing speech model", owner.progress?.phase)
+        assertEquals("Preparing speech model", owner.progress?.phase?.fallback)
     }
 
     @Test
@@ -318,7 +319,7 @@ class AndroidMainScreenStateHostTest {
     @Test
     fun hydratedCatalogPublishesEmptyStateAndRetainedEntriesRemainVisibleWhileRevalidating() {
         val empty = AndroidTaskListSnapshotMapper.state(readyInput())
-        assertEquals("No new tasks", empty.taskList.emptyMessage)
+        assertEquals(TaskTextKey.NO_NEW_TASKS, empty.taskList.emptyMessage?.key)
 
         val retained = AndroidTaskListSnapshotMapper.state(
             readyInput(entries = listOf(entry(1, AudioFileState.PENDING))).copy(

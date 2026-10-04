@@ -70,6 +70,6 @@ class AndroidAudioMetadataFormatterTest {
         ).taskList.tasks.single().detail
 
         assertEquals(processed, all)
-        assertTrue(requireNotNull(processed).endsWith(" • 1 KiB • 1:05"))
+        assertTrue(requireNotNull(processed).fallback.endsWith(" • 1 KiB • 1:05"))
     }
 }
