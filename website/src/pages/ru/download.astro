@@ -1,0 +1,16 @@
+---
+import Layout from '../../layouts/Layout.astro';
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const releasesUrl = 'https://github.com/maxistar/Voice-Inbox/releases';
+---
+<Layout title="Скачать и получить доступ" description="Доступность Voice Inbox: закрытое тестирование Android, iOS MVP, релизы GitHub и первые требования к использованию.">
+  <p class="eyebrow">Доступность</p>
+  <h1>Android доступен через закрытое тестирование Google Play.</h1>
+  <p>Voice Inbox пока не является публичным production-релизом в Google Play. Для Android нужно вступить в группу тестеров, пройти opt-in и установить приложение из Google Play тем же аккаунтом.</p>
+  <div class="grid section">
+    <article class="card"><h2>Android closed testing</h2><p>Поддерживается Android 7.0 (API 24)+ на ARM64-устройстве. После установки потребуется скачать речевую модель примерно 640 MiB или установить совместимую локальную копию.</p><a href={`${base}/ru/testing/`}>Инструкция для тестеров →</a></article>
+    <article class="card"><h2>GitHub Releases</h2><p>Подписанные APK/AAB и исходный код доступны на GitHub. Это полезно для архива релизов и разработчиков, но основной канал тестирования Android — Google Play closed test.</p><a href={releasesUrl} target="_blank" rel="noopener">Открыть релизы →</a></article>
+    <article class="card"><h2>iOS MVP</h2><p>iOS сейчас не распространяется через App Store или TestFlight. Это исходно-собираемый MVP с импортом, предпросмотром и foreground-расшифровкой.</p></article>
+  </div>
+  <section class="section note">Перед первым использованием подготовьте свободное место и подходящее соединение для загрузки модели. После установки модели распознавание выполняется локально.</section>
+</Layout>

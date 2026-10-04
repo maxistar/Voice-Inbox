@@ -4,15 +4,49 @@ interface Props {
   description?: string;
 }
 
+const currentPath = Astro.url.pathname;
+const isRussian = currentPath === '/ru/' || currentPath.startsWith('/ru/');
+const locale = isRussian ? 'ru' : 'en';
+
 const {
   title,
-  description = 'Voice Inbox turns accumulated voice recordings into a local Markdown or text inbox.',
+  description = isRussian
+    ? 'Voice Inbox превращает накопленные голосовые записи в локальные Markdown- или текстовые заметки.'
+    : 'Voice Inbox turns accumulated voice recordings into a local Markdown or text inbox.',
 } = Astro.props;
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const site = Astro.site?.toString().replace(/\/$/, '') ?? 'https://voiceinbox.simpleditor.org';
 const gaId = import.meta.env.PUBLIC_GA_ID;
 const githubUrl = 'https://github.com/maxistar/Voice-Inbox';
 const releaseUrl = `${githubUrl}/releases`;
-const nav = [
+
+const trimTrailingSlash = (path: string) => path.length > 1 ? path.replace(/\/$/, '') : path;
+const toEnglishPath = (path: string) => {
+  if (path === '/ru' || path === '/ru/') return '/';
+  if (path.startsWith('/ru/')) return path.replace('/ru', '');
+  return path;
+};
+const toRussianPath = (path: string) => {
+  if (path === '/') return '/ru/';
+  if (path === '/ru' || path.startsWith('/ru/')) return path.endsWith('/') ? path : `${path}/`;
+  return `/ru${path}`;
+};
+const englishPath = toEnglishPath(currentPath);
+const russianPath = toRussianPath(currentPath);
+const localized = (path: string) => isRussian ? toRussianPath(path) : path;
+const withBase = (path: string) => `${base}${path}`;
+const absolute = (path: string) => `${site}${path}`;
+
+const nav = isRussian ? [
+  ['Главная', '/'],
+  ['О проекте', '/about/'],
+  ['Скачать', '/download/'],
+  ['Документация', '/docs/'],
+  ['Настройка', '/setup/'],
+  ['Тестирование', '/testing/'],
+  ['FAQ', '/faq/'],
+  ['Другие проекты', '/projects/'],
+] : [
   ['Home', '/'],
   ['About', '/about/'],
   ['Download', '/download/'],
@@ -22,13 +56,22 @@ const nav = [
   ['FAQ', '/faq/'],
   ['Other Projects', '/projects/'],
 ];
+const footerText = isRussian
+  ? 'Voice Inbox — локальная расшифровка голосовых заметок.'
+  : 'Voice Inbox - local-first voice note transcription.';
+const footerLabels = isRussian
+  ? { releases: 'Релизы', contact: 'Контакты', setup: 'Настройка', faq: 'FAQ', privacy: 'Приватность', legal: 'Правовая информация', source: 'Исходный код Voice Inbox на GitHub', language: 'Язык', nav: 'Основная навигация' }
+  : { releases: 'Releases', contact: 'Contact', setup: 'Setup', faq: 'FAQ', privacy: 'Privacy', legal: 'Legal', source: 'Voice Inbox source code on GitHub', language: 'Language', nav: 'Main navigation' };
 ---
 <!doctype html>
-<html lang="en">
+<html lang={locale}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content={description} />
+    <link rel="alternate" hreflang="en" href={absolute(englishPath)} />
+    <link rel="alternate" hreflang="ru" href={absolute(russianPath)} />
+    <link rel="alternate" hreflang="x-default" href={absolute(englishPath)} />
     <title>{title} - Voice Inbox</title>
     {
       gaId && (
@@ -117,14 +160,25 @@ const nav = [
         flex-wrap: wrap;
         gap: 12px 16px;
       }
-      nav a {
+      nav a, .language-switcher a {
         color: var(--muted);
         font-size: 0.88rem;
         font-weight: 650;
       }
-      nav a:hover {
+      nav a:hover, .language-switcher a:hover {
         color: var(--ink);
         text-decoration: none;
+      }
+      .language-switcher {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border-left: 1px solid var(--border);
+        padding-left: 14px;
+      }
+      .language-switcher a[aria-current="true"] {
+        color: var(--ink);
+        font-weight: 850;
       }
       main {
         flex: 1;
@@ -277,6 +331,7 @@ const nav = [
           flex-direction: column;
         }
         nav { justify-content: flex-start; }
+        .language-switcher { border-left: 0; padding-left: 0; }
         .page { padding-top: 38px; }
       }
     </style>
@@ -284,12 +339,17 @@ const nav = [
   <body>
     <header>
       <div class="topbar">
-        <a class="logo" href={`${base}/`}>
+        <a class="logo" href={withBase(localized('/'))}>
           <span class="logo-mark" aria-hidden="true">V</span>
           <span>Voice Inbox</span>
         </a>
-        <nav aria-label="Main navigation">
-          {nav.map(([label, href]) => <a href={`${base}${href}`}>{label}</a>)}
+        <nav aria-label={footerLabels.nav}>
+          {nav.map(([label, href]) => <a href={withBase(localized(href))}>{label}</a>)}
+          <span class="language-switcher" aria-label={footerLabels.language}>
+            <a href={withBase(englishPath)} aria-current={!isRussian ? 'true' : undefined}>EN</a>
+            <span aria-hidden="true">/</span>
+            <a href={withBase(russianPath)} aria-current={isRussian ? 'true' : undefined}>RU</a>
+          </span>
         </nav>
       </div>
     </header>
@@ -300,16 +360,16 @@ const nav = [
     </main>
     <footer>
       <div class="footer-inner">
-        <span>Voice Inbox - local-first voice note transcription.</span>
+        <span>{footerText}</span>
         <span class="footer-links">
-          <a href={releaseUrl} target="_blank" rel="noopener">Releases</a>
-          <a href={`${base}/contact/`}>Contact</a>
-          <a href={`${base}/setup/`}>Setup</a>
-          <a href={`${base}/faq/`}>FAQ</a>
-          <a href={`${base}/privacy/`}>Privacy</a>
-          <a href={`${base}/legal/`}>Legal</a>
-          <a class="github-link" href={githubUrl} target="_blank" rel="noopener" title="Voice Inbox source code on GitHub">
-            <span class="visually-hidden">Voice Inbox source code on GitHub</span>
+          <a href={releaseUrl} target="_blank" rel="noopener">{footerLabels.releases}</a>
+          <a href={withBase(localized('/contact/'))}>{footerLabels.contact}</a>
+          <a href={withBase(localized('/setup/'))}>{footerLabels.setup}</a>
+          <a href={withBase(localized('/faq/'))}>{footerLabels.faq}</a>
+          <a href={withBase(localized('/privacy/'))}>{footerLabels.privacy}</a>
+          <a href={withBase(localized('/legal/'))}>{footerLabels.legal}</a>
+          <a class="github-link" href={githubUrl} target="_blank" rel="noopener" title={footerLabels.source}>
+            <span class="visually-hidden">{footerLabels.source}</span>
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M12 2C6.48 2 2 6.59 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49 0-.24-.01-.89-.01-1.75-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.9 1.57 2.35 1.12 2.92.85.09-.66.35-1.12.64-1.37-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.04 1.03-2.76-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05A9.3 9.3 0 0 1 12 6.69a9.3 9.3 0 0 1 2.5.34c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.46.1 2.72.64.72 1.03 1.64 1.03 2.76 0 3.94-2.34 4.8-4.57 5.06.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.49A10.27 10.27 0 0 0 22 12.25C22 6.59 17.52 2 12 2Z" />
             </svg>

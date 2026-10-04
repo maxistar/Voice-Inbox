@@ -1,0 +1,123 @@
+---
+import Layout from '../../layouts/Layout.astro';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const githubUrl = 'https://github.com/maxistar/Voice-Inbox';
+const testingUrl = `${base}/ru/testing/`;
+const androidScreenshot = `${base}/screenshots/android-inbox.jpg`;
+const androidWorkflowsIllustration = `${base}/screenshots/android-workflows.png`;
+---
+<Layout
+  title="Локальная расшифровка голоса"
+  description="Voice Inbox превращает существующие аудиозаписи и короткую Android-диктовку в читаемые локальные расшифровки. Android доступен в закрытом тестировании; iOS находится в стадии MVP."
+>
+  <style>
+    .hero { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.75fr); gap: 42px; align-items: center; min-height: 560px; }
+    .hero-copy p { max-width: 640px; font-size: 1.12rem; }
+    .hero-visual { border: 1px solid var(--border); border-radius: 28px; background: linear-gradient(180deg, #eff6ff, #ffffff); box-shadow: var(--shadow); padding: 18px; }
+    .screenshot-shell { border: 10px solid #111827; border-radius: 28px; background: #f8fafc; overflow: hidden; max-height: 620px; }
+    .screenshot-shell img, .workflow-visual img { display: block; width: 100%; height: auto; }
+    .caption { margin: 14px 0 0; color: var(--soft); font-size: 0.9rem; text-align: center; }
+    .platform-card, .use-case-card { display: grid; gap: 10px; align-content: start; }
+    .use-case-card p { margin-bottom: 0; }
+    .platform-tag, .status-badge { display: inline-flex; width: fit-content; border-radius: 999px; padding: 5px 10px; font-size: 0.78rem; font-weight: 850; }
+    .platform-tag { border: 1px solid var(--border); color: var(--soft); background: var(--surface-strong); }
+    .status-badge { color: var(--accent-strong); background: var(--accent-soft); }
+    .flow { counter-reset: flow; }
+    .flow .card { position: relative; padding-left: 58px; }
+    .flow .card::before { counter-increment: flow; content: counter(flow); position: absolute; left: 20px; top: 22px; width: 26px; height: 26px; border-radius: 8px; color: white; background: var(--accent); display: grid; place-items: center; font-weight: 900; }
+    .requirements { border: 1px solid var(--border); border-radius: 8px; background: var(--surface); padding: 24px; }
+    @media (max-width: 860px) { .hero { grid-template-columns: 1fr; min-height: auto; } }
+  </style>
+
+  <section class="hero">
+    <div class="hero-copy">
+      <p class="eyebrow">Локальная расшифровка голосовых заметок</p>
+      <h1>Превращайте аудио в читаемый локальный текст.</h1>
+      <p>
+        Отправьте существующую запись в Voice Inbox, расшифруйте её на устройстве и проверьте текст в приложении.
+        На Android также есть компактная голосовая клавиатура для коротких фраз. iOS MVP поддерживает импорт,
+        предпросмотр, пакетную расшифровку и локальный просмотр результатов.
+      </p>
+      <div class="button-row">
+        <a class="button primary" href={testingUrl}>Присоединиться к закрытому тесту Android</a>
+        <a class="button" href={`${base}/ru/setup/`}>Руководство по настройке</a>
+        <a class="button" href={githubUrl} target="_blank" rel="noopener">Исходный код</a>
+      </div>
+    </div>
+    <div class="hero-visual" aria-label="Предпросмотр приложения Voice Inbox">
+      <div class="screenshot-shell">
+        <img src={androidScreenshot} alt="Android-приложение Voice Inbox со списком аудиофайлов и действиями воспроизведения" />
+      </div>
+      <p class="caption">Список задач Android с демонстрационными записями, готовыми к локальной расшифровке.</p>
+    </div>
+  </section>
+
+  <section class="section">
+    <p class="eyebrow">Сценарии</p>
+    <h2>Начните с аудио, которое у вас уже есть.</h2>
+    <div class="grid">
+      <article class="card use-case-card"><span class="platform-tag">Android и iOS MVP</span><h3>Голосовое сообщение из мессенджера</h3><p>Отправьте уже записанное сообщение через Share/Поделиться и прочитайте локальную расшифровку.</p></article>
+      <article class="card use-case-card"><span class="platform-tag">Android и iOS MVP</span><h3>Запись из диктофона</h3><p>Записывайте в привычном приложении, а затем импортируйте аудио в Voice Inbox, когда нужен текст.</p></article>
+      <article class="card use-case-card"><span class="platform-tag">Android и iOS MVP</span><h3>Встреча, интервью или лекция</h3><p>Просмотрите запись, расшифруйте один файл или пакет и проверьте результат перед экспортом.</p></article>
+      <article class="card use-case-card"><span class="platform-tag">Android</span><h3>Папка новых записей</h3><p>Выберите одну папку, чтобы Voice Inbox находил новые или изменённые аудиофайлы для повторяемого workflow.</p></article>
+      <article class="card use-case-card"><span class="platform-tag">Android</span><h3>Мысль во время письма</h3><p>Переключитесь на клавиатуру Voice Inbox и продиктуйте короткую фразу прямо в активное текстовое поле.</p></article>
+    </div>
+  </section>
+
+  <section class="section">
+    <p class="eyebrow">Статус платформ</p>
+    <h2>Android — в закрытом тестировании; iOS быстро догоняет.</h2>
+    <div class="grid">
+      <div class="card platform-card"><span class="status-badge">Закрытый тест Android</span><h3>Гибкий список задач</h3><p>Импортируйте записи, сканируйте папку, просматривайте задачи, расшифровывайте один файл или пакет, повторяйте ошибки, настраивайте best-effort расписание или диктуйте короткую фразу Android-клавиатурой.</p></div>
+      <div class="card platform-card"><span class="status-badge">iOS MVP</span><h3>Foreground workflow</h3><p>Импорт из приложения, Share Extension или выбранной папки, предпросмотр аудио, пакетная расшифровка, просмотр текста, добавление в файл и политика обработки при запуске. Фоновая или запланированная расшифровка на iOS не поддерживается.</p></div>
+      <div class="card platform-card"><span class="status-badge">Общее ядро</span><h3>Kotlin Multiplatform</h3><p>Каталог и use cases расшифровки переносятся в общий код, чтобы Android и iOS сближались без скрытия платформенных ограничений.</p></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <p class="eyebrow">Что умеет приложение</p>
+    <h2>Обрабатывайте inbox записей — или диктуйте короткую фразу на Android.</h2>
+    <div class="grid">
+      <div class="card"><h3>Отдельные файлы и папки</h3><p>Импортируйте записи по одной или выберите папку, чтобы обрабатывать только новые и изменённые файлы.</p></div>
+      <div class="card"><h3>Локальное распознавание</h3><p>Скачайте модель или установите её из совместимой локальной папки. После установки распознавание выполняется на устройстве.</p></div>
+      <div class="card"><h3>Сначала просмотр, потом экспорт</h3><p>Читайте текст в Voice Inbox. При желании выберите <code>.md</code> или <code>.txt</code> файл и добавляйте успешные заметки без перезаписи старого содержимого.</p></div>
+      <div class="card"><h3>Предпросмотр аудио</h3><p>Воспроизводите файлы из списка перед расшифровкой.</p></div>
+      <div class="card"><h3>Запланированная обработка</h3><p>На Android можно попросить приложение запускать расшифровку примерно в выбранное время. Точное выполнение не гарантируется.</p></div>
+      <div class="card"><h3>Прозрачная история</h3><p>Обработанные и неудачные файлы остаются видимыми, а ошибки можно повторить отдельно.</p></div>
+      <div class="card"><h3>Голосовая клавиатура Android</h3><p>Запишите короткую фразу в компактном Android input method и вставьте локально распознанный текст в активное поле. Это не полноценная клавиатура и не функция iOS.</p><a href={`${base}/ru/docs/voice-keyboard/`}>Открыть руководство →</a></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <p class="eyebrow">Текущие workflow</p>
+    <h2>Организуйте записи или диктуйте там, где пишете.</h2>
+    <figure class="workflow-visual">
+      <img src={androidWorkflowsIllustration} alt="Три экрана Android Voice Inbox: список задач, настройки запуска и расписания, компактная голосовая клавиатура" />
+      <figcaption class="caption">Android workflow для записей, автоматизации и короткой диктовки с демонстрационным содержимым.</figcaption>
+    </figure>
+  </section>
+
+  <section class="section">
+    <p class="eyebrow">Workflow</p>
+    <h2>От существующего аудио к локальному тексту.</h2>
+    <div class="grid flow">
+      <div class="card"><h3>Установите модель</h3><p>Скачайте и проверьте модель или установите её из совместимой локальной папки.</p></div>
+      <div class="card"><h3>Добавьте аудио</h3><p>Импортируйте файл, отправьте его через Share или выберите аудиопапку.</p></div>
+      <div class="card"><h3>Расшифруйте и проверьте</h3><p>При необходимости прослушайте запись, затем прочитайте распознанный текст в Voice Inbox.</p></div>
+      <div class="card"><h3>Экспортируйте или автоматизируйте</h3><p>При желании добавляйте текст в Markdown/текстовый документ, выбирайте поведение при запуске или включайте Android-расписание.</p></div>
+    </div>
+  </section>
+
+  <section class="section requirements">
+    <p class="eyebrow">Требования</p>
+    <h2>Создано для локального распознавания на устройстве.</h2>
+    <p>
+      Android требует Android 7.0 (API 24) или новее на ARM64-устройстве. Android и iOS MVP требуют сеть для первой загрузки модели и достаточно свободного места для её установки.
+    </p>
+    <div class="button-row">
+      <a class="button primary" href={testingUrl}>Присоединиться к закрытому тесту Android</a>
+      <a class="button" href={`${base}/ru/faq/`}>Открыть FAQ</a>
+    </div>
+  </section>
+</Layout>
