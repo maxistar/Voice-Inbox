@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import Shared
 
 struct IosAudioDocumentPicker: UIViewControllerRepresentable {
     let onPick: ([URL]) -> Void
@@ -318,15 +319,27 @@ final class IosOutputDocumentStore: ObservableObject {
 
         guard let data = try? Data(contentsOf: url), !data.isEmpty else { return "" }
         let tail = data.suffix(maxBytes)
-        return String(data: tail, encoding: .utf8) ?? ""
+        if let text = String(data: tail, encoding: .utf8) {
+            return text
+        }
+        for offset in 1..<min(4, tail.count) {
+            if let text = String(data: tail.dropFirst(offset), encoding: .utf8) {
+                return text
+            }
+        }
+        return ""
     }
 
-    nonisolated static func append(_ text: String, to url: URL) -> String? {
+    nonisolated static func appendOutcome(_ text: String, to url: URL) -> TranscriptAppendOutcome {
         let didStartAccessing = url.startAccessingSecurityScopedResource()
         defer {
             if didStartAccessing {
                 url.stopAccessingSecurityScopedResource()
             }
+        }
+
+        guard let data = text.data(using: .utf8) else {
+            return .notWritten
         }
 
         do {
@@ -335,12 +348,24 @@ final class IosOutputDocumentStore: ObservableObject {
                 try? handle.close()
             }
             try handle.seekToEnd()
-            guard let data = text.data(using: .utf8) else {
-                return L10n.text("output.encodingFailed", fallback: "Transcript text could not be encoded as UTF-8.")
+            do {
+                try handle.write(contentsOf: data)
+                return .succeeded
+            } catch {
+                return .unknown
             }
-            try handle.write(contentsOf: data)
-            return nil
         } catch {
+            return .notWritten
+        }
+    }
+
+    nonisolated static func append(_ text: String, to url: URL) -> String? {
+        switch appendOutcome(text, to: url) {
+        case .succeeded:
+            return nil
+        case .notWritten, .unknown:
+            return L10n.text("output.appendFailed", fallback: "Could not append to the selected output file.")
+        default:
             return L10n.text("output.appendFailed", fallback: "Could not append to the selected output file.")
         }
     }

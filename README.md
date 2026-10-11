@@ -58,10 +58,13 @@ both tabs.
 
 Every successful reprocessing appends a new entry. The application never
 searches, replaces, or deletes previous Markdown content because the document
-may be edited independently. A process failure after an append succeeds but
-before SQLite records success can make the same file eligible again and produce
-a duplicate entry; generic document providers cannot make those two updates
-atomic.
+may be edited independently. Before appending, the exact formatted entry is
+stored in a local publication ledger and the output tail is checked for a
+complete matching entry. This lets recovery confirm an append that succeeded
+before the catalog update without transcribing the audio again. If a provider
+reports an ambiguous write, the file remains failed and the prepared entry is
+preserved; retry reconciles the output first and will not blindly append a
+second copy.
 
 ## Supported Audio
 

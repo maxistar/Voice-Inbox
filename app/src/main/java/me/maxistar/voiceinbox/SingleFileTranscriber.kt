@@ -24,6 +24,7 @@ data class FileTranscriptionResult(
 
 class SingleFileTranscriber(
     private val context: Context,
+    private val publicationStore: TranscriptPublicationStore? = null,
 ) {
     fun transcribe(
         entry: AudioCatalogEntry,
@@ -39,12 +40,22 @@ class SingleFileTranscriber(
             staging = FileTranscriptStaging(staging),
             timestampLabelFormatter = AndroidTimestampLabelFormatter,
             transcriptOutput = AndroidTranscriptOutput(access),
+            publicationStore = publicationStore,
         ).transcribe(
             input = SingleFileTranscriptionInput(
                 audioId = entry.documentUri,
                 audioName = entry.displayName,
                 outputId = outputUri?.toString(),
                 fallbackRecordingTimeMillis = entry.fingerprint.modifiedMillis,
+                publicationKey = outputUri?.let {
+                    TranscriptPublicationKeys.forEntry(
+                        audioFileId = entry.id,
+                        fingerprint = entry.fingerprint,
+                        outputDocumentId = it.toString(),
+                    )
+                },
+                publicationAudioFileId = entry.id,
+                publicationSourceFingerprint = entry.fingerprint,
             ),
             onProgress = { progress ->
                 onProgress(
@@ -116,10 +127,9 @@ private object AndroidTimestampLabelFormatter : PlatformTimestampLabelFormatter 
 private class AndroidTranscriptOutput(
     private val access: DocumentAccess,
 ) : PlatformTranscriptOutput {
-    override fun readTail(outputId: String): String =
-        access.readTail(Uri.parse(outputId))
+    override fun readTail(outputId: String, maxBytes: Int): String =
+        access.readTail(Uri.parse(outputId), maxBytes)
 
-    override fun append(outputId: String, text: String) {
+    override fun append(outputId: String, text: String): TranscriptAppendOutcome =
         access.append(Uri.parse(outputId), text)
-    }
 }

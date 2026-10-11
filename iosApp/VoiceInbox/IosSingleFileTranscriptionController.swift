@@ -330,12 +330,17 @@ final class IosSingleFileTranscriptionController: ObservableObject {
         }
         let staging = IosTranscriptStaging()
         let formatter = IosTimestampLabelFormatter()
+        let catalog = IosSqlDelightAudioCatalogFactory().create(
+            databaseName: IosAudioCatalogConstants.databaseName
+        )
+        defer { catalog.close() }
         let output = CallbackTranscriptOutput(
-            readTailBlock: { _ in
-                outputDocument.map { IosOutputDocumentStore.readTail($0.url) } ?? ""
+            readTailBlock: { _, maxBytes in
+                outputDocument.map { IosOutputDocumentStore.readTail($0.url, maxBytes: Int(maxBytes)) } ?? ""
             },
-            appendBlock: { _, text in
-                outputDocument.flatMap { IosOutputDocumentStore.append(text, to: $0.url) }
+            appendBlock: { _, _ in nil },
+            appendOutcomeBlock: { _, text in
+                outputDocument.map { IosOutputDocumentStore.appendOutcome(text, to: $0.url) } ?? .notWritten
             }
         )
         let useCase = SingleFileTranscriptionUseCase(
@@ -343,7 +348,12 @@ final class IosSingleFileTranscriptionController: ObservableObject {
             nativeTranscriber: transcriber,
             staging: staging,
             timestampLabelFormatter: formatter,
-            transcriptOutput: output
+            transcriptOutput: output,
+            publicationStore: catalog
+        )
+        let publicationFingerprint = AudioFileFingerprint(
+            sizeBytes: KotlinLong(longLong: file.sizeBytes),
+            modifiedMillis: KotlinLong(longLong: Int64(file.importedAt.timeIntervalSince1970 * 1000))
         )
         return useCase.tryTranscribe(
             input: SingleFileTranscriptionInput(
@@ -352,7 +362,16 @@ final class IosSingleFileTranscriptionController: ObservableObject {
                 outputId: outputDocument?.id,
                 fallbackRecordingTimeMillis: KotlinLong(
                     longLong: Int64(file.importedAt.timeIntervalSince1970 * 1000)
-                )
+                ),
+                publicationKey: outputDocument.map {
+                    TranscriptPublicationKeys.shared.forEntry(
+                        audioFileId: file.id,
+                        fingerprint: publicationFingerprint,
+                        outputDocumentId: $0.id
+                    )
+                },
+                publicationAudioFileId: KotlinLong(longLong: file.id),
+                publicationSourceFingerprint: publicationFingerprint
             ),
             onProgress: onProgress
         )

@@ -146,6 +146,55 @@ class SqlDelightAudioCatalogRepositoryTest {
         assertEquals(failed.id, repository.claimFailed(scope, failed.id)?.id)
     }
 
+    @Test
+    fun publicationAttemptSurvivesInterruptedRecoveryAndCanBeConfirmed() {
+        val repository = repository()
+        val file = imported(repository, "voice.wav", modified = 10)
+        val fingerprint = file.entry.fingerprint
+        val key = TranscriptPublicationKeys.forEntry(file.id, fingerprint, "output.md")
+
+        repository.ensurePublication(key, file.id, fingerprint, "output.md")
+        repository.savePreparedPublication(
+            attemptKey = key,
+            transcriptText = "hello",
+            formattedEntry = "voice.wav\n- recorded: unknown\nhello",
+            durationUs = 123,
+        )
+        repository.markPublicationUnknown(key, "provider result unknown")
+        repository.recoverInterrupted()
+
+        val recovered = assertNotNull(repository.findPublication(key))
+        assertEquals(TranscriptPublicationState.UNKNOWN, recovered.state)
+        assertEquals("hello", recovered.transcriptText)
+        assertEquals("provider result unknown", recovered.lastError)
+
+        repository.markPublicationConfirmed(key)
+        assertEquals(
+            TranscriptPublicationState.CONFIRMED,
+            repository.findPublication(key)?.state,
+        )
+    }
+
+    @Test
+    fun publicationKeysDoNotReuseChangedFingerprintOrOutput() {
+        val repository = repository()
+        val file = imported(repository, "voice.wav", modified = 10)
+        val firstFingerprint = file.entry.fingerprint
+        val changedFingerprint = firstFingerprint.copy(modifiedMillis = 11)
+        val firstKey = TranscriptPublicationKeys.forEntry(file.id, firstFingerprint, "output.md")
+        val changedKey = TranscriptPublicationKeys.forEntry(file.id, changedFingerprint, "output.md")
+        val otherOutputKey = TranscriptPublicationKeys.forEntry(file.id, firstFingerprint, "other.md")
+
+        repository.ensurePublication(firstKey, file.id, firstFingerprint, "output.md")
+        repository.ensurePublication(changedKey, file.id, changedFingerprint, "output.md")
+        repository.ensurePublication(otherOutputKey, file.id, firstFingerprint, "other.md")
+
+        assertNotNull(repository.findPublication(firstKey))
+        assertNotNull(repository.findPublication(changedKey))
+        assertNotNull(repository.findPublication(otherOutputKey))
+        assertEquals(TranscriptPublicationState.READY, repository.findPublication(changedKey)?.state)
+    }
+
     private fun repository(): SqlDelightAudioCatalogRepository {
         val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         VoiceInboxDatabase.Schema.create(driver)

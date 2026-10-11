@@ -66,6 +66,19 @@ class BatchTranscriptionUseCaseTest {
     }
 
     @Test
+    fun noOutputStillProcessesAndRetainsTheLocalTranscript() {
+        val catalog = FakeCatalog(entry(1, "local.wav", AudioFileState.PENDING))
+        val transcriber = FakeTranscriber(
+            1L to SingleFileTranscriptionResult(10, 5, "local transcript"),
+        )
+
+        useCase(catalog, transcriber).transcribe(input().copy(outputId = null)) {}
+
+        assertEquals(AudioFileState.PROCESSED, catalog.entry(1).state)
+        assertEquals("local transcript", catalog.entry(1).transcriptText)
+    }
+
+    @Test
     fun retryOneClaimsOnlyTheRequestedFailedEntry() {
         val catalog = FakeCatalog(
             entry(1, "pending.wav", AudioFileState.PENDING),

@@ -28,8 +28,8 @@ class TranscriptionWorker(
         val folderUri = inputData.getString(KEY_FOLDER_URI)
         val outputUri = inputData.getString(KEY_OUTPUT_URI)?.let(Uri::parse)
         val retryId = inputData.getLong(KEY_RETRY_ID, NO_RETRY_ID).takeIf { it != NO_RETRY_ID }
-        val catalog: AudioCatalogQueuePort =
-            AndroidSqlDelightAudioCatalogFactory(applicationContext).create()
+        val catalogRepository = AndroidSqlDelightAudioCatalogFactory(applicationContext).create()
+        val catalog: AudioCatalogQueuePort = catalogRepository
 
         try {
             SpeechModelInstallationWork.promote(
@@ -47,7 +47,7 @@ class TranscriptionWorker(
             val batch = BatchTranscriptionUseCase(
                 catalog = catalog,
                 transcriber = AndroidBatchEntryTranscriber(
-                    SingleFileTranscriber(applicationContext),
+                    SingleFileTranscriber(applicationContext, catalogRepository),
                     outputUri,
                 ),
                 clock = SystemBatchClock,

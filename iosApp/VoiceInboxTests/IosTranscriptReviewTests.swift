@@ -5,6 +5,30 @@ import XCTest
 @testable import VoiceInbox
 
 final class IosTranscriptReviewTests: XCTestCase {
+    func testOutputAdapterAppendsAndReadsBoundedUtf8Tail() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("VoiceInboxOutput-\(UUID().uuidString).txt")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Data("Existing\n".utf8).write(to: url)
+
+        XCTAssertEqual(
+            IosOutputDocumentStore.appendOutcome("Entry\n", to: url),
+            .succeeded
+        )
+        XCTAssertEqual(IosOutputDocumentStore.readTail(url, maxBytes: 4096), "Existing\nEntry\n")
+        XCTAssertTrue(IosOutputDocumentStore.readTail(url, maxBytes: 5).hasSuffix("try\n"))
+    }
+
+    func testOutputAdapterClassifiesMissingDocumentBeforeWriting() {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("VoiceInboxMissing-\(UUID().uuidString).txt")
+
+        XCTAssertEqual(
+            IosOutputDocumentStore.appendOutcome("Entry\n", to: url),
+            .notWritten
+        )
+    }
+
     func testMetadataFormatterCombinesLocalizedTimestampSizeAndDuration() throws {
         let locale = Locale(identifier: "en_US_POSIX")
         let timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))

@@ -41,11 +41,77 @@ data class SqlDelightAudioCatalogFile(
 
 class SqlDelightAudioCatalogRepository(
     private val driver: SqlDriver,
-) : AudioCatalogQueuePort, AudioCatalogReconciliationPort {
+) : AudioCatalogQueuePort, AudioCatalogReconciliationPort, TranscriptPublicationStore {
     private val queries = VoiceInboxDatabase(driver).audioFilesQueries
+    private val publicationQueries = VoiceInboxDatabase(driver).publicationAttemptsQueries
 
     fun close() {
         driver.close()
+    }
+
+    override fun findPublication(attemptKey: String): TranscriptPublicationAttempt? =
+        publicationQueries.selectByKey(
+            attempt_key = attemptKey,
+            mapper = ::toPublicationAttempt,
+        ).executeAsOneOrNull()
+
+    override fun ensurePublication(
+        attemptKey: String,
+        audioFileId: Long,
+        sourceFingerprint: AudioFileFingerprint,
+        outputDocumentId: String,
+    ): TranscriptPublicationAttempt {
+        publicationQueries.insertAttempt(
+            attempt_key = attemptKey,
+            audio_file_id = audioFileId,
+            source_size_bytes = sourceFingerprint.sizeBytes,
+            source_modified_millis = sourceFingerprint.modifiedMillis,
+            output_document_id = outputDocumentId,
+            transcript_text = "",
+            formatted_entry = "",
+            duration_us = null,
+            state = TranscriptPublicationState.READY.name,
+            last_error = null,
+            created_at = 0L,
+            updated_at = 0L,
+        )
+        return requireNotNull(findPublication(attemptKey))
+    }
+
+    override fun savePreparedPublication(
+        attemptKey: String,
+        transcriptText: String,
+        formattedEntry: String,
+        durationUs: Long?,
+    ): TranscriptPublicationAttempt {
+        publicationQueries.updatePrepared(
+            transcript_text = transcriptText,
+            formatted_entry = formattedEntry,
+            duration_us = durationUs,
+            updated_at = 0L,
+            attempt_key = attemptKey,
+        )
+        return requireNotNull(findPublication(attemptKey))
+    }
+
+    override fun markPublicationConfirmed(attemptKey: String) {
+        publicationQueries.markConfirmed(updated_at = 0L, attempt_key = attemptKey)
+    }
+
+    override fun markPublicationRetryableFailure(attemptKey: String, message: String) {
+        publicationQueries.markRetryableFailure(
+            last_error = message,
+            updated_at = 0L,
+            attempt_key = attemptKey,
+        )
+    }
+
+    override fun markPublicationUnknown(attemptKey: String, message: String) {
+        publicationQueries.markUnknown(
+            last_error = message,
+            updated_at = 0L,
+            attempt_key = attemptKey,
+        )
     }
 
     fun importedFiles(folderUri: String): List<SqlDelightAudioCatalogFile> =
@@ -331,4 +397,32 @@ private fun toCatalogFile(
     processedAtMillis = processed_at,
     transcriptText = transcript_text,
     durationUs = duration_us,
+)
+
+private fun toPublicationAttempt(
+    attempt_key: String,
+    audio_file_id: Long,
+    source_size_bytes: Long?,
+    source_modified_millis: Long?,
+    output_document_id: String,
+    transcript_text: String,
+    formatted_entry: String,
+    duration_us: Long?,
+    state: String,
+    last_error: String?,
+    created_at: Long,
+    updated_at: Long,
+): TranscriptPublicationAttempt = TranscriptPublicationAttempt(
+    attemptKey = attempt_key,
+    audioFileId = audio_file_id,
+    sourceFingerprint = AudioFileFingerprint(
+        sizeBytes = source_size_bytes,
+        modifiedMillis = source_modified_millis,
+    ),
+    outputDocumentId = output_document_id,
+    transcriptText = transcript_text,
+    formattedEntry = formatted_entry,
+    durationUs = duration_us,
+    state = TranscriptPublicationState.valueOf(state),
+    lastError = last_error,
 )

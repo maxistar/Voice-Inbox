@@ -119,6 +119,50 @@ class SingleFileTranscriptionUseCaseTest {
         )
     }
 
+    @Test
+    fun resumesPreparedPublicationWithoutRetranscribing() {
+        val entry = "voice.m4a\n- recorded: unknown\nhello"
+        val store = FakePublicationStore(
+            TranscriptPublicationAttempt(
+                attemptKey = "attempt-1",
+                audioFileId = 1,
+                sourceFingerprint = AudioFileFingerprint(10, 20),
+                outputDocumentId = "content://output",
+                transcriptText = "hello",
+                formattedEntry = entry,
+                durationUs = 10,
+                state = TranscriptPublicationState.READY,
+                lastError = null,
+            ),
+        )
+        val output = FakeTranscriptOutput(existingTail = "older\n\n$entry")
+
+        val result = SingleFileTranscriptionUseCase(
+            audioDecoder = object : PlatformAudioDecoder {
+                override fun decode(
+                    audioId: String,
+                    onProgress: (processedUs: Long, durationUs: Long?) -> Unit,
+                    onChunk: (samples: FloatArray) -> Unit,
+                ): PlatformAudioInfo = error("prepared publication should skip decoding")
+            },
+            nativeTranscriber = FakeNativeTranscriber("never used"),
+            staging = FakeStaging(),
+            timestampLabelFormatter = FakeTimestampFormatter,
+            transcriptOutput = output,
+            publicationStore = store,
+        ).transcribe(
+            input = input().copy(
+                publicationKey = "attempt-1",
+                publicationAudioFileId = 1,
+                publicationSourceFingerprint = AudioFileFingerprint(10, 20),
+            ),
+        ) {}
+
+        assertEquals("hello", result.transcriptText)
+        assertEquals(emptyList(), output.appended)
+        assertEquals(TranscriptPublicationState.CONFIRMED, store.attempt.state)
+    }
+
     private fun useCase(
         decoder: FakeAudioDecoder = FakeAudioDecoder(chunks = listOf(floatArrayOf(1f))),
         transcriber: FakeNativeTranscriber = FakeNativeTranscriber("hello"),
@@ -196,13 +240,50 @@ class SingleFileTranscriptionUseCaseTest {
         val appended = mutableListOf<String>()
         var reads = 0
 
-        override fun readTail(outputId: String): String {
+        override fun readTail(outputId: String, maxBytes: Int): String {
             reads += 1
             return existingTail
         }
 
-        override fun append(outputId: String, text: String) {
+        override fun append(outputId: String, text: String): TranscriptAppendOutcome {
             appended += text
+            return TranscriptAppendOutcome.SUCCEEDED
+        }
+    }
+
+    private class FakePublicationStore(
+        var attempt: TranscriptPublicationAttempt,
+    ) : TranscriptPublicationStore {
+        override fun findPublication(attemptKey: String): TranscriptPublicationAttempt? =
+            attempt.takeIf { it.attemptKey == attemptKey }
+
+        override fun ensurePublication(
+            attemptKey: String,
+            audioFileId: Long,
+            sourceFingerprint: AudioFileFingerprint,
+            outputDocumentId: String,
+        ): TranscriptPublicationAttempt = attempt
+
+        override fun savePreparedPublication(
+            attemptKey: String,
+            transcriptText: String,
+            formattedEntry: String,
+            durationUs: Long?,
+        ): TranscriptPublicationAttempt = attempt
+
+        override fun markPublicationConfirmed(attemptKey: String) {
+            attempt = attempt.copy(state = TranscriptPublicationState.CONFIRMED)
+        }
+
+        override fun markPublicationRetryableFailure(attemptKey: String, message: String) {
+            attempt = attempt.copy(lastError = message)
+        }
+
+        override fun markPublicationUnknown(attemptKey: String, message: String) {
+            attempt = attempt.copy(
+                state = TranscriptPublicationState.UNKNOWN,
+                lastError = message,
+            )
         }
     }
 }

@@ -7,6 +7,8 @@ import android.database.MatrixCursor;
 import android.net.Uri;
 import android.provider.DocumentsContract;
 import android.os.ParcelFileDescriptor;
+import android.system.Os;
+import android.system.OsConstants;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -148,10 +150,23 @@ public class TestAudioDocumentsProvider extends ContentProvider {
         }
         File file = new File(getContext().getCacheDir(), "shared-" + documentId.replace('/', '-') + ".bin");
         if (OUTPUT_ID.equals(documentId)) {
-            return ParcelFileDescriptor.open(
+            ParcelFileDescriptor descriptor = ParcelFileDescriptor.open(
                 file,
                 ParcelFileDescriptor.MODE_CREATE | ParcelFileDescriptor.MODE_READ_WRITE
             );
+            if (mode.contains("a")) {
+                try {
+                    Os.lseek(descriptor.getFileDescriptor(), 0L, OsConstants.SEEK_END);
+                } catch (android.system.ErrnoException error) {
+                    try {
+                        descriptor.close();
+                    } catch (IOException ignored) {
+                        // Preserve the original provider failure.
+                    }
+                    throw new FileNotFoundException(error.getMessage());
+                }
+            }
+            return descriptor;
         }
         try (FileOutputStream output = new FileOutputStream(file)) {
             output.write(("test-audio-" + documentId).getBytes());

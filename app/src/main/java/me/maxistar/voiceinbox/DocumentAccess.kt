@@ -1,5 +1,6 @@
 package me.maxistar.voiceinbox
 
+import me.maxistar.voiceinbox.core.TranscriptAppendOutcome
 import android.content.ContentResolver
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -50,17 +51,31 @@ class DocumentAccess(
         throw IOException("The selected text file is not writable")
     }
 
-    fun append(uri: Uri, text: String) {
-        resolver.openOutputStream(uri, "wa")?.bufferedWriter(Charsets.UTF_8)?.use {
-            it.write(text)
-        } ?: throw IOException("Unable to append to the selected text file")
+    fun append(uri: Uri, text: String): TranscriptAppendOutcome {
+        val stream = try {
+            resolver.openOutputStream(uri, "wa")
+        } catch (_: Throwable) {
+            return TranscriptAppendOutcome.NOT_WRITTEN
+        } ?: return TranscriptAppendOutcome.NOT_WRITTEN
+
+        return try {
+            stream.bufferedWriter(Charsets.UTF_8).use { writer ->
+                writer.write(text)
+                writer.flush()
+            }
+            TranscriptAppendOutcome.SUCCEEDED
+        } catch (_: Throwable) {
+            TranscriptAppendOutcome.UNKNOWN
+        }
     }
 
     fun readTail(uri: Uri, maxBytes: Int = 4096): String {
-        val bytes = resolver.openInputStream(uri)?.use { input ->
-            val all = input.readBytes()
-            all.copyOfRange((all.size - maxBytes).coerceAtLeast(0), all.size)
-        } ?: return ""
-        return bytes.toString(Charsets.UTF_8)
+        val all = resolver.openInputStream(uri)?.use { it.readBytes() } ?: return ""
+        val start = (all.size - maxBytes).coerceAtLeast(0)
+        for (candidate in start..all.size) {
+            val text = all.copyOfRange(candidate, all.size).toString(Charsets.UTF_8)
+            if (!text.contains('\uFFFD')) return text
+        }
+        return all.copyOfRange(start, all.size).toString(Charsets.UTF_8)
     }
 }

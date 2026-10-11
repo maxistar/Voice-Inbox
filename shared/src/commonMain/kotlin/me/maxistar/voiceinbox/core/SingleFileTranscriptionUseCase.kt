@@ -5,6 +5,9 @@ data class SingleFileTranscriptionInput(
     val audioName: String,
     val outputId: String? = null,
     val fallbackRecordingTimeMillis: Long?,
+    val publicationKey: String? = null,
+    val publicationAudioFileId: Long? = null,
+    val publicationSourceFingerprint: AudioFileFingerprint? = null,
 )
 
 data class SingleFileTranscriptionProgress(
@@ -35,8 +38,8 @@ interface PlatformTimestampLabelFormatter {
 }
 
 interface PlatformTranscriptOutput {
-    fun readTail(outputId: String): String
-    fun append(outputId: String, text: String)
+    fun readTail(outputId: String, maxBytes: Int): String
+    fun append(outputId: String, text: String): TranscriptAppendOutcome
 }
 
 class SingleFileTranscriptionUseCase(
@@ -45,12 +48,30 @@ class SingleFileTranscriptionUseCase(
     private val staging: PlatformTranscriptStaging,
     private val timestampLabelFormatter: PlatformTimestampLabelFormatter,
     private val transcriptOutput: PlatformTranscriptOutput,
+    private val publicationStore: TranscriptPublicationStore? = null,
 ) {
     fun transcribe(
         input: SingleFileTranscriptionInput,
         onProgress: (SingleFileTranscriptionProgress) -> Unit,
     ): SingleFileTranscriptionResult {
         try {
+            val preparedPublication = preparedPublication(input)
+            if (preparedPublication != null) {
+                if (preparedPublication.state == TranscriptPublicationState.CONFIRMED) {
+                    return resultFromPreparedPublication(preparedPublication)
+                }
+                onProgress(
+                    SingleFileTranscriptionProgress(
+                        phase = PHASE_APPENDING_TRANSCRIPT,
+                        processedUs = preparedPublication.durationUs,
+                        durationUs = preparedPublication.durationUs,
+                    ),
+                )
+                TranscriptPublicationCoordinator(transcriptOutput, requireNotNull(publicationStore))
+                    .publish(preparedPublication)
+                return resultFromPreparedPublication(preparedPublication)
+            }
+
             onProgress(SingleFileTranscriptionProgress(PHASE_DECODING_AUDIO))
             var transcript = ""
             var durationUs: Long? = null
@@ -91,8 +112,38 @@ class SingleFileTranscriptionUseCase(
                     ),
                     transcript = finalTranscript,
                 )
-                AppendPublication.publish(transcriptOutput.readTail(outputId), formatted) { text ->
-                    transcriptOutput.append(outputId, text)
+                val store = publicationStore
+                val publicationKey = input.publicationKey
+                if (store != null && publicationKey != null) {
+                    val prepared = store.ensurePublication(
+                        attemptKey = publicationKey,
+                        audioFileId = requireNotNull(input.publicationAudioFileId),
+                        sourceFingerprint = requireNotNull(input.publicationSourceFingerprint),
+                        outputDocumentId = outputId,
+                    ).let {
+                        store.savePreparedPublication(
+                            attemptKey = it.attemptKey,
+                            transcriptText = finalTranscript,
+                            formattedEntry = formatted,
+                            durationUs = durationUs,
+                        )
+                    }
+                    TranscriptPublicationCoordinator(transcriptOutput, store).publish(prepared)
+                } else {
+                    val existingTail = transcriptOutput.readTail(
+                        outputId,
+                        AppendPublication.requiredTailBytes(formatted),
+                    )
+                    when (transcriptOutput.append(
+                        outputId,
+                        AppendPublication.appendText(existingTail, formatted),
+                    )) {
+                        TranscriptAppendOutcome.SUCCEEDED -> Unit
+                        TranscriptAppendOutcome.NOT_WRITTEN ->
+                            throw IllegalStateException(TranscriptPublicationCoordinator.ERROR_APPEND_NOT_WRITTEN)
+                        TranscriptAppendOutcome.UNKNOWN ->
+                            throw IllegalStateException(TranscriptPublicationCoordinator.ERROR_UNKNOWN_PUBLICATION)
+                    }
                 }
             }
             return SingleFileTranscriptionResult(
@@ -122,6 +173,23 @@ class SingleFileTranscriptionUseCase(
                 errorMessage = error.message ?: ERROR_SPEECH_RECOGNITION_FAILED,
             )
         }
+
+    private fun preparedPublication(
+        input: SingleFileTranscriptionInput,
+    ): TranscriptPublicationAttempt? {
+        val key = input.publicationKey ?: return null
+        val store = publicationStore ?: return null
+        val attempt = store.findPublication(key) ?: return null
+        return attempt.takeIf { it.formattedEntry.isNotBlank() }
+    }
+
+    private fun resultFromPreparedPublication(
+        attempt: TranscriptPublicationAttempt,
+    ): SingleFileTranscriptionResult = SingleFileTranscriptionResult(
+        durationUs = attempt.durationUs,
+        transcriptLength = attempt.transcriptText.length,
+        transcriptText = attempt.transcriptText,
+    )
 
     companion object {
         const val PHASE_DECODING_AUDIO = "Decoding audio"

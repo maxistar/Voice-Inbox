@@ -1,0 +1,70 @@
+CREATE TABLE transcript_publication_attempts (
+    attempt_key TEXT NOT NULL PRIMARY KEY,
+    audio_file_id INTEGER NOT NULL,
+    source_size_bytes INTEGER,
+    source_modified_millis INTEGER,
+    output_document_id TEXT NOT NULL,
+    transcript_text TEXT NOT NULL,
+    formatted_entry TEXT NOT NULL,
+    duration_us INTEGER,
+    state TEXT NOT NULL,
+    last_error TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX index_transcript_publication_attempts_audio_file
+ON transcript_publication_attempts(audio_file_id);
+
+selectByKey:
+SELECT *
+FROM transcript_publication_attempts
+WHERE attempt_key = ?;
+
+insertAttempt:
+INSERT OR IGNORE INTO transcript_publication_attempts(
+    attempt_key,
+    audio_file_id,
+    source_size_bytes,
+    source_modified_millis,
+    output_document_id,
+    transcript_text,
+    formatted_entry,
+    duration_us,
+    state,
+    last_error,
+    created_at,
+    updated_at
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+updatePrepared:
+UPDATE transcript_publication_attempts
+SET transcript_text = ?,
+    formatted_entry = ?,
+    duration_us = ?,
+    state = 'READY',
+    last_error = NULL,
+    updated_at = ?
+WHERE attempt_key = ?;
+
+markConfirmed:
+UPDATE transcript_publication_attempts
+SET state = 'CONFIRMED',
+    last_error = NULL,
+    updated_at = ?
+WHERE attempt_key = ?;
+
+markRetryableFailure:
+UPDATE transcript_publication_attempts
+SET state = 'READY',
+    last_error = ?,
+    updated_at = ?
+WHERE attempt_key = ?;
+
+markUnknown:
+UPDATE transcript_publication_attempts
+SET state = 'UNKNOWN',
+    last_error = ?,
+    updated_at = ?
+WHERE attempt_key = ?;

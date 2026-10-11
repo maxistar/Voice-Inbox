@@ -1,0 +1,17 @@
+CREATE TABLE transcript_publication_attempts (
+    attempt_key TEXT NOT NULL PRIMARY KEY,
+    audio_file_id INTEGER NOT NULL,
+    source_size_bytes INTEGER,
+    source_modified_millis INTEGER,
+    output_document_id TEXT NOT NULL,
+    transcript_text TEXT NOT NULL,
+    formatted_entry TEXT NOT NULL,
+    duration_us INTEGER,
+    state TEXT NOT NULL,
+    last_error TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX index_transcript_publication_attempts_audio_file
+ON transcript_publication_attempts(audio_file_id);
