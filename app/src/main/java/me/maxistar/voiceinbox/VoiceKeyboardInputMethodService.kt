@@ -147,6 +147,50 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
         return view
     }
 
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        return when (
+            VoiceKeyboardVolumeShortcut.action(
+                inputViewActive = inputViewActive,
+                keyCode = keyCode,
+                keyAction = KeyEvent.ACTION_DOWN,
+                repeatCount = event.repeatCount,
+                phase = controller.phase,
+            )
+        ) {
+            VoiceKeyboardVolumeShortcutAction.PASS_THROUGH -> super.onKeyDown(keyCode, event)
+            VoiceKeyboardVolumeShortcutAction.CONSUME -> true
+            VoiceKeyboardVolumeShortcutAction.START,
+            VoiceKeyboardVolumeShortcutAction.STOP,
+            -> {
+                handleRecordButtonActivation()
+                true
+            }
+        }
+    }
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
+        return when (
+            VoiceKeyboardVolumeShortcut.action(
+                inputViewActive = inputViewActive,
+                keyCode = keyCode,
+                keyAction = KeyEvent.ACTION_UP,
+                repeatCount = event.repeatCount,
+                phase = controller.phase,
+            )
+        ) {
+            VoiceKeyboardVolumeShortcutAction.PASS_THROUGH -> super.onKeyUp(keyCode, event)
+            else -> true
+        }
+    }
+
+    override fun onKeyMultiple(keyCode: Int, count: Int, event: KeyEvent): Boolean {
+        return if (VoiceKeyboardVolumeShortcut.shouldConsumeMultiple(inputViewActive, keyCode)) {
+            true
+        } else {
+            super.onKeyMultiple(keyCode, count, event)
+        }
+    }
+
     private fun applyNavigationBarInsets(view: View) {
         val initialPaddingLeft = view.paddingLeft
         val initialPaddingTop = view.paddingTop
