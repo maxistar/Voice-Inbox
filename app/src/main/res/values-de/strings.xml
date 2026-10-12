@@ -123,6 +123,16 @@
     <string name="folder_temporarily_unavailable">Audioordner: vorübergehend nicht verfügbar</string>
     <string name="select_audio_folder">Audioordner auswählen</string>
     <string name="import_audio">Audio importieren</string>
+    <string name="quick_capture_record">Sprachnotiz aufnehmen</string>
+    <string name="quick_capture_stop">Aufnahme stoppen</string>
+    <string name="quick_capture_recording">Aufnahme · noch %1$02d:%2$02d</string>
+    <string name="quick_capture_saving">Aufnahme wird gespeichert…</string>
+    <string name="quick_capture_saved">Aufnahme unter „Neu“ gespeichert</string>
+    <string name="quick_capture_cancelled">Aufnahme abgebrochen</string>
+    <string name="quick_capture_failed">Aufnahme konnte nicht gespeichert werden: %1$s</string>
+    <string name="quick_capture_permission_required">Für eine Sprachnotiz ist Mikrofonzugriff erforderlich.</string>
+    <string name="quick_capture_limit">Aufnahmelimit erreicht</string>
+    <string name="quick_capture_status_accessibility">Status der Schnellaufnahme</string>
     <string name="importing_audio">Audio wird importiert…</string>
     <string name="no_shared_audio">Es wurde kein lesbares Audio geteilt.</string>
     <string name="transcript_copy_all">Alles kopieren</string>

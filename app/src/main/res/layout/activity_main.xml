@@ -64,6 +64,36 @@
     </LinearLayout>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/recordAudio"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="88dp"
+        android:contentDescription="@string/quick_capture_record"
+        app:backgroundTint="?attr/colorSecondary"
+        app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.NotesRecognition.Circular"
+        app:srcCompat="@drawable/ic_voice_keyboard_mic"
+        app:tint="?attr/colorOnSecondary" />
+
+    <TextView
+        android:id="@+id/quickCaptureStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="80dp"
+        android:background="?attr/colorSurfaceContainer"
+        android:paddingStart="12dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="6dp"
+        android:textColor="?attr/colorOnSurface"
+        android:textSize="14sp"
+        android:visibility="gone" />
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/importAudio"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"

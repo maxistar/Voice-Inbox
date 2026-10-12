@@ -123,6 +123,16 @@
     <string name="folder_temporarily_unavailable">Audio folder: temporarily unavailable</string>
     <string name="select_audio_folder">Select audio folder</string>
     <string name="import_audio">Import audio</string>
+    <string name="quick_capture_record">Record voice note</string>
+    <string name="quick_capture_stop">Stop recording</string>
+    <string name="quick_capture_recording">Recording · %1$02d:%2$02d remaining</string>
+    <string name="quick_capture_saving">Saving recording…</string>
+    <string name="quick_capture_saved">Recording saved in New</string>
+    <string name="quick_capture_cancelled">Recording cancelled</string>
+    <string name="quick_capture_failed">Could not save recording: %1$s</string>
+    <string name="quick_capture_permission_required">Microphone permission is required to record a voice note.</string>
+    <string name="quick_capture_limit">Recording limit reached</string>
+    <string name="quick_capture_status_accessibility">Quick Capture status</string>
     <string name="importing_audio">Importing audio…</string>
     <string name="no_shared_audio">No readable audio was shared.</string>
     <string name="transcript_copy_all">Copy all</string>

@@ -125,6 +125,16 @@
     <string name="folder_temporarily_unavailable">Папка с аудио: временно недоступна</string>
     <string name="select_audio_folder">Выбрать папку с аудио</string>
     <string name="import_audio">Импортировать аудио</string>
+    <string name="quick_capture_record">Записать голосовую заметку</string>
+    <string name="quick_capture_stop">Остановить запись</string>
+    <string name="quick_capture_recording">Запись · осталось %1$02d:%2$02d</string>
+    <string name="quick_capture_saving">Сохранение записи…</string>
+    <string name="quick_capture_saved">Запись сохранена в разделе «Новые»</string>
+    <string name="quick_capture_cancelled">Запись отменена</string>
+    <string name="quick_capture_failed">Не удалось сохранить запись: %1$s</string>
+    <string name="quick_capture_permission_required">Для записи голосовой заметки требуется доступ к микрофону.</string>
+    <string name="quick_capture_limit">Достигнут предел длительности записи</string>
+    <string name="quick_capture_status_accessibility">Состояние быстрой записи</string>
     <string name="importing_audio">Импорт аудио…</string>
     <string name="no_shared_audio">Не удалось прочитать переданное аудио.</string>
     <string name="transcript_copy_all">Скопировать всё</string>

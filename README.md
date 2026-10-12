@@ -29,6 +29,16 @@ application preserves existing text and separates each new entry with one blank
 line. Folder scanning runs when the application starts and when **Refresh** is
 selected. It scans direct children only and does not traverse nested folders.
 
+## Quick Capture
+
+On Android, **Record voice note** starts a foreground-only microphone capture
+directly from the main screen. Tap the same button again to stop; recordings
+are limited to 60 seconds, saved as 16 kHz mono WAV files in the app's private
+import storage, and appear in **New** ready for the existing transcription
+workflow. Quick Capture does not start transcription automatically and stops
+when the app leaves the foreground. Microphone permission is requested the
+first time the action is used.
+
 ## Automatic Processing
 
 Android Settings provides two independent automation options:

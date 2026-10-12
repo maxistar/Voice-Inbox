@@ -302,12 +302,15 @@ class AndroidAudioImportStorage(
 
     fun cleanupOrphans(catalog: SqlDelightAudioCatalogRepository) {
         if (!directory.exists()) return
-        directory.listFiles()?.filter { it.name.endsWith(".part") }?.forEach(File::delete)
+        directory.listFiles()
+            ?.filter { it.name.endsWith(".part") && !AndroidQuickCaptureFileRegistry.isProtected(it) }
+            ?.forEach(File::delete)
         val catalogUris = catalog.importedFiles(AndroidAudioImportConstants.SOURCE_ID)
             .mapTo(mutableSetOf()) { it.documentUri }
         directory.listFiles()
             ?.filter(File::isFile)
             ?.forEach { file ->
+                if (AndroidQuickCaptureFileRegistry.isProtected(file)) return@forEach
                 val uri = FileProvider.getUriForFile(
                     context,
                     "${context.packageName}.files",

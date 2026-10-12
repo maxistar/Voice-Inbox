@@ -51,7 +51,9 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private var taskListAnimatorSuppressed = false
     private lateinit var taskActionRouter: AndroidTaskActionRouter
     private val taskStateHost: AndroidMainScreenStateHost by viewModels()
+    private val quickCaptureViewModel: AndroidQuickCaptureViewModel by viewModels()
 
+    private lateinit var recordAudio: FloatingActionButton
     private lateinit var selectionStore: DocumentSelectionStore
     private lateinit var selectionAccess: PersistedSelectionAccess
     private lateinit var documentAccess: DocumentAccess
@@ -64,6 +66,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private lateinit var keyboardDiscoveryStore: AndroidVoiceKeyboardDiscoveryStore
     private lateinit var keyboardStatusProvider: AndroidVoiceKeyboardStatusProvider
     private lateinit var keyboardSystemGateway: AndroidVoiceKeyboardSystemGateway
+    private lateinit var quickCaptureStatus: TextView
     private val folderExecutor = Executors.newSingleThreadExecutor()
     private val importExecutor = Executors.newSingleThreadExecutor()
 
@@ -125,6 +128,15 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private var catalogPresentationKnown = false
     private var refreshActionView: View? = null
     private val refreshIndicatorHandler = Handler(Looper.getMainLooper())
+    private val quickCaptureHandler = Handler(Looper.getMainLooper())
+    private val quickCaptureTick: Runnable = Runnable {
+        if (quickCaptureViewModel.tick()) {
+            Toast.makeText(this, R.string.quick_capture_limit, Toast.LENGTH_SHORT).show()
+        }
+        if (quickCaptureViewModel.state.value.phase == QuickCapturePhase.RECORDING) {
+            quickCaptureHandler.postDelayed(quickCaptureTick, QUICK_CAPTURE_TICK_MILLIS)
+        }
+    }
     private var refreshIndicatorActive = false
     private var refreshIndicatorStartedAt = 0L
     private var refreshIndicatorAnimator: android.animation.ObjectAnimator? = null
@@ -137,6 +149,9 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private var keyboardStatusKnown = false
     private var pendingModelPackageUri: Uri? = null
     private var pendingModelPackageCatalogId: String? = null
+    private var quickCaptureState = QuickCaptureUiState()
+    private var lastQuickCaptureTerminalGeneration = -1L
+    private var quickCapturePermissionRequested = false
 
     private val outputPicker = registerForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -171,6 +186,15 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private val microphonePermissionRequest = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
+        if (quickCapturePermissionRequested) {
+            quickCapturePermissionRequested = false
+            if (granted) {
+                handleQuickCaptureAction()
+            } else {
+                Toast.makeText(this, R.string.quick_capture_permission_required, Toast.LENGTH_LONG).show()
+            }
+            return@registerForActivityResult
+        }
         Toast.makeText(
             this,
             if (granted) R.string.voice_keyboard_permission_granted else R.string.voice_keyboard_permission_denied,
@@ -235,6 +259,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         importAudio.setOnClickListener {
             if (!ingestionActive) importPicker.launch(arrayOf("audio/*", "application/ogg"))
         }
+        recordAudio.setOnClickListener { handleQuickCaptureAction() }
         taskFilters.addOnButtonCheckedListener { _, checkedId, isChecked ->
             if (!isChecked || renderingFilter) return@addOnButtonCheckedListener
             val filter = when (checkedId) {
@@ -247,6 +272,11 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 taskStateHost.state.collect(::renderTaskState)
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                quickCaptureViewModel.state.collect(::renderQuickCaptureState)
             }
         }
 
@@ -267,6 +297,9 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
 
     override fun onStart() {
         super.onStart()
+        if (quickCaptureViewModel.state.value.phase == QuickCapturePhase.RECORDING) {
+            scheduleQuickCaptureTick()
+        }
         if (hasStarted) {
             restoreSelections(scanFolderOnSuccess = false)
             refreshCatalog()
@@ -278,6 +311,12 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     override fun onResume() {
         super.onResume()
         if (::keyboardStatusProvider.isInitialized) refreshKeyboardStatus(publish = true)
+    }
+
+    override fun onStop() {
+        quickCaptureHandler.removeCallbacks(quickCaptureTick)
+        if (!isChangingConfigurations) quickCaptureViewModel.cancel()
+        super.onStop()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -332,6 +371,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     override fun onDestroy() {
         activityDestroyed = true
         refreshIndicatorHandler.removeCallbacksAndMessages(null)
+        quickCaptureHandler.removeCallbacksAndMessages(null)
         refreshIndicatorAnimator?.cancel()
         refreshIndicatorAnimator = null
         stopPreviewPlayback(render = false)
@@ -350,6 +390,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
 
     private fun bindViews() {
         importAudio = findViewById(R.id.importAudio)
+        recordAudio = findViewById(R.id.recordAudio)
+        quickCaptureStatus = findViewById(R.id.quickCaptureStatus)
         newTab = findViewById(R.id.newTab)
         processedTab = findViewById(R.id.processedTab)
         allTab = findViewById(R.id.allTab)
@@ -1313,9 +1355,99 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     }
 
     private fun updateControls() {
-        importAudio.isEnabled = !ingestionActive
+        updateQuickCaptureButtons()
         publishTaskState()
         invalidateOptionsMenu()
+    }
+
+    private fun updateQuickCaptureButtons() {
+        val quickCaptureActive = quickCaptureState.phase == QuickCapturePhase.RECORDING ||
+            quickCaptureState.phase == QuickCapturePhase.FINALIZING
+        importAudio.isEnabled = !ingestionActive && !quickCaptureActive
+        recordAudio.isEnabled = quickCaptureState.phase != QuickCapturePhase.FINALIZING && !activityDestroyed
+    }
+
+    private fun handleQuickCaptureAction() {
+        when (quickCaptureState.phase) {
+            QuickCapturePhase.RECORDING -> {
+                quickCaptureViewModel.stop()
+                return
+            }
+            QuickCapturePhase.FINALIZING -> return
+            QuickCapturePhase.IDLE,
+            QuickCapturePhase.SUCCESS,
+            QuickCapturePhase.CANCELED,
+            QuickCapturePhase.ERROR,
+            -> Unit
+        }
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            quickCapturePermissionRequested = true
+            Toast.makeText(this, R.string.quick_capture_permission_required, Toast.LENGTH_LONG).show()
+            microphonePermissionRequest.launch(Manifest.permission.RECORD_AUDIO)
+            return
+        }
+        if (quickCaptureViewModel.start()) scheduleQuickCaptureTick()
+    }
+
+    private fun scheduleQuickCaptureTick() {
+        quickCaptureHandler.removeCallbacks(quickCaptureTick)
+        quickCaptureHandler.post(quickCaptureTick)
+    }
+
+    private fun renderQuickCaptureState(state: QuickCaptureUiState) {
+        quickCaptureState = state
+        val recording = state.phase == QuickCapturePhase.RECORDING
+        val finalizing = state.phase == QuickCapturePhase.FINALIZING
+        recordAudio.setImageResource(
+            if (recording) R.drawable.ic_voice_keyboard_stop else R.drawable.ic_voice_keyboard_mic,
+        )
+        recordAudio.contentDescription = getString(
+            if (recording) R.string.quick_capture_stop else R.string.quick_capture_record,
+        )
+        quickCaptureStatus.contentDescription = getString(R.string.quick_capture_status_accessibility)
+        quickCaptureStatus.visibility = if (recording || finalizing) View.VISIBLE else View.GONE
+        quickCaptureStatus.text = when {
+            recording -> {
+                val remaining = state.remainingSeconds ?: 0L
+                getString(
+                    R.string.quick_capture_recording,
+                    remaining / 60L,
+                    remaining % 60L,
+                )
+            }
+            finalizing -> getString(R.string.quick_capture_saving)
+            else -> ""
+        }
+        if (recording) scheduleQuickCaptureTick() else quickCaptureHandler.removeCallbacks(quickCaptureTick)
+
+        val generation = state.session.generation
+        if (generation != lastQuickCaptureTerminalGeneration) {
+            when (state.phase) {
+                QuickCapturePhase.SUCCESS -> {
+                    lastQuickCaptureTerminalGeneration = generation
+                    taskStateHost.selectFilter(TaskListFilter.NEW)
+                    Toast.makeText(this, R.string.quick_capture_saved, Toast.LENGTH_SHORT).show()
+                    refreshCatalog()
+                }
+                QuickCapturePhase.CANCELED -> {
+                    lastQuickCaptureTerminalGeneration = generation
+                    Toast.makeText(this, R.string.quick_capture_cancelled, Toast.LENGTH_SHORT).show()
+                }
+                QuickCapturePhase.ERROR -> {
+                    lastQuickCaptureTerminalGeneration = generation
+                    Toast.makeText(
+                        this,
+                        getString(
+                            R.string.quick_capture_failed,
+                            state.session.errorMessage ?: getString(R.string.unknown_error),
+                        ),
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+                else -> Unit
+            }
+        }
+        updateControls()
     }
 
     private fun startPreviewPlayback(entry: AudioCatalogEntry) {
@@ -1503,6 +1635,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         )
         renderingFilter = false
         importAudio.isEnabled = state.importEnabled
+        updateQuickCaptureButtons()
         updateTaskListAnimation(state.transcriptionActive)
         taskAdapter.submitList(
             TaskListDisplayItems.from(
@@ -1812,6 +1945,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         const val REFRESH_SHOW_DELAY_MS = 180L
         const val REFRESH_MIN_VISIBLE_MS = 450L
         const val REFRESH_ROTATION_MS = 800L
+        const val QUICK_CAPTURE_TICK_MILLIS = 250L
         val ACTIVE_WORK_STATES = setOf(
             WorkInfo.State.ENQUEUED,
             WorkInfo.State.BLOCKED,

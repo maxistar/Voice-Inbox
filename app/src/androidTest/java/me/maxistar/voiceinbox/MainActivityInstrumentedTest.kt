@@ -66,6 +66,25 @@ class MainActivityInstrumentedTest {
     }
 
     @Test
+    fun quickCaptureControlIsVisibleAndStartsInRecordMode() {
+        clearActivityState()
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            onView(withId(R.id.recordAudio)).check(matches(isDisplayed()))
+            scenario.onActivity { activity ->
+                val recordButton = activity.findViewById<FloatingActionButton>(R.id.recordAudio)
+                assertEquals(
+                    activity.getString(R.string.quick_capture_record),
+                    recordButton.contentDescription,
+                )
+                assertEquals(
+                    android.view.View.GONE,
+                    activity.findViewById<android.widget.TextView>(R.id.quickCaptureStatus).visibility,
+                )
+            }
+        }
+    }
+
+    @Test
     fun setupSelectionActionsRemainAvailableBeforeModelReadiness() {
         clearActivityState()
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
