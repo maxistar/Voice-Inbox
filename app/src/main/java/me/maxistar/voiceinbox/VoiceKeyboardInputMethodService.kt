@@ -148,6 +148,24 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        when (
+            VoiceKeyboardF10Shortcut.action(
+                inputActive = inputActive,
+                keyCode = keyCode,
+                keyAction = KeyEvent.ACTION_DOWN,
+                repeatCount = event.repeatCount,
+                phase = controller.phase,
+            )
+        ) {
+            VoiceKeyboardVolumeShortcutAction.PASS_THROUGH -> Unit
+            VoiceKeyboardVolumeShortcutAction.CONSUME -> return true
+            VoiceKeyboardVolumeShortcutAction.START,
+            VoiceKeyboardVolumeShortcutAction.STOP,
+            -> {
+                handleRecordButtonActivation()
+                return true
+            }
+        }
         return when (
             VoiceKeyboardVolumeShortcut.action(
                 inputViewActive = inputViewActive,
@@ -169,6 +187,17 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
     }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
+        if (
+            VoiceKeyboardF10Shortcut.action(
+                inputActive = inputActive,
+                keyCode = keyCode,
+                keyAction = KeyEvent.ACTION_UP,
+                repeatCount = event.repeatCount,
+                phase = controller.phase,
+            ) != VoiceKeyboardVolumeShortcutAction.PASS_THROUGH
+        ) {
+            return true
+        }
         return when (
             VoiceKeyboardVolumeShortcut.action(
                 inputViewActive = inputViewActive,
@@ -184,7 +213,9 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
     }
 
     override fun onKeyMultiple(keyCode: Int, count: Int, event: KeyEvent): Boolean {
-        return if (VoiceKeyboardVolumeShortcut.shouldConsumeMultiple(inputViewActive, keyCode)) {
+        return if (VoiceKeyboardF10Shortcut.shouldConsumeMultiple(inputActive, keyCode) ||
+            VoiceKeyboardVolumeShortcut.shouldConsumeMultiple(inputViewActive, keyCode)
+        ) {
             true
         } else {
             super.onKeyMultiple(keyCode, count, event)

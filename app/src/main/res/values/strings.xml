@@ -123,6 +123,9 @@
     <string name="folder_temporarily_unavailable">Audio folder: temporarily unavailable</string>
     <string name="select_audio_folder">Select audio folder</string>
     <string name="import_audio">Import audio</string>
+    <string name="audio_actions_open">Open audio actions</string>
+    <string name="quick_capture_record_short">Record</string>
+    <string name="import_audio_short">Import</string>
     <string name="quick_capture_record">Record voice note</string>
     <string name="quick_capture_stop">Stop recording</string>
     <string name="quick_capture_recording">Recording · %1$02d:%2$02d remaining</string>

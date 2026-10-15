@@ -7,10 +7,13 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.Espresso.openActionBarOverflowOrOptionsMenu
+import androidx.test.espresso.Espresso.pressBack
 import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
+import androidx.test.espresso.matcher.ViewMatchers.withEffectiveVisibility
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.espresso.matcher.ViewMatchers.withText
+import androidx.test.espresso.matcher.ViewMatchers.Visibility
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.work.ExistingWorkPolicy
@@ -39,7 +42,8 @@ class MainActivityInstrumentedTest {
     fun taskListShellAndCurrentMenuActionsAreVisible() {
         clearActivityState()
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            onView(withId(R.id.importAudio)).check(matches(isDisplayed()))
+            onView(withId(R.id.audioActionsToggle)).check(matches(isDisplayed()))
+            onView(withId(R.id.importAudio)).check(matches(withEffectiveVisibility(Visibility.GONE)))
             onView(withId(R.id.newTab)).check(matches(isDisplayed()))
             onView(withId(R.id.processedTab)).check(matches(isDisplayed()))
             onView(withId(R.id.allTab)).check(matches(isDisplayed()))
@@ -66,20 +70,82 @@ class MainActivityInstrumentedTest {
     }
 
     @Test
-    fun quickCaptureControlIsVisibleAndStartsInRecordMode() {
+    fun quickCaptureActionsExpandAndDismissFromOutsideOrBack() {
         clearActivityState()
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            onView(withId(R.id.audioActionsToggle)).check(matches(isDisplayed()))
+            onView(withId(R.id.audioActionsToggle)).perform(
+                androidx.test.espresso.action.ViewActions.click(),
+            )
             onView(withId(R.id.recordAudio)).check(matches(isDisplayed()))
+            onView(withId(R.id.importAudio)).check(matches(isDisplayed()))
+            onView(withText(R.string.quick_capture_record_short)).check(matches(isDisplayed()))
+            onView(withText(R.string.import_audio_short)).check(matches(isDisplayed()))
+
+            onView(withId(R.id.audioActionFanBackdrop)).perform(
+                androidx.test.espresso.action.ViewActions.click(),
+            )
+            onView(withId(R.id.audioActionsToggle)).check(matches(isDisplayed()))
+            onView(withId(R.id.recordAudio)).check(matches(withEffectiveVisibility(Visibility.GONE)))
+
+            onView(withId(R.id.audioActionsToggle)).perform(
+                androidx.test.espresso.action.ViewActions.click(),
+            )
+            pressBack()
+            onView(withId(R.id.audioActionsToggle)).check(matches(isDisplayed()))
+            awaitActivity(scenario) { activity ->
+                activity.findViewById<FloatingActionButton>(R.id.importAudio).visibility == android.view.View.GONE
+            }
+
+            onView(withId(R.id.audioActionsToggle)).perform(
+                androidx.test.espresso.action.ViewActions.click(),
+            )
             scenario.onActivity { activity ->
-                val recordButton = activity.findViewById<FloatingActionButton>(R.id.recordAudio)
-                assertEquals(
-                    activity.getString(R.string.quick_capture_record),
-                    recordButton.contentDescription,
-                )
-                assertEquals(
-                    android.view.View.GONE,
-                    activity.findViewById<android.widget.TextView>(R.id.quickCaptureStatus).visibility,
-                )
+                setField(activity, "ingestionActive", true)
+                activity.findViewById<FloatingActionButton>(R.id.importAudio).performClick()
+            }
+            awaitActivity(scenario) { activity ->
+                !MainActivity::class.java.getDeclaredField("audioActionFanExpanded")
+                    .apply { isAccessible = true }
+                    .getBoolean(activity)
+            }
+
+            scenario.onActivity { activity ->
+                assertEquals(activity.getString(R.string.audio_actions_open),
+                    activity.findViewById<FloatingActionButton>(R.id.audioActionsToggle).contentDescription)
+                assertEquals(android.view.View.GONE,
+                    activity.findViewById<android.widget.TextView>(R.id.quickCaptureStatus).visibility)
+            }
+        }
+    }
+
+    @Test
+    fun recordingAndFinalizingKeepTheSingleCaptureControl() {
+        clearActivityState()
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                invoke(activity, "renderQuickCaptureState", QuickCaptureUiState(
+                    session = QuickCaptureSessionState(phase = QuickCapturePhase.RECORDING),
+                    remainingSeconds = 20,
+                ))
+            }
+            onView(withId(R.id.recordAudio)).check(matches(isDisplayed()))
+            onView(withId(R.id.importAudio)).check(matches(withEffectiveVisibility(Visibility.GONE)))
+            scenario.onActivity { activity ->
+                assertEquals(activity.getString(R.string.quick_capture_stop),
+                    activity.findViewById<FloatingActionButton>(R.id.recordAudio).contentDescription)
+            }
+
+            scenario.onActivity { activity ->
+                invoke(activity, "renderQuickCaptureState", QuickCaptureUiState(
+                    session = QuickCaptureSessionState(phase = QuickCapturePhase.FINALIZING),
+                ))
+            }
+            onView(withId(R.id.recordAudio)).check(matches(isDisplayed()))
+            onView(withId(R.id.audioActionsToggle)).check(matches(withEffectiveVisibility(Visibility.GONE)))
+            onView(withId(R.id.importAudio)).check(matches(withEffectiveVisibility(Visibility.GONE)))
+            scenario.onActivity { activity ->
+                assertFalse(activity.findViewById<FloatingActionButton>(R.id.recordAudio).isEnabled)
             }
         }
     }
@@ -740,7 +806,9 @@ class MainActivityInstrumentedTest {
         MainActivity::class.java.getDeclaredField(name).apply { isAccessible = true }.set(activity, value)
     }
 
-    private fun invoke(activity: MainActivity, name: String) {
-        MainActivity::class.java.getDeclaredMethod(name).apply { isAccessible = true }.invoke(activity)
+    private fun invoke(activity: MainActivity, name: String, vararg args: Any) {
+        MainActivity::class.java.getDeclaredMethod(name, *args.map { it.javaClass }.toTypedArray())
+            .apply { isAccessible = true }
+            .invoke(activity, *args)
     }
 }

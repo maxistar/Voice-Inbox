@@ -125,6 +125,9 @@
     <string name="folder_temporarily_unavailable">Папка с аудио: временно недоступна</string>
     <string name="select_audio_folder">Выбрать папку с аудио</string>
     <string name="import_audio">Импортировать аудио</string>
+    <string name="audio_actions_open">Открыть действия с аудио</string>
+    <string name="quick_capture_record_short">Запись</string>
+    <string name="import_audio_short">Импорт</string>
     <string name="quick_capture_record">Записать голосовую заметку</string>
     <string name="quick_capture_stop">Остановить запись</string>
     <string name="quick_capture_recording">Запись · осталось %1$02d:%2$02d</string>

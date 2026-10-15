@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.MediaPlayer
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -16,6 +17,7 @@ import android.view.View
 import android.widget.Toast
 import android.widget.TextView
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
@@ -41,6 +43,10 @@ import java.util.UUID
 class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listener {
     private val speechModel = SpeechModelCatalog.defaultModel
     private lateinit var importAudio: FloatingActionButton
+    private lateinit var audioActionsToggle: FloatingActionButton
+    private lateinit var audioActionFanBackdrop: View
+    private lateinit var recordAudioLabel: TextView
+    private lateinit var importAudioLabel: TextView
     private lateinit var newTab: MaterialButton
     private lateinit var processedTab: MaterialButton
     private lateinit var allTab: MaterialButton
@@ -150,6 +156,12 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private var pendingModelPackageUri: Uri? = null
     private var pendingModelPackageCatalogId: String? = null
     private var quickCaptureState = QuickCaptureUiState()
+    private var audioActionFanExpanded = false
+    private val closeAudioActionFanOnBack = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() {
+            setAudioActionFanExpanded(false)
+        }
+    }
     private var lastQuickCaptureTerminalGeneration = -1L
     private var quickCapturePermissionRequested = false
 
@@ -213,6 +225,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
             insets
         }
         bindViews()
+        onBackPressedDispatcher.addCallback(this, closeAudioActionFanOnBack)
 
         selectionStore = DocumentSelectionStore(
             getSharedPreferences(DocumentSelectionStore.PREFERENCES_NAME, MODE_PRIVATE),
@@ -257,9 +270,17 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         )
 
         importAudio.setOnClickListener {
+            setAudioActionFanExpanded(false)
             if (!ingestionActive) importPicker.launch(arrayOf("audio/*", "application/ogg"))
         }
-        recordAudio.setOnClickListener { handleQuickCaptureAction() }
+        recordAudio.setOnClickListener {
+            if (audioActionFanExpanded) setAudioActionFanExpanded(false)
+            handleQuickCaptureAction()
+        }
+        audioActionsToggle.setOnClickListener {
+            setAudioActionFanExpanded(!audioActionFanExpanded)
+        }
+        audioActionFanBackdrop.setOnClickListener { setAudioActionFanExpanded(false) }
         taskFilters.addOnButtonCheckedListener { _, checkedId, isChecked ->
             if (!isChecked || renderingFilter) return@addOnButtonCheckedListener
             val filter = when (checkedId) {
@@ -390,6 +411,10 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
 
     private fun bindViews() {
         importAudio = findViewById(R.id.importAudio)
+        audioActionsToggle = findViewById(R.id.audioActionsToggle)
+        audioActionFanBackdrop = findViewById(R.id.audioActionFanBackdrop)
+        recordAudioLabel = findViewById(R.id.recordAudioLabel)
+        importAudioLabel = findViewById(R.id.importAudioLabel)
         recordAudio = findViewById(R.id.recordAudio)
         quickCaptureStatus = findViewById(R.id.quickCaptureStatus)
         newTab = findViewById(R.id.newTab)
@@ -1363,9 +1388,115 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private fun updateQuickCaptureButtons() {
         val quickCaptureActive = quickCaptureState.phase == QuickCapturePhase.RECORDING ||
             quickCaptureState.phase == QuickCapturePhase.FINALIZING
+        val idle = !quickCaptureActive
+        audioActionsToggle.visibility = if (idle) View.VISIBLE else View.GONE
+        audioActionsToggle.isEnabled = !activityDestroyed
+        recordAudio.visibility = if (!idle || audioActionFanExpanded) View.VISIBLE else View.GONE
+        importAudio.visibility = if (idle && audioActionFanExpanded) View.VISIBLE else View.GONE
+        recordAudioLabel.visibility = if (idle && audioActionFanExpanded) View.VISIBLE else View.GONE
+        importAudioLabel.visibility = if (idle && audioActionFanExpanded) View.VISIBLE else View.GONE
+        audioActionFanBackdrop.visibility = if (idle && audioActionFanExpanded) View.VISIBLE else View.GONE
         importAudio.isEnabled = !ingestionActive && !quickCaptureActive
         recordAudio.isEnabled = quickCaptureState.phase != QuickCapturePhase.FINALIZING && !activityDestroyed
     }
+
+    private fun setAudioActionFanExpanded(expanded: Boolean) {
+        val captureBusy = quickCaptureState.phase == QuickCapturePhase.RECORDING ||
+            quickCaptureState.phase == QuickCapturePhase.FINALIZING
+        val shouldExpand = expanded && !captureBusy && !activityDestroyed
+        if (audioActionFanExpanded == shouldExpand) return
+        audioActionFanExpanded = shouldExpand
+        closeAudioActionFanOnBack.isEnabled = shouldExpand
+
+        listOf(audioActionsToggle, recordAudio, importAudio, recordAudioLabel, importAudioLabel)
+            .forEach { it.animate().cancel() }
+        audioActionFanBackdrop.visibility = if (shouldExpand) View.VISIBLE else View.GONE
+        audioActionFanBackdrop.isClickable = shouldExpand
+
+        if (!shouldExpand) {
+            audioActionsToggle.visibility = if (captureBusy) View.GONE else View.VISIBLE
+            recordAudio.visibility = View.VISIBLE
+            importAudio.visibility = View.VISIBLE
+            recordAudioLabel.visibility = View.VISIBLE
+            importAudioLabel.visibility = View.VISIBLE
+            if (shouldAnimateAudioActionFan()) {
+                recordAudio.animate().translationY(72f.dp).alpha(0f).scaleX(0.85f).scaleY(0.85f)
+                    .setDuration(AUDIO_ACTION_FAN_ANIMATION_MS).withEndAction {
+                        recordAudio.translationY = 0f
+                        recordAudio.alpha = 1f
+                        recordAudio.scaleX = 1f
+                        recordAudio.scaleY = 1f
+                        updateQuickCaptureButtons()
+                    }
+                importAudio.animate().translationX(72f.dp).alpha(0f).scaleX(0.85f).scaleY(0.85f)
+                    .setDuration(AUDIO_ACTION_FAN_ANIMATION_MS).withEndAction {
+                        importAudio.translationX = 0f
+                        importAudio.alpha = 1f
+                        importAudio.scaleX = 1f
+                        importAudio.scaleY = 1f
+                        updateQuickCaptureButtons()
+                    }
+                recordAudioLabel.animate().alpha(0f).setDuration(AUDIO_ACTION_FAN_ANIMATION_MS)
+                    .withEndAction { recordAudioLabel.visibility = View.GONE; recordAudioLabel.alpha = 1f }
+                importAudioLabel.animate().alpha(0f).setDuration(AUDIO_ACTION_FAN_ANIMATION_MS)
+                    .withEndAction { importAudioLabel.visibility = View.GONE; importAudioLabel.alpha = 1f }
+                audioActionsToggle.visibility = if (captureBusy) View.GONE else View.VISIBLE
+                audioActionsToggle.alpha = 0f
+                audioActionsToggle.animate().alpha(1f).setDuration(AUDIO_ACTION_FAN_ANIMATION_MS)
+            } else {
+                recordAudio.visibility = View.GONE
+                importAudio.visibility = View.GONE
+                recordAudioLabel.visibility = View.GONE
+                importAudioLabel.visibility = View.GONE
+                audioActionsToggle.alpha = 1f
+            }
+        } else {
+            recordAudio.visibility = View.VISIBLE
+            importAudio.visibility = View.VISIBLE
+            recordAudio.translationY = 72f.dp
+            importAudio.translationX = 72f.dp
+            recordAudio.alpha = 0f
+            importAudio.alpha = 0f
+            recordAudio.scaleX = 0.85f
+            recordAudio.scaleY = 0.85f
+            importAudio.scaleX = 0.85f
+            importAudio.scaleY = 0.85f
+            recordAudioLabel.visibility = View.VISIBLE
+            importAudioLabel.visibility = View.VISIBLE
+            recordAudioLabel.alpha = 0f
+            importAudioLabel.alpha = 0f
+            audioActionsToggle.animate().cancel()
+            if (shouldAnimateAudioActionFan()) {
+                recordAudio.animate().translationY(0f).alpha(1f).scaleX(1f).scaleY(1f)
+                    .setDuration(AUDIO_ACTION_FAN_ANIMATION_MS)
+                importAudio.animate().translationX(0f).alpha(1f).scaleX(1f).scaleY(1f)
+                    .setDuration(AUDIO_ACTION_FAN_ANIMATION_MS)
+                recordAudioLabel.animate().alpha(1f).setDuration(AUDIO_ACTION_FAN_ANIMATION_MS)
+                importAudioLabel.animate().alpha(1f).setDuration(AUDIO_ACTION_FAN_ANIMATION_MS)
+                audioActionsToggle.animate().alpha(0f).setDuration(AUDIO_ACTION_FAN_ANIMATION_MS)
+                    .withEndAction { audioActionsToggle.visibility = View.GONE; audioActionsToggle.alpha = 1f }
+            } else {
+                audioActionsToggle.visibility = View.GONE
+                recordAudio.translationY = 0f
+                importAudio.translationX = 0f
+                recordAudio.alpha = 1f
+                importAudio.alpha = 1f
+                recordAudio.scaleX = 1f
+                recordAudio.scaleY = 1f
+                importAudio.scaleX = 1f
+                importAudio.scaleY = 1f
+                recordAudioLabel.alpha = 1f
+                importAudioLabel.alpha = 1f
+            }
+        }
+        audioActionsToggle.sendAccessibilityEvent(android.view.accessibility.AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED)
+    }
+
+    private fun shouldAnimateAudioActionFan(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.O || android.animation.ValueAnimator.areAnimatorsEnabled()
+
+    private val Float.dp: Float
+        get() = this * resources.displayMetrics.density
 
     private fun handleQuickCaptureAction() {
         when (quickCaptureState.phase) {
@@ -1938,6 +2069,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     }
 
     private companion object {
+        const val AUDIO_ACTION_FAN_ANIMATION_MS = 180L
         const val STATE_STARTUP_PROCESSING_STAGE = "startup-processing-stage"
         const val STATE_PENDING_MODEL_URI = "pending-model-uri"
         const val STATE_PENDING_MODEL_CATALOG_ID = "pending-model-catalog-id"
