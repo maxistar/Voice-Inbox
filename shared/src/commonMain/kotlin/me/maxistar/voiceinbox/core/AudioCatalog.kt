@@ -8,6 +8,11 @@ enum class AudioFileState {
     MISSING,
 }
 
+enum class AudioStorageOwnership {
+    APP_OWNED_COPY,
+    EXTERNAL_SOURCE,
+}
+
 data class AudioFileFingerprint(
     val sizeBytes: Long?,
     val modifiedMillis: Long?,
@@ -34,7 +39,26 @@ data class AudioCatalogEntry(
     val processedAtMillis: Long?,
     val transcriptText: String?,
     val durationUs: Long? = null,
+    val ownership: AudioStorageOwnership = AudioStorageOwnership.EXTERNAL_SOURCE,
+    val publicationConfirmed: Boolean = false,
 )
+
+interface AppOwnedAudioStorage {
+    /** Returns true when the private copy is deleted or was already absent. */
+    fun delete(entry: AudioCatalogEntry): Boolean
+}
+
+object AudioDisplayNameRules {
+    const val MAX_LENGTH = 120
+
+    fun validate(name: String): String? {
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) return null
+        if (trimmed.length > MAX_LENGTH) return null
+        if (trimmed.any { it == '/' || it == '\\' || it.isISOControl() }) return null
+        return trimmed
+    }
+}
 
 data class AudioCatalogSourceScope(
     val sourceIds: List<String>,

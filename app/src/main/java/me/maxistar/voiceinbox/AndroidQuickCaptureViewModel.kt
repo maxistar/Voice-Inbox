@@ -22,6 +22,10 @@ class AndroidQuickCaptureViewModel(
         onStateChanged = { value -> _state.value = value },
     )
 
+    init {
+        AndroidQuickCaptureNames.backfill(catalog)
+    }
+
     fun start(): Boolean = controller.start()
 
     fun stop(): Boolean = controller.stop()

@@ -4,8 +4,10 @@ import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import me.maxistar.voiceinbox.db.VoiceInboxDatabase
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class SqlDelightAudioCatalogRepositoryTest {
     @Test
@@ -193,6 +195,52 @@ class SqlDelightAudioCatalogRepositoryTest {
         assertNotNull(repository.findPublication(changedKey))
         assertNotNull(repository.findPublication(otherOutputKey))
         assertEquals(TranscriptPublicationState.READY, repository.findPublication(changedKey)?.state)
+    }
+
+    @Test
+    fun appOwnedEntriesCanBeRenamedAndDeletedWithPublicationMetadata() {
+        val repository = repository()
+        val file = imported(
+            repository = repository,
+            name = "voice-note.wav",
+            modified = 10,
+            state = AudioFileState.PROCESSED,
+            processedAtMillis = 20,
+            transcriptText = "hello",
+        )
+        val key = TranscriptPublicationKeys.forEntry(file.id, file.entry.fingerprint, "output.md")
+        repository.ensurePublication(key, file.id, file.entry.fingerprint, "output.md")
+        repository.markPublicationConfirmed(key)
+
+        assertEquals(AudioStorageOwnership.APP_OWNED_COPY, file.ownership)
+        assertEquals("renamed note", repository.renameEntry(file.id, "  renamed note  ")?.displayName)
+        assertTrue(repository.hasConfirmedPublication(file.id))
+        assertTrue(repository.deleteAppOwnedEntry(file.id))
+        assertNull(repository.entry(file.id))
+        assertNull(repository.findPublication(key))
+    }
+
+    @Test
+    fun externalEntriesRejectDeletionAndInvalidNamesDoNotMutateRows() {
+        val repository = repository()
+        repository.reconcile(
+            OTHER_FOLDER,
+            listOf(
+                ScannedAudioFile(
+                    folderUri = OTHER_FOLDER,
+                    documentUri = "external.wav",
+                    displayName = "external.wav",
+                    mimeType = "audio/wav",
+                    fingerprint = AudioFileFingerprint(100, 10),
+                ),
+            ),
+        )
+        val external = assertNotNull(repository.existingEntriesForReconciliation(OTHER_FOLDER).singleOrNull())
+        assertEquals(AudioStorageOwnership.EXTERNAL_SOURCE, external.ownership)
+        assertFalse(repository.deleteAppOwnedEntry(external.id))
+        assertEquals("external.wav", repository.entry(external.id)?.displayName)
+        assertNull(repository.renameEntry(external.id, "bad/name"))
+        assertEquals("external.wav", repository.entry(external.id)?.displayName)
     }
 
     private fun repository(): SqlDelightAudioCatalogRepository {

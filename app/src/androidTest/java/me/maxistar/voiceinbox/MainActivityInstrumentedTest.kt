@@ -3,12 +3,16 @@ package me.maxistar.voiceinbox
 import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
+import android.widget.EditText
 import androidx.recyclerview.widget.RecyclerView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.Espresso.openActionBarOverflowOrOptionsMenu
 import androidx.test.espresso.Espresso.pressBack
+import androidx.test.espresso.action.ViewActions.click
+import androidx.test.espresso.action.ViewActions.replaceText
 import androidx.test.espresso.assertion.ViewAssertions.matches
+import androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.withEffectiveVisibility
 import androidx.test.espresso.matcher.ViewMatchers.withId
@@ -24,7 +28,9 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton
 import me.maxistar.voiceinbox.core.AudioFileState
 import me.maxistar.voiceinbox.core.AudioTaskPresentation
 import me.maxistar.voiceinbox.core.AndroidSqlDelightAudioCatalogFactory
+import me.maxistar.voiceinbox.core.AudioFileFingerprint
 import me.maxistar.voiceinbox.core.ModelSetupSnapshotState
+import me.maxistar.voiceinbox.core.ScannedAudioFile
 import me.maxistar.voiceinbox.core.TaskActionKind
 import me.maxistar.voiceinbox.core.TaskListFilter
 import me.maxistar.voiceinbox.core.TranscriptionObservationState
@@ -34,6 +40,7 @@ import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.hamcrest.Matchers.allOf
 import java.util.concurrent.TimeUnit
 
 @RunWith(AndroidJUnit4::class)
@@ -314,6 +321,125 @@ class MainActivityInstrumentedTest {
                     rows.getValue("failed.ogg").task.actions.any { it.kind == TaskActionKind.RETRY_TRANSCRIPTION } &&
                     rows.getValue("silent.ogg").task.badge.fallback == "No speech" &&
                     rows.getValue("done.ogg").task.actions.any { it.kind == TaskActionKind.SHOW_TEXT }
+            }
+        }
+    }
+
+    @Test
+    fun appOwnedRowsExposeSecondaryLifecycleActionsAndAccessiblePlaybackIcon() {
+        clearActivityState()
+        seedCatalogEntry(
+            Uri.parse(AndroidAudioImportConstants.SOURCE_ID),
+            "quick-note.wav",
+            AudioFileState.PENDING,
+            10,
+        )
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            awaitActivity(scenario) { activity -> audioTitles(activity) == listOf("quick-note.wav") }
+            scenario.onActivity { activity ->
+                val recycler = activity.findViewById<RecyclerView>(R.id.taskList)
+                val position = (recycler.adapter as TaskListAdapter).currentList
+                    .indexOfFirst { it is TaskListDisplayItem.Audio }
+                val holder = recycler.findViewHolderForAdapterPosition(position)
+                    ?: error("Audio row was not bound")
+                val more = holder.itemView.findViewById<android.widget.ImageButton>(R.id.taskMore)
+                assertTrue(more.isShown)
+                assertEquals(activity.getString(R.string.task_more_actions), more.contentDescription)
+                val imageButtons = descendants(holder.itemView as android.view.ViewGroup)
+                    .filterIsInstance<android.widget.ImageButton>()
+                    .toList()
+                assertTrue(imageButtons.any { it.contentDescription == activity.getString(R.string.task_play_accessibility) })
+            }
+        }
+    }
+
+    @Test
+    fun renameAndDeleteDialogsRefreshTheAppOwnedRow() {
+        clearActivityState()
+        val source = Uri.parse(AndroidAudioImportConstants.SOURCE_ID)
+        seedCatalogEntry(source, "quick-note.wav", AudioFileState.PENDING, 10)
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            awaitActivity(scenario) { activity -> audioTitles(activity) == listOf("quick-note.wav") }
+            onView(allOf(withId(R.id.taskMore), isDisplayed())).perform(click())
+            onView(withText(R.string.task_rename)).perform(click())
+            onView(isAssignableFrom(EditText::class.java)).perform(replaceText("Daily note"))
+            onView(withText(R.string.rename_recording_save)).perform(click())
+            awaitActivity(scenario) { activity -> audioTitles(activity) == listOf("Daily note") }
+
+            onView(allOf(withId(R.id.taskMore), isDisplayed())).perform(click())
+            onView(withText(R.string.task_delete)).perform(click())
+            onView(withText(R.string.delete_recording_unpublished_message)).check(matches(isDisplayed()))
+            onView(withText(android.R.string.cancel)).perform(click())
+            awaitActivity(scenario) { activity -> audioTitles(activity) == listOf("Daily note") }
+
+            onView(allOf(withId(R.id.taskMore), isDisplayed())).perform(click())
+            onView(withText(R.string.task_delete)).perform(click())
+            onView(withText(R.string.delete_recording_confirm)).perform(click())
+            awaitActivity(scenario) { activity -> audioTitles(activity).isEmpty() }
+        }
+    }
+
+    @Test
+    fun confirmedPublicationUsesPublishedDeleteWarning() {
+        clearActivityState()
+        val source = Uri.parse(AndroidAudioImportConstants.SOURCE_ID)
+        seedConfirmedPublicationEntry(source, "published-note.wav", 10)
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { it.findViewById<android.widget.Button>(R.id.processedTab).performClick() }
+            awaitActivity(scenario) { activity -> audioTitles(activity) == listOf("published-note.wav") }
+            onView(allOf(withId(R.id.taskMore), isDisplayed())).perform(click())
+            onView(withText(R.string.task_delete)).perform(click())
+            onView(withText(R.string.delete_recording_published_message)).check(matches(isDisplayed()))
+            onView(withText(android.R.string.cancel)).perform(click())
+            awaitActivity(scenario) { activity -> audioTitles(activity) == listOf("published-note.wav") }
+        }
+    }
+
+    @Test
+    fun externalRowsDoNotExposeLifecycleMenu() {
+        clearActivityState()
+        val folder = Uri.parse("content://test.audio.documents/external-folder")
+        val document = DocumentsContract.buildDocumentUri(
+            TestAudioDocumentsProvider.AUTHORITY,
+            "external-note.wav",
+        )
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val repository = AndroidSqlDelightAudioCatalogFactory(context).create()
+        try {
+            repository.reconcile(
+                folder.toString(),
+                listOf(
+                    ScannedAudioFile(
+                        folderUri = folder.toString(),
+                        documentUri = document.toString(),
+                        displayName = "external-note.wav",
+                        mimeType = "audio/ogg",
+                        fingerprint = AudioFileFingerprint(100, 10),
+                    ),
+                ),
+            )
+        } finally {
+            repository.close()
+        }
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                setField(activity, "folderUri", folder)
+                setField(activity, "folderAccessReady", true)
+                setField(activity, "folderPresentationKnown", true)
+                refreshCatalog(activity)
+            }
+            awaitActivity(scenario) { activity -> audioTitles(activity) == listOf("external-note.wav") }
+            scenario.onActivity { activity ->
+                val recycler = activity.findViewById<RecyclerView>(R.id.taskList)
+                val position = (recycler.adapter as TaskListAdapter).currentList
+                    .indexOfFirst { it is TaskListDisplayItem.Audio }
+                val holder = recycler.findViewHolderForAdapterPosition(position)
+                    ?: error("External audio row was not bound")
+                assertFalse(holder.itemView.findViewById<android.widget.ImageButton>(R.id.taskMore).isShown)
             }
         }
     }
@@ -780,6 +906,42 @@ class MainActivityInstrumentedTest {
         } finally {
             repository.close()
         }
+    }
+
+    private fun seedConfirmedPublicationEntry(
+        source: Uri,
+        displayName: String,
+        modifiedMillis: Long,
+    ) {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val repository = AndroidSqlDelightAudioCatalogFactory(context).create()
+        try {
+            val file = repository.upsertImportedFile(
+                folderUri = source.toString(),
+                documentUri = DocumentsContract.buildDocumentUri(TestAudioDocumentsProvider.AUTHORITY, displayName).toString(),
+                displayName = displayName,
+                mimeType = "audio/ogg",
+                sizeBytes = 100,
+                importedAtMillis = modifiedMillis,
+                state = AudioFileState.PROCESSED,
+                lastError = null,
+                processedAtMillis = modifiedMillis,
+                transcriptText = "published transcript",
+                durationUs = null,
+            )
+            val key = "instrumented-$displayName"
+            repository.ensurePublication(key, file.id, file.entry.fingerprint, "output-document")
+            repository.markPublicationConfirmed(key)
+        } finally {
+            repository.close()
+        }
+    }
+
+    private fun refreshCatalog(activity: MainActivity) {
+        MainActivity::class.java.declaredMethods
+            .first { it.name == "refreshCatalog" && it.parameterTypes.size == 2 }
+            .apply { isAccessible = true }
+            .invoke(activity, null, null)
     }
 
     private fun activeModelRow(activity: MainActivity): Boolean =

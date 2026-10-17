@@ -1,0 +1,5 @@
+ALTER TABLE audio_files ADD COLUMN ownership TEXT NOT NULL DEFAULT 'EXTERNAL_SOURCE';
+
+UPDATE audio_files
+SET ownership = 'APP_OWNED_COPY'
+WHERE folder_uri IN ('android-imported-audio', 'ios-imported-audio');

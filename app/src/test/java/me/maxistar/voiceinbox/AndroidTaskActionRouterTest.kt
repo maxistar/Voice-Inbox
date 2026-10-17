@@ -3,6 +3,7 @@ package me.maxistar.voiceinbox
 import me.maxistar.voiceinbox.core.AudioCatalogEntry
 import me.maxistar.voiceinbox.core.AudioFileFingerprint
 import me.maxistar.voiceinbox.core.AudioFileState
+import me.maxistar.voiceinbox.core.AudioStorageOwnership
 import me.maxistar.voiceinbox.core.FolderSetupSnapshot
 import me.maxistar.voiceinbox.core.FolderSetupSnapshotState
 import me.maxistar.voiceinbox.core.ModelSetupSnapshot
@@ -92,6 +93,21 @@ class AndroidTaskActionRouterTest {
         state = state(filter = TaskListFilter.PROCESSED, entries = listOf(processed))
         assertTrue(router.route(request("audio:4", 4, TaskActionKind.SHOW_TEXT)))
         assertEquals(processed, routed?.second)
+    }
+
+    @Test
+    fun routesRenameAndDeleteOnlyForCurrentAppOwnedTaskActions() {
+        val owned = entry(8).copy(ownership = AudioStorageOwnership.APP_OWNED_COPY)
+        var state = state(entries = listOf(owned))
+        val calls = mutableListOf<TaskActionKind>()
+        val router = AndroidTaskActionRouter({ state }) { kind, _ -> calls += kind }
+
+        assertTrue(router.route(request("audio:8", 8, TaskActionKind.RENAME)))
+        assertTrue(router.route(request("audio:8", 8, TaskActionKind.DELETE)))
+        assertEquals(listOf(TaskActionKind.RENAME, TaskActionKind.DELETE), calls)
+
+        state = state(entries = listOf(entry(8)))
+        assertFalse(router.route(request("audio:8", 8, TaskActionKind.DELETE)))
     }
 
     @Test

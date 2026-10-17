@@ -101,6 +101,8 @@ object AndroidTaskListSnapshotMapper {
                 noSpeech = isNoSpeech(entry.lastError),
                 eligibleForTranscription = input.transcriptionEligible,
                 eligibleForPreview = input.previewEligible,
+                ownership = entry.ownership,
+                publicationConfirmed = entry.publicationConfirmed,
             )
         }
         val taskList = TaskListPresentationController.state(

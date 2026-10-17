@@ -2,6 +2,7 @@ package me.maxistar.voiceinbox
 
 import android.content.Context
 import androidx.core.content.FileProvider
+import me.maxistar.voiceinbox.core.SqlDelightAudioCatalogRepository
 import java.io.Closeable
 import java.io.File
 import java.text.SimpleDateFormat
@@ -68,9 +69,9 @@ class AndroidQuickCaptureStorage(
             "Unable to create imported-audio storage"
         }
         val token = UUID.randomUUID().toString()
-        val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date(recordedAtMillis))
-        val displayName = "voice-note-$stamp-${token.take(8)}.wav"
-        val finalFile = File(directory, displayName)
+        val physicalStamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date(recordedAtMillis))
+        val displayName = AndroidQuickCaptureNames.displayName(recordedAtMillis)
+        val finalFile = File(directory, "voice-note-$physicalStamp-${token.take(8)}.wav")
         val temporaryFile = File(directory, ".${token}.part")
         val documentId = FileProvider.getUriForFile(
             context,
@@ -93,6 +94,25 @@ class AndroidQuickCaptureStorage(
 
     override fun release(destination: QuickCaptureDestination) {
         AndroidQuickCaptureFileRegistry.release(destination)
+    }
+}
+
+internal object AndroidQuickCaptureNames {
+    private val technicalName = Regex("voice-note-\\d{8}-\\d{6}-[0-9a-fA-F]{8}\\.wav")
+
+    fun displayName(recordedAtMillis: Long): String =
+        "Voice note — " + SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+            .format(Date(recordedAtMillis))
+
+    fun isTechnicalName(name: String): Boolean = technicalName.matches(name)
+
+    fun backfill(catalog: SqlDelightAudioCatalogRepository) {
+        catalog.importedFiles(AndroidAudioImportConstants.SOURCE_ID)
+            .filter { isTechnicalName(it.displayName) }
+            .forEach { file ->
+                val timestamp = file.modifiedMillis ?: return@forEach
+                catalog.renameEntry(file.id, displayName(timestamp))
+            }
     }
 }
 

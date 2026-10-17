@@ -65,12 +65,14 @@ class AudioCatalogRepositoryInstrumentedTest {
         val failed = processedRows.single { it.state == AudioFileState.FAILED }
         val pending = repository.newEntries(FOLDER).single()
         val missing = repository.missingEntries(FOLDER).single()
+        val imported = repository.newEntries(AndroidAudioImportConstants.SOURCE_ID).single()
 
         assertEquals("already recognized", restored.transcriptText)
         assertEquals("decode failed", failed.lastError)
         assertEquals("legacy-pending.wav", pending.displayName)
         assertEquals(AudioFileState.MISSING, missing.state)
         assertEquals(AudioFileState.PROCESSED, missing.stateBeforeMissing)
+        assertEquals(AudioStorageOwnership.APP_OWNED_COPY, imported.ownership)
         repository.markProcessedFile(
             id = restored.id,
             processedAtMillis = 600,
@@ -413,6 +415,33 @@ class AudioCatalogRepositoryInstrumentedTest {
                     "audio/wav",
                     50,
                     10,
+                    "PENDING",
+                ),
+            )
+            database.execSQL(
+                """
+                INSERT INTO audio_files(
+                    folder_uri,
+                    document_uri,
+                    display_name,
+                    mime_type,
+                    size_bytes,
+                    modified_millis,
+                    state,
+                    state_before_missing,
+                    last_error,
+                    processed_at,
+                    transcript_text
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL)
+                """.trimIndent(),
+                arrayOf(
+                    AndroidAudioImportConstants.SOURCE_ID,
+                    "content://audio/imported-legacy.wav",
+                    "imported-legacy.wav",
+                    "audio/wav",
+                    50,
+                    5,
                     "PENDING",
                 ),
             )

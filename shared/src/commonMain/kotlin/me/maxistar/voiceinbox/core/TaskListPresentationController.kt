@@ -48,6 +48,8 @@ enum class TaskActionKind {
     PLAY,
     STOP,
     SHOW_TEXT,
+    RENAME,
+    DELETE,
     IMPORT_AUDIO,
     ENABLE_VOICE_KEYBOARD,
     CHOOSE_VOICE_KEYBOARD,
@@ -90,6 +92,8 @@ enum class TaskTextKey {
     SHOW_TEXT,
     STOP,
     PLAY,
+    RENAME,
+    DELETE,
     IMPORT_AUDIO_FILES,
     SELECT_AUDIO_FOLDER,
     NO_NEW_TASKS,
@@ -228,6 +232,8 @@ data class AudioTaskSnapshot(
     val noSpeech: Boolean = false,
     val eligibleForTranscription: Boolean = true,
     val eligibleForPreview: Boolean = true,
+    val ownership: AudioStorageOwnership = AudioStorageOwnership.EXTERNAL_SOURCE,
+    val publicationConfirmed: Boolean = false,
 )
 
 data class PreviewTaskSnapshot(
@@ -495,6 +501,17 @@ object TaskListPresentationController {
                     add(TaskActionPresentation(TaskActionKind.SHOW_TEXT, taskText(TaskTextKey.SHOW_TEXT, "Show Text")))
                 }
                 AudioTaskState.PROCESSING -> Unit
+            }
+            if (snapshot.ownership == AudioStorageOwnership.APP_OWNED_COPY) {
+                add(TaskActionPresentation(TaskActionKind.RENAME, taskText(TaskTextKey.RENAME, "Rename")))
+                if (presentationState != AudioTaskState.PROCESSING) {
+                    add(
+                        TaskActionPresentation(
+                            TaskActionKind.DELETE,
+                            taskText(TaskTextKey.DELETE, "Delete"),
+                        ),
+                    )
+                }
             }
             add(
                 TaskActionPresentation(

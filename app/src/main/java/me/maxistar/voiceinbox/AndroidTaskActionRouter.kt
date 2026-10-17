@@ -64,6 +64,8 @@ class AndroidTaskActionRouter(
             TaskActionKind.PLAY,
             TaskActionKind.STOP,
             TaskActionKind.SHOW_TEXT,
+            TaskActionKind.RENAME,
+            TaskActionKind.DELETE,
         )
     }
 }

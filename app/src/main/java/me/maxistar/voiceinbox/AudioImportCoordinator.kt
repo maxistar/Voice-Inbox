@@ -9,6 +9,9 @@ import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import androidx.core.content.FileProvider
 import me.maxistar.voiceinbox.core.AudioFileState
+import me.maxistar.voiceinbox.core.AppOwnedAudioStorage
+import me.maxistar.voiceinbox.core.AudioCatalogEntry
+import me.maxistar.voiceinbox.core.AudioStorageOwnership
 import me.maxistar.voiceinbox.core.SqlDelightAudioCatalogRepository
 import java.io.File
 import java.io.FileOutputStream
@@ -220,7 +223,7 @@ class AudioImportUseCase(
 
 class AndroidAudioImportStorage(
     private val context: Context,
-) : AudioImportStorage {
+) : AudioImportStorage, AppOwnedAudioStorage {
     private val resolver: ContentResolver = context.contentResolver
     private val directory = File(context.filesDir, AndroidAudioImportConstants.DIRECTORY_NAME)
 
@@ -300,6 +303,12 @@ class AndroidAudioImportStorage(
         fileFor(destination).delete()
     }
 
+    override fun delete(entry: AudioCatalogEntry): Boolean {
+        if (entry.ownership != AudioStorageOwnership.APP_OWNED_COPY) return false
+        val file = fileFor(entry.documentUri) ?: return false
+        return !file.exists() || file.delete()
+    }
+
     fun cleanupOrphans(catalog: SqlDelightAudioCatalogRepository) {
         if (!directory.exists()) return
         directory.listFiles()
@@ -321,10 +330,18 @@ class AndroidAudioImportStorage(
     }
 
     private fun fileFor(destination: AudioImportDestination): File {
-        val uri = Uri.parse(destination.documentId)
-        val filename = uri.lastPathSegment?.substringAfterLast('/')
+        return fileFor(destination.documentId)
             ?: error("Invalid imported-audio destination")
-        return File(directory, filename)
+    }
+
+    private fun fileFor(documentId: String): File? {
+        val uri = Uri.parse(documentId)
+        val filename = uri.lastPathSegment?.substringAfterLast('/')
+            ?: return null
+        if (filename.isBlank() || filename == "." || filename == ".." || filename.contains('/')) return null
+        val directoryPath = runCatching { directory.canonicalFile }.getOrNull() ?: return null
+        val file = runCatching { File(directory, filename).canonicalFile }.getOrNull() ?: return null
+        return file.takeIf { it.parentFile == directoryPath }
     }
 }
 

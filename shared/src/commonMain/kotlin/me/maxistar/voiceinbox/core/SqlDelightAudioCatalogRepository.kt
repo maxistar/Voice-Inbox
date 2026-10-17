@@ -18,6 +18,7 @@ data class SqlDelightAudioCatalogFile(
     val processedAtMillis: Long?,
     val transcriptText: String?,
     val durationUs: Long?,
+    val ownership: AudioStorageOwnership,
 ) {
     val entry: AudioCatalogEntry
         get() = AudioCatalogEntry(
@@ -36,6 +37,7 @@ data class SqlDelightAudioCatalogFile(
             processedAtMillis = processedAtMillis,
             transcriptText = transcriptText,
             durationUs = durationUs,
+            ownership = ownership,
         )
 }
 
@@ -114,6 +116,9 @@ class SqlDelightAudioCatalogRepository(
         )
     }
 
+    fun hasConfirmedPublication(audioFileId: Long): Boolean =
+        publicationQueries.hasConfirmedForAudioFile(audio_file_id = audioFileId).executeAsOne() > 0
+
     fun importedFiles(folderUri: String): List<SqlDelightAudioCatalogFile> =
         queries.selectDisplayRows(folderUri, mapper = ::toCatalogFile).executeAsList()
 
@@ -143,6 +148,23 @@ class SqlDelightAudioCatalogRepository(
     fun catalogFile(folderUri: String, documentUri: String): SqlDelightAudioCatalogFile? =
         queries.selectByFolderDocument(folderUri, documentUri, mapper = ::toCatalogFile)
             .executeAsOneOrNull()
+
+    fun renameEntry(id: Long, displayName: String): AudioCatalogEntry? {
+        val validName = AudioDisplayNameRules.validate(displayName) ?: return null
+        queries.updateDisplayName(display_name = validName, id = id)
+        return entry(id)
+    }
+
+    fun deleteAppOwnedEntry(id: Long): Boolean = queries.transactionWithResult {
+        val candidate = queries.selectById(id, mapper = ::toCatalogEntry).executeAsOneOrNull()
+            ?: return@transactionWithResult false
+        if (candidate.ownership != AudioStorageOwnership.APP_OWNED_COPY ||
+            candidate.state == AudioFileState.PROCESSING
+        ) return@transactionWithResult false
+        publicationQueries.deleteByAudioFileId(audio_file_id = id)
+        queries.deleteById(id)
+        queries.selectById(id, mapper = ::toCatalogEntry).executeAsOneOrNull() == null
+    }
 
     fun upsertImportedFile(
         folderUri: String,
@@ -353,6 +375,7 @@ private fun toCatalogEntry(
     processed_at: Long?,
     transcript_text: String?,
     duration_us: Long?,
+    ownership: String,
 ): AudioCatalogEntry = toCatalogFile(
     id = id,
     folder_uri = folder_uri,
@@ -367,6 +390,7 @@ private fun toCatalogEntry(
     processed_at = processed_at,
     transcript_text = transcript_text,
     duration_us = duration_us,
+    ownership = ownership,
 ).entry
 
 private fun toCatalogFile(
@@ -383,6 +407,7 @@ private fun toCatalogFile(
     processed_at: Long?,
     transcript_text: String?,
     duration_us: Long?,
+    ownership: String,
 ): SqlDelightAudioCatalogFile = SqlDelightAudioCatalogFile(
     id = id,
     folderUri = folder_uri,
@@ -397,6 +422,7 @@ private fun toCatalogFile(
     processedAtMillis = processed_at,
     transcriptText = transcript_text,
     durationUs = duration_us,
+    ownership = AudioStorageOwnership.valueOf(ownership),
 )
 
 private fun toPublicationAttempt(

@@ -35,6 +35,8 @@ internal object AndroidTaskTextResolver {
         TaskTextKey.SHOW_TEXT -> resources.getString(R.string.task_show_text)
         TaskTextKey.STOP -> resources.getString(R.string.voice_keyboard_stop)
         TaskTextKey.PLAY -> resources.getString(R.string.task_play)
+        TaskTextKey.RENAME -> resources.getString(R.string.task_rename)
+        TaskTextKey.DELETE -> resources.getString(R.string.task_delete)
         TaskTextKey.IMPORT_AUDIO_FILES -> resources.getString(R.string.task_import_audio_files)
         TaskTextKey.SELECT_AUDIO_FOLDER -> resources.getString(R.string.select_audio_folder)
         TaskTextKey.NO_NEW_TASKS -> resources.getString(R.string.task_no_new_tasks)

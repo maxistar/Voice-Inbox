@@ -11,9 +11,11 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.text.InputType
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.widget.EditText
 import android.widget.Toast
 import android.widget.TextView
 import androidx.activity.enableEdgeToEdge
@@ -72,6 +74,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private lateinit var documentAccess: DocumentAccess
     private lateinit var folderScanner: AudioFolderScanner
     private lateinit var catalog: SqlDelightAudioCatalogRepository
+    private lateinit var appOwnedAudioStorage: AndroidAudioImportStorage
     private lateinit var modelReadiness: SpeechModelReadinessManager
     private lateinit var startupPolicyStore: StartupProcessingPolicyStore
     private lateinit var startupCoordinator: StartupProcessingCoordinator
@@ -252,6 +255,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         documentAccess = DocumentAccess(contentResolver)
         folderScanner = AudioFolderScanner(contentResolver)
         catalog = AndroidSqlDelightAudioCatalogFactory(this).create()
+        appOwnedAudioStorage = AndroidAudioImportStorage(this)
+        AndroidQuickCaptureNames.backfill(catalog)
         modelReadiness = getSharedModelReadiness {
             SpeechModelRepository.forActive(noBackupFilesDir.resolve("models"))
         }
@@ -975,10 +980,15 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
             runCatching {
                 val newEntries = catalog.newEntries(token.sourceScope)
                 val processedEntries = catalog.processedEntries(token.sourceScope)
+                val entries = (newEntries + processedEntries)
+                    .distinctBy(AudioCatalogEntry::id)
+                    .map { entry ->
+                        entry.copy(publicationConfirmed = catalog.hasConfirmedPublication(entry.id))
+                    }
                 Triple(
                     newEntries,
                     processedEntries,
-                    (newEntries + processedEntries).distinctBy(AudioCatalogEntry::id),
+                    entries,
                 )
             }.onSuccess { (newEntries, processedEntries, entries) ->
                 runOnUiThread {
@@ -1037,6 +1047,83 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         val request = TranscriptionWorker.requestRetry(folderUri, exportOutputUri(), entry.id)
         beginTranscriptionHandoff(request.id, entry.id)
         TranscriptionWorker.enqueue(this, request)
+    }
+
+    private fun renameEntry(entry: AudioCatalogEntry) {
+        if (entry.ownership != AudioStorageOwnership.APP_OWNED_COPY) return
+        val input = EditText(this).apply {
+            setText(entry.displayName)
+            hint = getString(R.string.rename_recording_hint)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            setSingleLine(true)
+            selectAll()
+        }
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.rename_recording_title)
+            .setView(input)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.rename_recording_save, null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val displayName = AudioDisplayNameRules.validate(input.text.toString())
+                if (displayName == null) {
+                    input.error = getString(R.string.rename_recording_invalid)
+                    return@setOnClickListener
+                }
+                dialog.dismiss()
+                importExecutor.execute {
+                    val renamed = catalog.renameEntry(entry.id, displayName)
+                    runOnUiThread {
+                        if (activityDestroyed) return@runOnUiThread
+                        if (renamed != null) {
+                            refreshCatalog()
+                        } else {
+                            Toast.makeText(this, R.string.rename_recording_invalid, Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+            }
+        }
+        dialog.show()
+    }
+
+    private fun confirmDeleteEntry(entry: AudioCatalogEntry) {
+        if (entry.ownership != AudioStorageOwnership.APP_OWNED_COPY || entry.state == AudioFileState.PROCESSING) return
+        val message = if (entry.publicationConfirmed) {
+            R.string.delete_recording_published_message
+        } else {
+            R.string.delete_recording_unpublished_message
+        }
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.delete_recording_title)
+            .setMessage(message)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.delete_recording_confirm, null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                if (activityDestroyed) return@setOnClickListener
+                stopPreviewPlayback(render = true)
+                dialog.dismiss()
+                importExecutor.execute {
+                    val latest = catalog.entry(entry.id)
+                    val success = latest != null &&
+                        latest.ownership == AudioStorageOwnership.APP_OWNED_COPY &&
+                        latest.state != AudioFileState.PROCESSING &&
+                        appOwnedAudioStorage.delete(latest) &&
+                        catalog.deleteAppOwnedEntry(latest.id)
+                    runOnUiThread {
+                        if (activityDestroyed) return@runOnUiThread
+                        if (!success) {
+                            Toast.makeText(this, R.string.delete_recording_failed, Toast.LENGTH_LONG).show()
+                        }
+                        refreshCatalog()
+                    }
+                }
+            }
+        }
+        dialog.show()
     }
 
     private fun showTranscriptText(entry: AudioCatalogEntry) {
@@ -1990,6 +2077,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
             TaskActionKind.PLAY -> entry?.let(::startPreviewPlayback)
             TaskActionKind.STOP -> stopPreviewPlayback(render = true)
             TaskActionKind.SHOW_TEXT -> entry?.let(::showTranscriptText)
+            TaskActionKind.RENAME -> entry?.let(::renameEntry)
+            TaskActionKind.DELETE -> entry?.let(::confirmDeleteEntry)
             TaskActionKind.ENABLE_VOICE_KEYBOARD,
             TaskActionKind.CHOOSE_VOICE_KEYBOARD,
             -> performKeyboardSystemAction()

@@ -98,6 +98,16 @@ class QuickCaptureTest {
     }
 
     @Test
+    fun quickCaptureDisplayNamesAreHumanReadableAndTechnicalNamesAreRecognized() {
+        val displayName = AndroidQuickCaptureNames.displayName(0L)
+
+        assertTrue(displayName.startsWith("Voice note — "))
+        assertTrue(AndroidQuickCaptureNames.isTechnicalName("voice-note-19700101-000000-abcdef12.wav"))
+        assertFalse(AndroidQuickCaptureNames.isTechnicalName(displayName))
+        assertFalse(AndroidQuickCaptureNames.isTechnicalName("voice-note-custom.wav"))
+    }
+
+    @Test
     fun controllerStopsAtDeadlineWithoutUiTicks() {
         val storage = FakeQuickCaptureStorage(temporaryRoot)
         val catalog = FakeAudioImportCatalog()

@@ -318,6 +318,45 @@ class TaskListPresentationControllerTest {
         assertTrue(processed.emptyActions.isEmpty())
     }
 
+    @Test
+    fun appOwnedStableAudioExposesLifecycleActionsButExternalDoesNot() {
+        val appOwned = assertIs<AudioTaskPresentation>(
+            state(
+                filter = TaskListFilter.PROCESSED,
+                audio = listOf(audio(1, AudioFileState.PROCESSED).copy(
+                    ownership = AudioStorageOwnership.APP_OWNED_COPY,
+                    hasTranscriptText = true,
+                )),
+            ).tasks.single(),
+        )
+        assertEquals(
+            listOf(TaskActionKind.SHOW_TEXT, TaskActionKind.RENAME, TaskActionKind.DELETE, TaskActionKind.PLAY),
+            appOwned.actions.map { it.kind },
+        )
+
+        val external = assertIs<AudioTaskPresentation>(
+            state(
+                filter = TaskListFilter.PROCESSED,
+                audio = listOf(audio(2, AudioFileState.PROCESSED)),
+            ).tasks.single(),
+        )
+        assertFalse(external.actions.any { it.kind == TaskActionKind.DELETE })
+    }
+
+    @Test
+    fun processingAppOwnedAudioCannotBeDeleted() {
+        val task = assertIs<AudioTaskPresentation>(
+            state(
+                filter = TaskListFilter.NEW,
+                audio = listOf(audio(1, AudioFileState.PROCESSING).copy(
+                    ownership = AudioStorageOwnership.APP_OWNED_COPY,
+                )),
+            ).tasks.single(),
+        )
+        assertTrue(task.actions.any { it.kind == TaskActionKind.RENAME })
+        assertFalse(task.actions.any { it.kind == TaskActionKind.DELETE })
+    }
+
     private fun state(
         filter: TaskListFilter = TaskListFilter.NEW,
         model: ModelSetupSnapshot = ModelSetupSnapshot(ModelSetupSnapshotState.READY),

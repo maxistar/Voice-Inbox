@@ -21,6 +21,16 @@ SELECT *
 FROM transcript_publication_attempts
 WHERE attempt_key = ?;
 
+hasConfirmedForAudioFile:
+SELECT count(*)
+FROM transcript_publication_attempts
+WHERE audio_file_id = ?
+  AND state = 'CONFIRMED';
+
+deleteByAudioFileId:
+DELETE FROM transcript_publication_attempts
+WHERE audio_file_id = ?;
+
 insertAttempt:
 INSERT OR IGNORE INTO transcript_publication_attempts(
     attempt_key,

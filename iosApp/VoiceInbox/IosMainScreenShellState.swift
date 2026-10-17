@@ -143,7 +143,9 @@ final class IosMainScreenShellState {
                     hasTranscriptText: file.transcriptText?.isEmpty == false,
                     noSpeech: Self.isNoSpeech(file.lastError),
                     eligibleForTranscription: actionsEnabled,
-                    eligibleForPreview: actionsEnabled
+                    eligibleForPreview: actionsEnabled,
+                    ownership: .externalSource,
+                    publicationConfirmed: false
                 )
             },
             preview: PreviewTaskSnapshot(

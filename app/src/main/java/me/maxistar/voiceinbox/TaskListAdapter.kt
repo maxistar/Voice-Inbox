@@ -1,6 +1,8 @@
 package me.maxistar.voiceinbox
 
 import android.view.LayoutInflater
+import android.view.Menu
+import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
@@ -8,10 +10,12 @@ import android.widget.ImageButton
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.core.view.isVisible
+import androidx.core.view.ViewCompat
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
+import androidx.appcompat.widget.PopupMenu
 import me.maxistar.voiceinbox.core.AudioTaskPresentation
 import me.maxistar.voiceinbox.core.SetupTaskPresentation
 import me.maxistar.voiceinbox.core.TaskActionKind
@@ -239,6 +243,7 @@ class TaskListAdapter(
         private val title: TextView = itemView.findViewById(R.id.taskTitle)
         private val badge: TextView = itemView.findViewById(R.id.taskBadge)
         private val dismiss: ImageButton = itemView.findViewById(R.id.taskDismiss)
+        private val more: ImageButton = itemView.findViewById(R.id.taskMore)
         private val detail: TextView = itemView.findViewById(R.id.taskDetail)
         private val progressPhase: TextView = itemView.findViewById(R.id.taskProgressPhase)
         private val progress: ProgressBar = itemView.findViewById(R.id.taskProgress)
@@ -262,7 +267,35 @@ class TaskListAdapter(
                     onAction(AndroidTaskActionRequest(task.stableId, entryId, action.kind))
                 }
             }
-            bindActions(task, entryId, task.actions.filterNot { it.kind == TaskActionKind.HIDE_OUTPUT })
+            val secondaryActions = task.actions.filter {
+                it.kind == TaskActionKind.RENAME || it.kind == TaskActionKind.DELETE
+            }
+            more.isVisible = secondaryActions.isNotEmpty()
+            more.contentDescription = itemView.resources.getString(R.string.task_more_actions)
+            ViewCompat.setTooltipText(more, itemView.resources.getString(R.string.task_more_actions))
+            more.setOnClickListener {
+                PopupMenu(itemView.context, more).apply {
+                    secondaryActions.forEachIndexed { index, action ->
+                        menu.add(Menu.NONE, index + 1, index, AndroidTaskTextResolver.resolve(itemView.resources, action.text))
+                            .isEnabled = action.enabled
+                    }
+                    setOnMenuItemClickListener { item ->
+                        secondaryActions.getOrNull(item.itemId - 1)?.let { action ->
+                            onAction(AndroidTaskActionRequest(task.stableId, entryId, action.kind))
+                            true
+                        } ?: false
+                    }
+                }.show()
+            }
+            bindActions(
+                task,
+                entryId,
+                task.actions.filterNot {
+                    it.kind == TaskActionKind.HIDE_OUTPUT ||
+                        it.kind == TaskActionKind.RENAME ||
+                        it.kind == TaskActionKind.DELETE
+                },
+            )
         }
 
         fun bindProgress(value: TaskProgressPresentation?) {
@@ -289,21 +322,49 @@ class TaskListAdapter(
             boundActions = visibleActions
             actions.removeAllViews()
             visibleActions.forEachIndexed { index, action ->
-                actions.addView(
-                    MaterialButton(actions.context).apply {
+                val view = when (action.kind) {
+                    TaskActionKind.PLAY,
+                    TaskActionKind.STOP,
+                    -> ImageButton(actions.context).apply {
+                        setImageResource(
+                            if (action.kind == TaskActionKind.PLAY) {
+                                R.drawable.ic_play_arrow_24
+                            } else {
+                                R.drawable.ic_stop_24
+                            },
+                        )
+                        contentDescription = when (action.kind) {
+                            TaskActionKind.PLAY -> actions.resources.getString(R.string.task_play_accessibility)
+                            TaskActionKind.STOP -> actions.resources.getString(R.string.task_stop_accessibility)
+                            else -> AndroidTaskTextResolver.resolve(actions.resources, action.text)
+                        }
+                        ViewCompat.setTooltipText(this, contentDescription)
+                        background = null
+                        setPadding(actionSpacing(actions), actionSpacing(actions), actionSpacing(actions), actionSpacing(actions))
+                    }
+                    else -> MaterialButton(actions.context).apply {
                         text = AndroidTaskTextResolver.resolve(actions.resources, action.text)
-                        isEnabled = action.enabled
-                        layoutParams = LinearLayout.LayoutParams(
-                            ViewGroup.LayoutParams.WRAP_CONTENT,
-                            ViewGroup.LayoutParams.WRAP_CONTENT,
-                        ).apply {
-                            if (index > 0) marginStart = actionSpacing(actions)
-                        }
-                        setOnClickListener {
-                            onAction(AndroidTaskActionRequest(task.stableId, entryId, action.kind))
-                        }
+                    }
+                }
+                view.isEnabled = action.enabled
+                view.layoutParams = LinearLayout.LayoutParams(
+                    if (action.kind == TaskActionKind.PLAY || action.kind == TaskActionKind.STOP) {
+                        48.dp(actions)
+                    } else {
+                        ViewGroup.LayoutParams.WRAP_CONTENT
                     },
-                )
+                    if (action.kind == TaskActionKind.PLAY || action.kind == TaskActionKind.STOP) {
+                        48.dp(actions)
+                    } else {
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    },
+                ).apply {
+                    if (index > 0) marginStart = actionSpacing(actions)
+                }
+                view.setOnClickListener {
+                    onAction(AndroidTaskActionRequest(task.stableId, entryId, action.kind))
+                }
+                actions.addView(view)
             }
             actions.isVisible = visibleActions.isNotEmpty()
         }
@@ -482,6 +543,9 @@ class TaskListAdapter(
 
         private fun actionSpacing(view: View): Int =
             (8 * view.resources.displayMetrics.density).toInt()
+
+        private fun Int.dp(view: View): Int =
+            (this * view.resources.displayMetrics.density).toInt()
 
         private fun progressMetadata(progress: TaskProgressPresentation): String? = buildList {
             progress.percent?.let { add("$it%") }
