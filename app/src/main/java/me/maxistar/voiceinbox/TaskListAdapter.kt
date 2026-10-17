@@ -3,7 +3,6 @@ package me.maxistar.voiceinbox
 import android.content.res.ColorStateList
 import android.view.LayoutInflater
 import android.view.Menu
-import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
@@ -13,6 +12,7 @@ import android.widget.TextView
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.view.isVisible
 import androidx.core.view.ViewCompat
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
@@ -246,7 +246,6 @@ class TaskListAdapter(
         private val title: TextView = itemView.findViewById(R.id.taskTitle)
         private val badge: TextView = itemView.findViewById(R.id.taskBadge)
         private val dismiss: ImageButton = itemView.findViewById(R.id.taskDismiss)
-        private val more: ImageButton = itemView.findViewById(R.id.taskMore)
         private val detail: TextView = itemView.findViewById(R.id.taskDetail)
         private val progressPhase: TextView = itemView.findViewById(R.id.taskProgressPhase)
         private val progress: ProgressBar = itemView.findViewById(R.id.taskProgress)
@@ -273,23 +272,7 @@ class TaskListAdapter(
             val secondaryActions = task.actions.filter {
                 it.kind == TaskActionKind.RENAME || it.kind == TaskActionKind.DELETE
             }
-            more.isVisible = secondaryActions.isNotEmpty()
-            more.contentDescription = itemView.resources.getString(R.string.task_more_actions)
-            ViewCompat.setTooltipText(more, itemView.resources.getString(R.string.task_more_actions))
-            more.setOnClickListener {
-                PopupMenu(itemView.context, more).apply {
-                    secondaryActions.forEachIndexed { index, action ->
-                        menu.add(Menu.NONE, index + 1, index, AndroidTaskTextResolver.resolve(itemView.resources, action.text))
-                            .isEnabled = action.enabled
-                    }
-                    setOnMenuItemClickListener { item ->
-                        secondaryActions.getOrNull(item.itemId - 1)?.let { action ->
-                            onAction(AndroidTaskActionRequest(task.stableId, entryId, action.kind))
-                            true
-                        } ?: false
-                    }
-                }.show()
-            }
+            bindSecondaryActions(task, entryId, secondaryActions)
             bindActions(
                 task,
                 entryId,
@@ -299,6 +282,56 @@ class TaskListAdapter(
                         it.kind == TaskActionKind.DELETE
                 },
             )
+        }
+
+        private fun bindSecondaryActions(
+            task: TaskPresentation,
+            entryId: Long?,
+            secondaryActions: List<TaskActionPresentation>,
+        ) {
+            if (secondaryActions.isEmpty()) {
+                itemView.isLongClickable = false
+                itemView.setOnLongClickListener(null)
+                ViewCompat.replaceAccessibilityAction(
+                    itemView,
+                    AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_LONG_CLICK,
+                    null,
+                    null,
+                )
+                return
+            }
+
+            val showMenu = {
+                PopupMenu(itemView.context, itemView).apply {
+                    secondaryActions.forEachIndexed { index, action ->
+                        menu.add(
+                            Menu.NONE,
+                            index + 1,
+                            index,
+                            AndroidTaskTextResolver.resolve(itemView.resources, action.text),
+                        ).isEnabled = action.enabled
+                    }
+                    setOnMenuItemClickListener { item ->
+                        secondaryActions.getOrNull(item.itemId - 1)?.let { action ->
+                            onAction(AndroidTaskActionRequest(task.stableId, entryId, action.kind))
+                            true
+                        } ?: false
+                    }
+                }.show()
+            }
+            itemView.isLongClickable = true
+            itemView.setOnLongClickListener {
+                showMenu()
+                true
+            }
+            ViewCompat.replaceAccessibilityAction(
+                itemView,
+                AccessibilityNodeInfoCompat.AccessibilityActionCompat.ACTION_LONG_CLICK,
+                itemView.resources.getString(R.string.task_more_actions),
+            ) { _, _ ->
+                showMenu()
+                true
+            }
         }
 
         fun bindProgress(value: TaskProgressPresentation?) {

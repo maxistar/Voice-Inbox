@@ -40,16 +40,6 @@
             android:src="@drawable/ic_close_24"
             android:visibility="gone" />
 
-        <ImageButton
-            android:id="@+id/taskMore"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginStart="4dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/task_more_actions"
-            android:padding="12dp"
-            android:src="@drawable/ic_more_vert_24"
-            android:visibility="gone" />
     </LinearLayout>
 
     <TextView

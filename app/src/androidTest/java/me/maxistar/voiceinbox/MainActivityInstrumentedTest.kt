@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.widget.EditText
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import androidx.recyclerview.widget.RecyclerView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
@@ -12,6 +13,7 @@ import androidx.test.espresso.Espresso.pressBack
 import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.action.ViewActions.replaceText
 import androidx.test.espresso.assertion.ViewAssertions.matches
+import androidx.test.espresso.assertion.ViewAssertions.doesNotExist
 import androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.withEffectiveVisibility
@@ -336,24 +338,40 @@ class MainActivityInstrumentedTest {
         )
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            awaitActivity(scenario) { activity -> audioTitles(activity) == listOf("quick-note.wav") }
+            awaitActivity(scenario) { activity ->
+                audioTitles(activity) == listOf("quick-note.wav") && boundAudioRowView(activity) != null
+            }
             scenario.onActivity { activity ->
-                val recycler = activity.findViewById<RecyclerView>(R.id.taskList)
-                val position = (recycler.adapter as TaskListAdapter).currentList
-                    .indexOfFirst { it is TaskListDisplayItem.Audio }
-                val holder = recycler.findViewHolderForAdapterPosition(position)
-                    ?: error("Audio row was not bound")
-                val more = holder.itemView.findViewById<android.widget.ImageButton>(R.id.taskMore)
-                assertTrue(more.isShown)
-                assertEquals(activity.getString(R.string.task_more_actions), more.contentDescription)
+                val row = audioRowView(activity)
                 assertTrue(
-                    descendants(holder.itemView as android.view.ViewGroup)
+                    descendants(row as android.view.ViewGroup)
+                        .none { it is android.widget.ImageButton && it.isShown },
+                )
+                assertTrue(row.isLongClickable)
+                val node = row.createAccessibilityNodeInfo()
+                assertTrue(
+                    node.actionList.any {
+                        it.id == AccessibilityNodeInfoCompat.ACTION_LONG_CLICK &&
+                            it.label == activity.getString(R.string.task_more_actions)
+                    },
+                )
+                node.recycle()
+                assertTrue(
+                    row.performAccessibilityAction(
+                        AccessibilityNodeInfoCompat.ACTION_LONG_CLICK,
+                        null,
+                    ),
+                )
+                assertTrue(
+                    descendants(row as android.view.ViewGroup)
                         .any {
                             it is MaterialButton &&
                                 it.contentDescription == activity.getString(R.string.task_play_accessibility)
                         },
                 )
             }
+            onView(withText(R.string.task_rename)).check(matches(isDisplayed()))
+            pressBack()
         }
     }
 
@@ -364,20 +382,22 @@ class MainActivityInstrumentedTest {
         seedCatalogEntry(source, "quick-note.wav", AudioFileState.PENDING, 10)
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            awaitActivity(scenario) { activity -> audioTitles(activity) == listOf("quick-note.wav") }
-            onView(allOf(withId(R.id.taskMore), isDisplayed())).perform(click())
+            awaitActivity(scenario) { activity ->
+                audioTitles(activity) == listOf("quick-note.wav") && boundAudioRowView(activity) != null
+            }
+            scenario.onActivity { activity -> audioRowView(activity).performLongClick() }
             onView(withText(R.string.task_rename)).perform(click())
             onView(isAssignableFrom(EditText::class.java)).perform(replaceText("Daily note"))
             onView(withText(R.string.rename_recording_save)).perform(click())
             awaitActivity(scenario) { activity -> audioTitles(activity) == listOf("Daily note") }
 
-            onView(allOf(withId(R.id.taskMore), isDisplayed())).perform(click())
+            scenario.onActivity { activity -> audioRowView(activity).performLongClick() }
             onView(withText(R.string.task_delete)).perform(click())
             onView(withText(R.string.delete_recording_unpublished_message)).check(matches(isDisplayed()))
             onView(withText(android.R.string.cancel)).perform(click())
             awaitActivity(scenario) { activity -> audioTitles(activity) == listOf("Daily note") }
 
-            onView(allOf(withId(R.id.taskMore), isDisplayed())).perform(click())
+            scenario.onActivity { activity -> audioRowView(activity).performLongClick() }
             onView(withText(R.string.task_delete)).perform(click())
             onView(withText(R.string.delete_recording_confirm)).perform(click())
             awaitActivity(scenario) { activity -> audioTitles(activity).isEmpty() }
@@ -392,8 +412,10 @@ class MainActivityInstrumentedTest {
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { it.findViewById<android.widget.Button>(R.id.processedTab).performClick() }
-            awaitActivity(scenario) { activity -> audioTitles(activity) == listOf("published-note.wav") }
-            onView(allOf(withId(R.id.taskMore), isDisplayed())).perform(click())
+            awaitActivity(scenario) { activity ->
+                audioTitles(activity) == listOf("published-note.wav") && boundAudioRowView(activity) != null
+            }
+            scenario.onActivity { activity -> audioRowView(activity).performLongClick() }
             onView(withText(R.string.task_delete)).perform(click())
             onView(withText(R.string.delete_recording_published_message)).check(matches(isDisplayed()))
             onView(withText(android.R.string.cancel)).perform(click())
@@ -435,15 +457,53 @@ class MainActivityInstrumentedTest {
                 setField(activity, "folderPresentationKnown", true)
                 refreshCatalog(activity)
             }
-            awaitActivity(scenario) { activity -> audioTitles(activity) == listOf("external-note.wav") }
-            scenario.onActivity { activity ->
-                val recycler = activity.findViewById<RecyclerView>(R.id.taskList)
-                val position = (recycler.adapter as TaskListAdapter).currentList
-                    .indexOfFirst { it is TaskListDisplayItem.Audio }
-                val holder = recycler.findViewHolderForAdapterPosition(position)
-                    ?: error("External audio row was not bound")
-                assertFalse(holder.itemView.findViewById<android.widget.ImageButton>(R.id.taskMore).isShown)
+            awaitActivity(scenario) { activity ->
+                audioTitles(activity) == listOf("external-note.wav") && boundAudioRowView(activity) != null
             }
+            scenario.onActivity { activity ->
+                val row = audioRowView(activity)
+                assertFalse(row.performLongClick())
+                assertTrue(
+                    descendants(row as android.view.ViewGroup)
+                        .none { it is android.widget.ImageButton && it.isShown },
+                )
+            }
+        }
+    }
+
+    @Test
+    fun processingRowsDoNotExposeDeleteInLongPressMenu() {
+        clearActivityState()
+        seedCatalogEntry(
+            Uri.parse(AndroidAudioImportConstants.SOURCE_ID),
+            "processing-note.wav",
+            AudioFileState.PENDING,
+            10,
+        )
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            awaitActivity(scenario) { activity ->
+                audioTitles(activity) == listOf("processing-note.wav") && boundAudioRowView(activity) != null
+            }
+            scenario.onActivity { activity ->
+                val entryId = audioRows(activity).single().task.entryId
+                stateHost(activity).update { input ->
+                    input.copy(
+                        transcription = me.maxistar.voiceinbox.core.TranscriptionTaskSnapshot(
+                            active = true,
+                            activeEntryId = entryId,
+                            phase = "Transcribing",
+                        ),
+                    )
+                }
+            }
+            awaitActivity(scenario) { activity ->
+                audioRows(activity).singleOrNull()?.task?.state == me.maxistar.voiceinbox.core.AudioTaskState.PROCESSING
+            }
+            scenario.onActivity { activity -> audioRowView(activity).performLongClick() }
+            onView(withText(R.string.task_rename)).check(matches(isDisplayed()))
+            onView(withText(R.string.task_delete)).check(doesNotExist())
+            pressBack()
         }
     }
 
@@ -977,6 +1037,20 @@ class MainActivityInstrumentedTest {
         displayItems(activity).filterIsInstance<TaskListDisplayItem.Audio>()
 
     private fun audioTitles(activity: MainActivity): List<String> = audioRows(activity).map { it.task.title.fallback }
+
+    private fun boundAudioRowView(activity: MainActivity): android.view.View? {
+        val recycler = activity.findViewById<RecyclerView>(R.id.taskList)
+        val position = (recycler.adapter as TaskListAdapter).currentList
+            .indexOfFirst { it is TaskListDisplayItem.Audio }
+        if (position < 0) return null
+        recycler.scrollToPosition(position)
+        return recycler.findViewHolderForAdapterPosition(position)?.itemView
+    }
+
+    private fun audioRowView(activity: MainActivity): android.view.View {
+        return boundAudioRowView(activity)
+            ?: error("Audio row was not bound")
+    }
 
     private fun descendants(root: android.view.ViewGroup): Sequence<android.view.View> = sequence {
         for (index in 0 until root.childCount) {
