@@ -127,6 +127,70 @@
                 android:layout_marginTop="8dp"
                 android:text="@string/settings_voice_keyboard_disabled" />
 
+            <TextView
+                android:id="@+id/settingsVoiceKeyboardTriggerTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/settings_voice_keyboard_trigger_title"
+                android:textStyle="bold" />
+
+            <RadioGroup
+                android:id="@+id/settingsVoiceKeyboardTriggerGroup"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:orientation="vertical">
+
+                <RadioButton
+                    android:id="@+id/settingsVoiceKeyboardVolumeDown"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_voice_keyboard_trigger_volume_down" />
+
+                <RadioButton
+                    android:id="@+id/settingsVoiceKeyboardPhysicalKey"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_voice_keyboard_trigger_physical_key" />
+
+                <RadioButton
+                    android:id="@+id/settingsVoiceKeyboardTouchOnly"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_voice_keyboard_trigger_touch_only" />
+            </RadioGroup>
+
+            <TextView
+                android:id="@+id/settingsVoiceKeyboardTriggerSummary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp" />
+
+            <LinearLayout
+                android:id="@+id/settingsVoiceKeyboardPhysicalKeyRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/settingsVoiceKeyboardPhysicalKeyLabel"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/settings_voice_keyboard_trigger_key_unassigned" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/settingsVoiceKeyboardAssignKey"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_voice_keyboard_trigger_assign_key" />
+            </LinearLayout>
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

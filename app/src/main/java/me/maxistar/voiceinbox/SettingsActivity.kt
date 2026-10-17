@@ -4,9 +4,11 @@ import me.maxistar.voiceinbox.core.*
 
 import android.app.TimePickerDialog
 import android.content.ActivityNotFoundException
+import android.content.DialogInterface
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.view.KeyEvent
 import android.view.MenuItem
 import android.view.View
 import android.widget.RadioGroup
@@ -44,6 +46,13 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var keyboardActionView: TextView
     private lateinit var keyboardStatusProvider: AndroidVoiceKeyboardStatusProvider
     private lateinit var keyboardSystemGateway: AndroidVoiceKeyboardSystemGateway
+    private lateinit var keyboardTriggerStore: VoiceKeyboardTriggerSettingsStore
+    private lateinit var keyboardTriggerGroup: RadioGroup
+    private lateinit var keyboardTriggerSummary: TextView
+    private lateinit var keyboardPhysicalKeyRow: View
+    private lateinit var keyboardPhysicalKeyLabel: TextView
+    private lateinit var keyboardAssignKeyButton: TextView
+    private var renderingKeyboardTrigger = false
     private val selectionExecutor = Executors.newSingleThreadExecutor()
     private var settings = ScheduledTranscriptionSettings()
     private var activityDestroyed = false
@@ -94,6 +103,9 @@ class SettingsActivity : AppCompatActivity() {
         folderScanner = AudioFolderScanner(contentResolver)
         keyboardStatusProvider = AndroidVoiceKeyboardStatusProvider(this)
         keyboardSystemGateway = AndroidVoiceKeyboardSystemGateway(this)
+        keyboardTriggerStore = VoiceKeyboardTriggerSettingsStore(
+            getSharedPreferences(VoiceKeyboardTriggerSettingsStore.PREFERENCES_NAME, MODE_PRIVATE),
+        )
         settings = settingsStore.load()
         folderDetail = findViewById(R.id.settingsFolderDetail)
         outputDetail = findViewById(R.id.settingsOutputDetail)
@@ -103,6 +115,11 @@ class SettingsActivity : AppCompatActivity() {
         scheduledSwitch = findViewById(R.id.scheduledSwitch)
         keyboardStatusView = findViewById(R.id.settingsVoiceKeyboardStatus)
         keyboardActionView = findViewById(R.id.settingsVoiceKeyboardAction)
+        keyboardTriggerGroup = findViewById(R.id.settingsVoiceKeyboardTriggerGroup)
+        keyboardTriggerSummary = findViewById(R.id.settingsVoiceKeyboardTriggerSummary)
+        keyboardPhysicalKeyRow = findViewById(R.id.settingsVoiceKeyboardPhysicalKeyRow)
+        keyboardPhysicalKeyLabel = findViewById(R.id.settingsVoiceKeyboardPhysicalKeyLabel)
+        keyboardAssignKeyButton = findViewById(R.id.settingsVoiceKeyboardAssignKey)
         findViewById<TextView>(R.id.settingsAboutVersion).text = getString(
             R.string.settings_about_version,
             appVersionName(),
@@ -125,6 +142,32 @@ class SettingsActivity : AppCompatActivity() {
                 Toast.makeText(this, R.string.voice_keyboard_system_action_error, Toast.LENGTH_LONG).show()
             }
         }
+        keyboardTriggerGroup.setOnCheckedChangeListener { _, checkedId ->
+            if (renderingKeyboardTrigger) return@setOnCheckedChangeListener
+            val current = keyboardTriggerStore.load()
+            when (checkedId) {
+                R.id.settingsVoiceKeyboardVolumeDown -> {
+                    keyboardTriggerStore.save(current.copy(trigger = VoiceKeyboardHardwareTrigger.VOLUME_DOWN))
+                    renderKeyboardTrigger()
+                }
+                R.id.settingsVoiceKeyboardTouchOnly -> {
+                    keyboardTriggerStore.save(current.copy(trigger = VoiceKeyboardHardwareTrigger.TOUCH_ONLY))
+                    renderKeyboardTrigger()
+                }
+                R.id.settingsVoiceKeyboardPhysicalKey -> {
+                    val keyCode = current.physicalKeyCode
+                    if (keyCode != null) {
+                        keyboardTriggerStore.save(
+                            current.copy(trigger = VoiceKeyboardHardwareTrigger.PHYSICAL_KEY),
+                        )
+                        renderKeyboardTrigger()
+                    } else {
+                        showVoiceKeyboardKeyAssignment()
+                    }
+                }
+            }
+        }
+        keyboardAssignKeyButton.setOnClickListener { showVoiceKeyboardKeyAssignment() }
         findViewById<View>(R.id.settingsVoiceKeyboardDocumentation).setOnClickListener {
             openExternalUrl(VoiceInboxPublicLinks.VOICE_KEYBOARD_DOCUMENTATION)
         }
@@ -290,6 +333,89 @@ class SettingsActivity : AppCompatActivity() {
                 AndroidVoiceKeyboardStatus.SELECTED -> R.string.settings_voice_keyboard_change
             },
         )
+        renderKeyboardTrigger()
+    }
+
+    private fun renderKeyboardTrigger() {
+        val selected = keyboardTriggerStore.load()
+        renderingKeyboardTrigger = true
+        keyboardTriggerGroup.check(
+            when (selected.trigger) {
+                VoiceKeyboardHardwareTrigger.VOLUME_DOWN -> R.id.settingsVoiceKeyboardVolumeDown
+                VoiceKeyboardHardwareTrigger.PHYSICAL_KEY -> R.id.settingsVoiceKeyboardPhysicalKey
+                VoiceKeyboardHardwareTrigger.TOUCH_ONLY -> R.id.settingsVoiceKeyboardTouchOnly
+            },
+        )
+        renderingKeyboardTrigger = false
+
+        keyboardTriggerSummary.setText(
+            when (selected.trigger) {
+                VoiceKeyboardHardwareTrigger.VOLUME_DOWN ->
+                    R.string.settings_voice_keyboard_trigger_summary_volume_down
+                VoiceKeyboardHardwareTrigger.PHYSICAL_KEY ->
+                    R.string.settings_voice_keyboard_trigger_summary_physical_key
+                VoiceKeyboardHardwareTrigger.TOUCH_ONLY ->
+                    R.string.settings_voice_keyboard_trigger_summary_touch_only
+            },
+        )
+        val physicalKeySelected = selected.trigger == VoiceKeyboardHardwareTrigger.PHYSICAL_KEY
+        keyboardPhysicalKeyRow.visibility = if (physicalKeySelected) View.VISIBLE else View.GONE
+        val keyLabel = selected.physicalKeyCode?.let(VoiceKeyboardFunctionKeys::label)
+        keyboardPhysicalKeyLabel.text = keyLabel?.let {
+            getString(R.string.settings_voice_keyboard_trigger_key_assigned, it)
+        } ?: getString(R.string.settings_voice_keyboard_trigger_key_unassigned)
+        keyboardAssignKeyButton.setText(
+            if (keyLabel == null) R.string.settings_voice_keyboard_trigger_assign_key
+            else R.string.settings_voice_keyboard_trigger_change_key,
+        )
+    }
+
+    private fun showVoiceKeyboardKeyAssignment() {
+        var candidateKeyCode: Int? = null
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.settings_voice_keyboard_trigger_capture_title)
+            .setMessage(R.string.settings_voice_keyboard_trigger_capture_prompt)
+            .setNegativeButton(R.string.settings_voice_keyboard_trigger_capture_cancel, null)
+            .setPositiveButton(R.string.settings_voice_keyboard_trigger_capture_save, null)
+            .create()
+        dialog.setOnKeyListener { _, keyCode, event ->
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                val label = VoiceKeyboardFunctionKeys.label(keyCode)
+                if (label == null) {
+                    candidateKeyCode = null
+                    dialog.setMessage(getString(R.string.settings_voice_keyboard_trigger_capture_unsupported))
+                    dialog.getButton(DialogInterface.BUTTON_POSITIVE)?.isEnabled = false
+                } else {
+                    candidateKeyCode = keyCode
+                    dialog.setMessage(
+                        getString(R.string.settings_voice_keyboard_trigger_capture_selected, label),
+                    )
+                    dialog.getButton(DialogInterface.BUTTON_POSITIVE)?.isEnabled = true
+                }
+            }
+            true
+        }
+        dialog.setOnShowListener {
+            dialog.getButton(DialogInterface.BUTTON_POSITIVE).apply {
+                isEnabled = false
+                setOnClickListener {
+                    val keyCode = candidateKeyCode ?: return@setOnClickListener
+                    if (
+                        keyboardTriggerStore.save(
+                            VoiceKeyboardTriggerSettings(
+                                trigger = VoiceKeyboardHardwareTrigger.PHYSICAL_KEY,
+                                physicalKeyCode = keyCode,
+                            ),
+                        )
+                    ) {
+                        renderKeyboardTrigger()
+                        dialog.dismiss()
+                    }
+                }
+            }
+        }
+        dialog.setOnDismissListener { renderKeyboardTrigger() }
+        dialog.show()
     }
 
     private fun renderModel() {

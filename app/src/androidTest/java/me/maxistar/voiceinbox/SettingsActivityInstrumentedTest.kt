@@ -1,8 +1,10 @@
 package me.maxistar.voiceinbox
 
 import android.content.Context
+import android.view.KeyEvent
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.Espresso.pressBack
 import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.action.ViewActions.scrollTo
 import androidx.test.espresso.assertion.ViewAssertions.matches
@@ -81,12 +83,95 @@ class SettingsActivityInstrumentedTest {
         }
     }
 
+    @Test
+    fun voiceKeyboardHasOneTriggerAndCanAssignPhysicalFunctionKey() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        clearSettings(context)
+
+        ActivityScenario.launch(SettingsActivity::class.java).use {
+            onView(withId(R.id.settingsVoiceKeyboardVolumeDown))
+                .perform(scrollTo())
+                .check(matches(isChecked()))
+            onView(withId(R.id.settingsVoiceKeyboardPhysicalKey))
+                .perform(scrollTo(), click())
+            onView(withText(R.string.settings_voice_keyboard_trigger_capture_prompt))
+                .check(matches(isDisplayed()))
+
+            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_F10)
+            onView(withText(context.getString(R.string.settings_voice_keyboard_trigger_capture_selected, "F10")))
+                .check(matches(isDisplayed()))
+            onView(withText(R.string.settings_voice_keyboard_trigger_capture_save)).perform(click())
+
+            val store = VoiceKeyboardTriggerSettingsStore(
+                context.getSharedPreferences(
+                    VoiceKeyboardTriggerSettingsStore.PREFERENCES_NAME,
+                    Context.MODE_PRIVATE,
+                ),
+            )
+            assertEquals(
+                VoiceKeyboardTriggerSettings(
+                    VoiceKeyboardHardwareTrigger.PHYSICAL_KEY,
+                    KeyEvent.KEYCODE_F10,
+                ),
+                store.load(),
+            )
+            onView(withId(R.id.settingsVoiceKeyboardPhysicalKeyRow)).check(matches(isDisplayed()))
+
+            onView(withId(R.id.settingsVoiceKeyboardVolumeDown)).perform(scrollTo(), click())
+            assertEquals(
+                VoiceKeyboardTriggerSettings(
+                    VoiceKeyboardHardwareTrigger.VOLUME_DOWN,
+                    KeyEvent.KEYCODE_F10,
+                ),
+                store.load(),
+            )
+            onView(withId(R.id.settingsVoiceKeyboardTouchOnly)).perform(scrollTo(), click())
+            assertEquals(
+                VoiceKeyboardTriggerSettings(
+                    VoiceKeyboardHardwareTrigger.TOUCH_ONLY,
+                    KeyEvent.KEYCODE_F10,
+                ),
+                store.load(),
+            )
+        }
+    }
+
+    @Test
+    fun cancellingPhysicalKeyAssignmentKeepsThePreviousTrigger() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        clearSettings(context)
+
+        ActivityScenario.launch(SettingsActivity::class.java).use {
+            onView(withId(R.id.settingsVoiceKeyboardTouchOnly)).perform(scrollTo(), click())
+            onView(withId(R.id.settingsVoiceKeyboardPhysicalKey)).perform(scrollTo(), click())
+            onView(withText(R.string.settings_voice_keyboard_trigger_capture_prompt))
+                .check(matches(isDisplayed()))
+            pressBack()
+
+            onView(withId(R.id.settingsVoiceKeyboardTouchOnly)).check(matches(isChecked()))
+            val store = VoiceKeyboardTriggerSettingsStore(
+                context.getSharedPreferences(
+                    VoiceKeyboardTriggerSettingsStore.PREFERENCES_NAME,
+                    Context.MODE_PRIVATE,
+                ),
+            )
+            assertEquals(
+                VoiceKeyboardHardwareTrigger.TOUCH_ONLY,
+                store.load().trigger,
+            )
+        }
+    }
+
     private fun clearSettings(context: Context) {
         context.getSharedPreferences(StartupProcessingPolicyStore.PREFERENCES_NAME, Context.MODE_PRIVATE)
             .edit()
             .clear()
             .commit()
         context.getSharedPreferences(ScheduledTranscriptionSettingsStore.PREFERENCES_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .clear()
+            .commit()
+        context.getSharedPreferences(VoiceKeyboardTriggerSettingsStore.PREFERENCES_NAME, Context.MODE_PRIVATE)
             .edit()
             .clear()
             .commit()
