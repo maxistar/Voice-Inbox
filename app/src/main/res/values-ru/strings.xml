@@ -246,6 +246,7 @@
     <string name="onboarding_action_select_folder">Выбрать папку с аудио</string>
     <string name="onboarding_action_enable_keyboard">Включить голосовую клавиатуру</string>
     <string name="onboarding_action_grant_microphone">Разрешить доступ к микрофону</string>
+    <string name="onboarding_optional_action_accessibility">%1$s. Необязательное действие: %2$s</string>
     <string name="onboarding_action_ready">Готово к расшифровке</string>
     <string name="voice_keyboard_discovery_title">Диктуйте в любом приложении</string>
     <string name="voice_keyboard_discovery_explanation">Используйте Voice Inbox как компактную голосовую клавиатуру. Распознавание работает локально после настройки модели.</string>

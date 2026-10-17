@@ -1,5 +1,6 @@
 package me.maxistar.voiceinbox
 
+import android.content.res.ColorStateList
 import android.view.LayoutInflater
 import android.view.Menu
 import android.view.MenuItem
@@ -9,12 +10,14 @@ import android.widget.LinearLayout
 import android.widget.ImageButton
 import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.view.isVisible
 import androidx.core.view.ViewCompat
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.color.MaterialColors
 import androidx.appcompat.widget.PopupMenu
 import me.maxistar.voiceinbox.core.AudioTaskPresentation
 import me.maxistar.voiceinbox.core.SetupTaskPresentation
@@ -325,22 +328,34 @@ class TaskListAdapter(
                 val view = when (action.kind) {
                     TaskActionKind.PLAY,
                     TaskActionKind.STOP,
-                    -> ImageButton(actions.context).apply {
-                        setImageResource(
+                    -> MaterialButton(actions.context).apply {
+                        icon = AppCompatResources.getDrawable(
+                            context,
                             if (action.kind == TaskActionKind.PLAY) {
                                 R.drawable.ic_play_arrow_24
                             } else {
                                 R.drawable.ic_stop_24
                             },
                         )
+                        iconTint = ColorStateList.valueOf(
+                            MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnPrimary),
+                        )
+                        iconSize = 24.dp(actions)
+                        iconPadding = 0
+                        iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
+                        textAlignment = View.TEXT_ALIGNMENT_CENTER
+                        gravity = android.view.Gravity.CENTER
+                        insetTop = 0
+                        insetBottom = 0
+                        minWidth = 0
+                        minHeight = 0
                         contentDescription = when (action.kind) {
                             TaskActionKind.PLAY -> actions.resources.getString(R.string.task_play_accessibility)
                             TaskActionKind.STOP -> actions.resources.getString(R.string.task_stop_accessibility)
                             else -> AndroidTaskTextResolver.resolve(actions.resources, action.text)
                         }
                         ViewCompat.setTooltipText(this, contentDescription)
-                        background = null
-                        setPadding(actionSpacing(actions), actionSpacing(actions), actionSpacing(actions), actionSpacing(actions))
+                        setPadding(0, 0, 0, 0)
                     }
                     else -> MaterialButton(actions.context).apply {
                         text = AndroidTaskTextResolver.resolve(actions.resources, action.text)
@@ -409,6 +424,8 @@ class TaskListAdapter(
         private val folderStep: TextView = itemView.findViewById(R.id.onboardingFolderStep)
         private val keyboardStep: TextView = itemView.findViewById(R.id.onboardingKeyboardStep)
         private val microphoneStep: TextView = itemView.findViewById(R.id.onboardingMicrophoneStep)
+        private val keyboardAction: MaterialButton = itemView.findViewById(R.id.onboardingKeyboardAction)
+        private val microphoneAction: MaterialButton = itemView.findViewById(R.id.onboardingMicrophoneAction)
         private val action: MaterialButton = itemView.findViewById(R.id.onboardingAction)
         private val close: ImageButton = itemView.findViewById(R.id.onboardingClose)
 
@@ -429,6 +446,8 @@ class TaskListAdapter(
             bindStep(folderStep, presentation.steps.firstOrNull { it.kind == AndroidOnboardingStepKind.FOLDER })
             bindStep(keyboardStep, presentation.steps.firstOrNull { it.kind == AndroidOnboardingStepKind.KEYBOARD })
             bindStep(microphoneStep, presentation.steps.firstOrNull { it.kind == AndroidOnboardingStepKind.MICROPHONE })
+            bindRowAction(keyboardAction, presentation, AndroidOnboardingStepKind.KEYBOARD)
+            bindRowAction(microphoneAction, presentation, AndroidOnboardingStepKind.MICROPHONE)
             presentation.action?.labelRes?.let(action::setText)
             action.isEnabled = presentation.action?.enabled == true
             action.isVisible = presentation.action != null
@@ -436,6 +455,32 @@ class TaskListAdapter(
                 presentation.action?.let { current ->
                     onAction(AndroidTaskActionRequest(item.stableKey, null, current.kind))
                 }
+            }
+        }
+
+        private fun bindRowAction(
+            button: MaterialButton,
+            presentation: AndroidOnboardingHintPresentation,
+            step: AndroidOnboardingStepKind,
+        ) {
+            val rowAction = presentation.rowActions.firstOrNull { it.step == step }
+            button.isVisible = rowAction != null
+            rowAction ?: return
+            button.setText(rowAction.labelRes)
+            button.contentDescription = itemView.resources.getString(
+                R.string.onboarding_optional_action_accessibility,
+                itemView.resources.getString(presentation.steps.first { it.kind == step }.labelRes),
+                itemView.resources.getString(rowAction.labelRes),
+            )
+            button.setOnClickListener {
+                onAction(
+                    AndroidTaskActionRequest(
+                        stableId = TaskListDisplayItem.OnboardingHint.STABLE_KEY,
+                        entryId = null,
+                        kind = rowAction.kind,
+                        onboardingStep = rowAction.step,
+                    ),
+                )
             }
         }
 

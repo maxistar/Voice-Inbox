@@ -64,8 +64,27 @@ class AndroidInlineOnboardingTest {
         val presentation = present(model = readyModel())
 
         assertTrue(presentation.visible)
-        assertEquals(TaskActionKind.SELECT_OUTPUT, presentation.action?.kind)
+        assertEquals(null, presentation.action)
         assertFalse(present(lifecycle = AndroidOnboardingHintLifecycle.DISMISSED, model = readyModel()).visible)
+    }
+
+    @Test
+    fun optionalActionsAreIndependentFromModelOutputAndFolderProgress() {
+        val installing = present(model = ModelSetupSnapshot(ModelSetupSnapshotState.INSTALLING))
+
+        assertFalse(installing.action!!.enabled)
+        assertEquals(
+            setOf(TaskActionKind.ENABLE_VOICE_KEYBOARD, TaskActionKind.REQUEST_MICROPHONE_PERMISSION),
+            installing.rowActions.map { it.kind }.toSet(),
+        )
+        assertEquals(
+            setOf(AndroidOnboardingStepKind.KEYBOARD, AndroidOnboardingStepKind.MICROPHONE),
+            installing.rowActions.map { it.step }.toSet(),
+        )
+
+        val ready = present(model = readyModel())
+        assertEquals(null, ready.action)
+        assertEquals(installing.rowActions, ready.rowActions)
     }
 
     @Test
@@ -95,7 +114,7 @@ class AndroidInlineOnboardingTest {
                 model = readyModel(),
                 output = readyOutput(),
                 folder = FolderSetupSnapshot(FolderSetupSnapshotState.READY),
-            ).action?.kind,
+            ).rowActions.firstOrNull { it.step == AndroidOnboardingStepKind.KEYBOARD }?.kind,
         )
         val microphoneStillNeeded = present(
             model = readyModel(),
@@ -104,7 +123,10 @@ class AndroidInlineOnboardingTest {
             keyboardStatus = AndroidVoiceKeyboardStatus.ENABLED,
         )
         assertTrue(microphoneStillNeeded.visible)
-        assertEquals(TaskActionKind.REQUEST_MICROPHONE_PERMISSION, microphoneStillNeeded.action?.kind)
+        assertEquals(
+            TaskActionKind.REQUEST_MICROPHONE_PERMISSION,
+            microphoneStillNeeded.rowActions.firstOrNull { it.step == AndroidOnboardingStepKind.MICROPHONE }?.kind,
+        )
         assertFalse(
             present(
                 model = readyModel(),

@@ -258,7 +258,11 @@ class AndroidMainScreenStateHostTest {
             ),
         )
         assertTrue(directModelCompletion.onboardingHint.visible)
-        assertEquals(TaskActionKind.SELECT_OUTPUT, directModelCompletion.onboardingHint.action?.kind)
+        assertNull(directModelCompletion.onboardingHint.action)
+        assertEquals(
+            setOf(TaskActionKind.ENABLE_VOICE_KEYBOARD, TaskActionKind.REQUEST_MICROPHONE_PERMISSION),
+            directModelCompletion.onboardingHint.rowActions.map { it.kind }.toSet(),
+        )
         assertEquals(
             listOf(
                 TaskActionKind.CREATE_OUTPUT,

@@ -346,10 +346,13 @@ class MainActivityInstrumentedTest {
                 val more = holder.itemView.findViewById<android.widget.ImageButton>(R.id.taskMore)
                 assertTrue(more.isShown)
                 assertEquals(activity.getString(R.string.task_more_actions), more.contentDescription)
-                val imageButtons = descendants(holder.itemView as android.view.ViewGroup)
-                    .filterIsInstance<android.widget.ImageButton>()
-                    .toList()
-                assertTrue(imageButtons.any { it.contentDescription == activity.getString(R.string.task_play_accessibility) })
+                assertTrue(
+                    descendants(holder.itemView as android.view.ViewGroup)
+                        .any {
+                            it is MaterialButton &&
+                                it.contentDescription == activity.getString(R.string.task_play_accessibility)
+                        },
+                )
             }
         }
     }
@@ -688,6 +691,12 @@ class MainActivityInstrumentedTest {
                 assertTrue(model.task.progress != null)
                 assertTrue(model.task.actions.any { it.kind == TaskActionKind.CANCEL_MODEL_DOWNLOAD })
                 assertEquals(R.string.onboarding_action_installing, hint.presentation.action?.labelRes)
+                assertEquals(
+                    setOf(TaskActionKind.ENABLE_VOICE_KEYBOARD, TaskActionKind.REQUEST_MICROPHONE_PERMISSION),
+                    hint.presentation.rowActions.map { it.kind }.toSet(),
+                )
+                assertTrue(activity.findViewById<android.view.View>(R.id.onboardingKeyboardAction).isShown)
+                assertTrue(activity.findViewById<android.view.View>(R.id.onboardingMicrophoneAction).isShown)
             }
 
             scenario.onActivity { activity ->
@@ -699,7 +708,7 @@ class MainActivityInstrumentedTest {
             }
             awaitActivity(scenario) { activity ->
                 displayItems(activity).filterIsInstance<TaskListDisplayItem.OnboardingHint>()
-                    .singleOrNull()?.presentation?.action?.kind == TaskActionKind.SELECT_OUTPUT
+                    .singleOrNull()?.presentation?.action == null
             }
             scenario.onActivity { activity ->
                 stateHost(activity).replace(
@@ -713,7 +722,7 @@ class MainActivityInstrumentedTest {
             }
             awaitActivity(scenario) { activity ->
                 displayItems(activity).filterIsInstance<TaskListDisplayItem.OnboardingHint>()
-                    .singleOrNull()?.presentation?.action?.kind == TaskActionKind.SELECT_FOLDER
+                    .singleOrNull()?.presentation?.action == null
             }
 
             scenario.onActivity { activity ->

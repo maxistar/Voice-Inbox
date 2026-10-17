@@ -244,6 +244,7 @@
     <string name="onboarding_action_select_folder">Select audio folder</string>
     <string name="onboarding_action_enable_keyboard">Enable voice keyboard</string>
     <string name="onboarding_action_grant_microphone">Allow microphone access</string>
+    <string name="onboarding_optional_action_accessibility">%1$s. Optional action: %2$s</string>
     <string name="onboarding_action_ready">Ready to transcribe</string>
     <string name="voice_keyboard_discovery_title">Dictate in any app</string>
     <string name="voice_keyboard_discovery_explanation">Use Voice Inbox as a compact voice keyboard. Recognition runs locally after model setup.</string>

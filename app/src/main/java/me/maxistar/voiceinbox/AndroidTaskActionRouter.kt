@@ -8,6 +8,7 @@ data class AndroidTaskActionRequest(
     val stableId: String,
     val entryId: Long?,
     val kind: TaskActionKind,
+    val onboardingStep: AndroidOnboardingStepKind? = null,
 )
 
 fun interface AndroidTaskActionGateway {
@@ -23,9 +24,15 @@ class AndroidTaskActionRouter(
         val authorized = when {
             request.stableId == TaskListDisplayItem.OnboardingHint.STABLE_KEY ->
                 state.onboardingHint.visible &&
-                    state.onboardingHint.action?.let { action ->
-                        action.kind == request.kind && action.enabled
-                    } == true
+                    if (request.onboardingStep == null) {
+                        state.onboardingHint.action?.let { action ->
+                            action.kind == request.kind && action.enabled
+                        } == true
+                    } else {
+                        state.onboardingHint.rowActions.any { action ->
+                            action.step == request.onboardingStep && action.kind == request.kind
+                        }
+                    }
             request.stableId == TaskListDisplayItem.KeyboardDiscovery.STABLE_KEY ->
                 state.keyboardDiscovery.visible && request.kind in setOf(
                     state.keyboardDiscovery.setupAction,

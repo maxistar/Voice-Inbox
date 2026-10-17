@@ -244,6 +244,7 @@
     <string name="onboarding_action_select_folder">Audioordner auswählen</string>
     <string name="onboarding_action_enable_keyboard">Voice-Inbox-Tastatur aktivieren</string>
     <string name="onboarding_action_grant_microphone">Mikrofonzugriff erlauben</string>
+    <string name="onboarding_optional_action_accessibility">%1$s. Optionale Aktion: %2$s</string>
     <string name="onboarding_action_ready">Bereit zum Transkribieren</string>
     <string name="voice_keyboard_discovery_title">In jeder App diktieren</string>
     <string name="voice_keyboard_discovery_explanation">Voice Inbox als kompakte Sprachtastatur verwenden. Die Erkennung läuft nach der Einrichtung lokal.</string>

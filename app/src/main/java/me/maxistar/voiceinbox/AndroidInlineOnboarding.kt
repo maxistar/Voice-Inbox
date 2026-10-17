@@ -87,6 +87,12 @@ data class AndroidOnboardingHintAction(
     val kind: TaskActionKind,
 )
 
+data class AndroidOnboardingRowAction(
+    val step: AndroidOnboardingStepKind,
+    val labelRes: Int,
+    val kind: TaskActionKind,
+)
+
 data class AndroidOnboardingHintPresentation(
     val visible: Boolean = false,
     val titleRes: Int = R.string.onboarding_title,
@@ -95,6 +101,7 @@ data class AndroidOnboardingHintPresentation(
     val microphoneDisclosureRes: Int? = null,
     val steps: List<AndroidOnboardingChecklistStep> = emptyList(),
     val action: AndroidOnboardingHintAction? = null,
+    val rowActions: List<AndroidOnboardingRowAction> = emptyList(),
 ) {
     companion object {
         val HIDDEN = AndroidOnboardingHintPresentation()
@@ -154,20 +161,38 @@ object AndroidOnboardingHintPresenter {
                 optional = true,
             ),
         )
-        val action = nextAction(model, output, folder, keyboardStatus, microphonePermissionGranted)
+        val action = nextAction(model)
+        val rowActions = buildList {
+            if (keyboardStatus == AndroidVoiceKeyboardStatus.DISABLED) {
+                add(AndroidOnboardingRowAction(
+                    AndroidOnboardingStepKind.KEYBOARD,
+                    R.string.onboarding_action_enable_keyboard,
+                    TaskActionKind.ENABLE_VOICE_KEYBOARD,
+                ))
+            }
+            if (!microphonePermissionGranted) {
+                add(AndroidOnboardingRowAction(
+                    AndroidOnboardingStepKind.MICROPHONE,
+                    R.string.onboarding_action_grant_microphone,
+                    TaskActionKind.REQUEST_MICROPHONE_PERMISSION,
+                ))
+            }
+        }
         return AndroidOnboardingHintPresentation(
             visible = true,
             steps = steps,
             microphoneDisclosureRes = R.string.onboarding_microphone_explanation
                 .takeUnless { microphonePermissionGranted },
-            downloadDisclosureRes = R.string.onboarding_download_disclosure
-                .takeIf {
-                    action.enabled && action.kind in setOf(
+            downloadDisclosureRes = action
+                ?.takeIf {
+                    it.enabled && it.kind in setOf(
                         TaskActionKind.DOWNLOAD_MODEL,
                         TaskActionKind.RETRY_MODEL_DOWNLOAD,
                     )
-                },
+                }
+                ?.let { R.string.onboarding_download_disclosure },
             action = action,
+            rowActions = rowActions,
         )
     }
 
@@ -204,13 +229,7 @@ object AndroidOnboardingHintPresenter {
             folder.state == FolderSetupSnapshotState.READY &&
             keyboardStatus != AndroidVoiceKeyboardStatus.DISABLED && microphonePermissionGranted
 
-    private fun nextAction(
-        model: ModelSetupSnapshot,
-        output: OutputSetupSnapshot,
-        folder: FolderSetupSnapshot,
-        keyboardStatus: AndroidVoiceKeyboardStatus,
-        microphonePermissionGranted: Boolean,
-    ): AndroidOnboardingHintAction = when {
+    private fun nextAction(model: ModelSetupSnapshot): AndroidOnboardingHintAction? = when {
         model.state == ModelSetupSnapshotState.INSTALLING -> AndroidOnboardingHintAction(
             labelRes = R.string.onboarding_action_installing,
             enabled = false,
@@ -230,30 +249,6 @@ object AndroidOnboardingHintPresenter {
             enabled = true,
             kind = TaskActionKind.IMPORT_MODEL,
         )
-        output.state != OutputSetupSnapshotState.READY -> AndroidOnboardingHintAction(
-            labelRes = R.string.onboarding_action_select_output,
-            enabled = true,
-            kind = TaskActionKind.SELECT_OUTPUT,
-        )
-        folder.state != FolderSetupSnapshotState.READY -> AndroidOnboardingHintAction(
-            labelRes = R.string.onboarding_action_select_folder,
-            enabled = true,
-            kind = TaskActionKind.SELECT_FOLDER,
-        )
-        keyboardStatus == AndroidVoiceKeyboardStatus.DISABLED -> AndroidOnboardingHintAction(
-            labelRes = R.string.onboarding_action_enable_keyboard,
-            enabled = true,
-            kind = TaskActionKind.ENABLE_VOICE_KEYBOARD,
-        )
-        !microphonePermissionGranted -> AndroidOnboardingHintAction(
-            labelRes = R.string.onboarding_action_grant_microphone,
-            enabled = true,
-            kind = TaskActionKind.REQUEST_MICROPHONE_PERMISSION,
-        )
-        else -> AndroidOnboardingHintAction(
-            labelRes = R.string.onboarding_action_ready,
-            enabled = false,
-            kind = TaskActionKind.IMPORT_AUDIO,
-        )
+        else -> null
     }
 }

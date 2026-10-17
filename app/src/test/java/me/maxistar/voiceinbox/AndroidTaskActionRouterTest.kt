@@ -111,7 +111,7 @@ class AndroidTaskActionRouterTest {
     }
 
     @Test
-    fun routesOnlyCurrentEnabledRequiredOnboardingAction() {
+    fun routesOnlyCurrentEnabledOnboardingPrimaryAndRowActions() {
         var state = onboardingState(
             model = ModelSetupSnapshot(ModelSetupSnapshotState.REQUIRED, downloadAvailable = true),
         )
@@ -137,9 +137,25 @@ class AndroidTaskActionRouterTest {
                 request(TaskListDisplayItem.OnboardingHint.STABLE_KEY, null, TaskActionKind.CREATE_OUTPUT),
             ),
         )
+        assertFalse(router.route(request(TaskListDisplayItem.OnboardingHint.STABLE_KEY, null, TaskActionKind.SELECT_OUTPUT)))
         assertTrue(
             router.route(
-                request(TaskListDisplayItem.OnboardingHint.STABLE_KEY, null, TaskActionKind.SELECT_OUTPUT),
+                AndroidTaskActionRequest(
+                    TaskListDisplayItem.OnboardingHint.STABLE_KEY,
+                    null,
+                    TaskActionKind.ENABLE_VOICE_KEYBOARD,
+                    AndroidOnboardingStepKind.KEYBOARD,
+                ),
+            ),
+        )
+        assertTrue(
+            router.route(
+                AndroidTaskActionRequest(
+                    TaskListDisplayItem.OnboardingHint.STABLE_KEY,
+                    null,
+                    TaskActionKind.REQUEST_MICROPHONE_PERMISSION,
+                    AndroidOnboardingStepKind.MICROPHONE,
+                ),
             ),
         )
 
@@ -149,7 +165,7 @@ class AndroidTaskActionRouterTest {
             folder = FolderSetupSnapshot(FolderSetupSnapshotState.UNSELECTED),
         )
         assertTrue(state.taskList.tasks.none { it.stableId == "setup:folder" })
-        assertTrue(
+        assertFalse(
             router.route(
                 request(TaskListDisplayItem.OnboardingHint.STABLE_KEY, null, TaskActionKind.SELECT_FOLDER),
             ),
@@ -166,11 +182,39 @@ class AndroidTaskActionRouterTest {
         assertEquals(
             listOf(
                 TaskActionKind.DOWNLOAD_MODEL,
-                TaskActionKind.SELECT_OUTPUT,
-                TaskActionKind.SELECT_FOLDER,
+                TaskActionKind.ENABLE_VOICE_KEYBOARD,
+                TaskActionKind.REQUEST_MICROPHONE_PERMISSION,
             ),
             calls,
         )
+    }
+
+    @Test
+    fun rejectsStaleOnboardingRowActionsAfterStepCompletionOrDismissal() {
+        var state = onboardingState(
+            model = ModelSetupSnapshot(ModelSetupSnapshotState.INSTALLING),
+        )
+        var calls = 0
+        val router = AndroidTaskActionRouter({ state }) { _, _ -> calls++ }
+        val keyboard = AndroidTaskActionRequest(
+            TaskListDisplayItem.OnboardingHint.STABLE_KEY,
+            null,
+            TaskActionKind.ENABLE_VOICE_KEYBOARD,
+            AndroidOnboardingStepKind.KEYBOARD,
+        )
+        assertTrue(router.route(keyboard))
+
+        state = AndroidTaskListSnapshotMapper.state(
+            stateInput(
+                model = ModelSetupSnapshot(ModelSetupSnapshotState.INSTALLING),
+            ).copy(keyboardStatus = AndroidVoiceKeyboardStatus.ENABLED),
+        )
+        assertFalse(router.route(keyboard))
+        state = onboardingState(
+            model = ModelSetupSnapshot(ModelSetupSnapshotState.INSTALLING),
+        ).copy(onboardingHint = AndroidOnboardingHintPresentation.HIDDEN)
+        assertFalse(router.route(keyboard))
+        assertEquals(1, calls)
     }
 
     @Test
