@@ -34,7 +34,7 @@ struct ContentView: View {
         NavigationStack {
             List {
                 Section {
-                    Picker("Catalog", selection: $selectedTab) {
+                    Picker(L10n.text("catalog.title", fallback: "Catalog"), selection: $selectedTab) {
                         ForEach(IosShellCatalogSelection.allCases) { tab in
                             Text(tab.title).tag(tab)
                         }
@@ -44,7 +44,7 @@ struct ContentView: View {
                 }
 
                 if let candidate = speechModelStore.pendingCandidate {
-                    Section("Detected Speech Model") {
+                    Section(L10n.text("model.detectedTitle", fallback: "Detected Speech Model")) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(candidate.descriptor.displayName)
                                 .font(.headline)
@@ -83,8 +83,8 @@ struct ContentView: View {
 
 
                 if !speechModelStore.isReady {
-                    Section("Download Speech Model") {
-                        Picker("Model", selection: $speechModelStore.selectedDownloadModel) {
+                    Section(L10n.text("model.downloadTitle", fallback: "Download Speech Model")) {
+                        Picker(L10n.text("Model", fallback: "Model"), selection: $speechModelStore.selectedDownloadModel) {
                             ForEach(speechModelStore.availableModels.filter(\.networkDownloadAvailable)) { model in
                                 Text(model.displayName).tag(model)
                             }
@@ -92,7 +92,13 @@ struct ContentView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             let model = speechModelStore.selectedDownloadModel
                             Text(model.languageSummary).font(.subheadline)
-                            Text("\(model.maturity) · \(ByteCountFormatter.string(fromByteCount: model.totalSizeBytes, countStyle: .file)) download · \(ByteCountFormatter.string(fromByteCount: model.totalSizeBytes + model.safetyMarginBytes, countStyle: .file)) free")
+                            Text(L10n.format(
+                                "model.downloadOption",
+                                fallback: "%@ · %@ download · %@ free",
+                                model.maturity,
+                                ByteCountFormatter.string(fromByteCount: model.totalSizeBytes, countStyle: .file),
+                                ByteCountFormatter.string(fromByteCount: model.totalSizeBytes + model.safetyMarginBytes, countStyle: .file)
+                            ))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             if speechModelStore.activeDescriptor != nil {
@@ -352,13 +358,13 @@ struct ContentView: View {
         Binding(
             get: {
                 if let error = previewPlayer.errorMessage {
-                    return IosGlobalMessage(title: "Playback", text: error)
+                    return IosGlobalMessage(title: L10n.text("playback.title", fallback: "Playback"), text: error)
                 }
                 if let message = importStore.importMessage {
                     return IosGlobalMessage(title: "Voice Inbox", text: message)
                 }
                 if let message = speechModelStore.actionableErrorMessage {
-                    return IosGlobalMessage(title: "Speech Model", text: message)
+                    return IosGlobalMessage(title: L10n.text("model.title", fallback: "Speech Model"), text: message)
                 }
                 return nil
             },
@@ -401,7 +407,7 @@ struct ContentView: View {
             speechModelStore.downloadModel(speechModelStore.selectedDownloadModel)
         case .modelImport:
             guard !transcriber.isActive else {
-                speechModelStore.message = "Wait for transcription to finish before replacing the speech model."
+                speechModelStore.message = L10n.text("model.waitForTranscription", fallback: "Wait for transcription to finish before replacing the speech model.")
                 return
             }
             presentPicker(.speechModelFolder)
@@ -427,7 +433,7 @@ struct ContentView: View {
             speechModelStore.downloadModel(speechModelStore.selectedDownloadModel)
         case .modelImport:
             guard !transcriber.isActive else {
-                speechModelStore.message = "Wait for transcription to finish before replacing the speech model."
+                speechModelStore.message = L10n.text("model.waitForTranscription", fallback: "Wait for transcription to finish before replacing the speech model.")
                 return
             }
             presentPicker(.speechModelFolder)
@@ -749,9 +755,6 @@ private struct StartupProcessingPromptView: View {
     }
 
     private var summary: String {
-        if pendingCount == 1 {
-            return "1 file is waiting in New."
-        }
         return L10n.plural("startup.filesWaiting", count: pendingCount, fallback: "%d files are waiting in New.")
     }
 }

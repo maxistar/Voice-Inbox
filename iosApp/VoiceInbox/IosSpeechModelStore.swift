@@ -447,7 +447,7 @@ final class IosSpeechModelStore: ObservableObject {
                     return PreparationResult(
                         directory: nil,
                         invalidInstallation: true,
-                        message: "Speech model is invalid: \(reason)"
+                        message: L10n.format("model.invalidInstallation", fallback: "Speech model is invalid: %@", reason)
                     )
                 }
                 guard prepareNative(directory.path) else {
@@ -712,14 +712,23 @@ final class IosSpeechModelStore: ObservableObject {
 
         let sourceValidation = validateModelFiles(in: sourceURL, descriptor: descriptor)
         guard sourceValidation.missingFiles.isEmpty else {
-            return InstallResult(message: "Selected folder is not a valid \(descriptor.displayName) package: \(sourceValidation.missingFiles.joined(separator: ", "))")
+            return InstallResult(message: L10n.format(
+                "model.invalidFolderPackage",
+                fallback: "Selected folder is not a valid %@ package. Missing files: %@",
+                descriptor.displayName,
+                sourceValidation.missingFiles.joined(separator: ", ")
+            ))
         }
 
         let requiredBytes = descriptor.totalSizeBytes + descriptor.safetyMarginBytes
         if let values = try? IosSpeechModelPaths.applicationSupportDirectory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]),
            let available = values.volumeAvailableCapacityForImportantUsage,
            available < requiredBytes {
-            return InstallResult(message: "Not enough free storage to install \(descriptor.displayName).")
+            return InstallResult(message: L10n.format(
+                "model.insufficientStorage",
+                fallback: "Not enough free storage to install %@.",
+                descriptor.displayName
+            ))
         }
 
         do {
@@ -740,7 +749,11 @@ final class IosSpeechModelStore: ObservableObject {
             let installedValidation = validateModelFiles(in: IosSpeechModelPaths.installDirectory, descriptor: descriptor)
             guard installedValidation.missingFiles.isEmpty else {
                 try removeItemIfExists(IosSpeechModelPaths.installDirectory)
-                return InstallResult(message: "Copied model is incomplete. Missing: \(installedValidation.missingFiles.joined(separator: ", "))")
+                return InstallResult(message: L10n.format(
+                    "model.copiedIncomplete",
+                    fallback: "Copied model is incomplete. Missing files: %@",
+                    installedValidation.missingFiles.joined(separator: ", ")
+                ))
             }
 
             if fileManager.fileExists(atPath: IosSpeechModelPaths.modelDirectory.path) {
@@ -759,7 +772,7 @@ final class IosSpeechModelStore: ObservableObject {
                 try writeVerifiedInstallation(descriptor: descriptor)
                 try removeItemIfExists(IosSpeechModelPaths.backupDirectory)
                 try removeItemIfExists(IosSpeechModelPaths.backupReceiptFile)
-                return InstallResult(message: "\(descriptor.displayName) installed.", committed: true)
+                return InstallResult(message: L10n.format("model.installedNamed", fallback: "%@ installed.", descriptor.displayName), committed: true)
             } catch {
                 try? removeItemIfExists(IosSpeechModelPaths.modelDirectory)
                 if fileManager.fileExists(atPath: IosSpeechModelPaths.backupDirectory.path) {
@@ -773,7 +786,11 @@ final class IosSpeechModelStore: ObservableObject {
             }
         } catch {
             try? removeItemIfExists(IosSpeechModelPaths.installDirectory)
-            return InstallResult(message: "Could not install speech model: \(error.localizedDescription)")
+            return InstallResult(message: L10n.format(
+                "model.installFailed",
+                fallback: "Could not install speech model: %@",
+                error.localizedDescription
+            ))
         }
     }
 
@@ -816,7 +833,7 @@ final class IosSpeechModelStore: ObservableObject {
 
             var completedBytes: Int64 = 0
             progress(IosSpeechModelDownloadProgress(
-                message: "Downloading speech model",
+                message: L10n.text("model.downloading", fallback: "Downloading speech model"),
                 bytesDownloaded: completedBytes,
                 totalBytes: totalBytes
             ))
@@ -834,19 +851,23 @@ final class IosSpeechModelStore: ObservableObject {
                 let temporary = temporaryFile(for: entry)
                 guard isValidFile(temporary, entry: entry) else {
                     try? removeItemIfExists(temporary)
-                    return InstallResult(message: "Downloaded \(entry.name) failed verification.")
+                    return InstallResult(message: L10n.format(
+                        "model.fileVerificationFailed",
+                        fallback: "Downloaded file %@ failed verification.",
+                        entry.name
+                    ))
                 }
                 try fileManager.moveItem(at: temporary, to: destination)
                 completedBytes += entry.sizeBytes
                 progress(IosSpeechModelDownloadProgress(
-                    message: "Verified \(entry.name)",
+                    message: L10n.format("model.verified", fallback: "Verified %@", entry.name),
                     bytesDownloaded: completedBytes,
                     totalBytes: totalBytes
                 ))
             }
 
             progress(IosSpeechModelDownloadProgress(
-                message: "Activating speech model...",
+                message: L10n.text("model.activating", fallback: "Activating speech model…"),
                 bytesDownloaded: totalBytes,
                 totalBytes: totalBytes
             ))
@@ -854,7 +875,11 @@ final class IosSpeechModelStore: ObservableObject {
             let stagedValidation = validateModelFiles(in: IosSpeechModelPaths.stagingDirectory, descriptor: descriptor)
             guard stagedValidation.missingFiles.isEmpty else {
                 return InstallResult(
-                    message: "Downloaded model is incomplete. Missing: \(stagedValidation.missingFiles.joined(separator: ", "))"
+                    message: L10n.format(
+                        "model.downloadedIncomplete",
+                        fallback: "Downloaded model is incomplete. Missing files: %@",
+                        stagedValidation.missingFiles.joined(separator: ", ")
+                    )
                 )
             }
 
@@ -862,14 +887,21 @@ final class IosSpeechModelStore: ObservableObject {
             try writeVerifiedInstallation(descriptor: descriptor)
             try removeItemIfExists(IosSpeechModelPaths.backupDirectory)
             try removeItemIfExists(IosSpeechModelPaths.backupReceiptFile)
-            return InstallResult(message: "\(descriptor.displayName) downloaded and installed.", committed: true)
+            return InstallResult(
+                message: L10n.format("model.downloadedInstalled", fallback: "%@ downloaded and installed.", descriptor.displayName),
+                committed: true
+            )
         } catch is CancellationError {
             try? removeItemIfExists(IosSpeechModelPaths.stagingDirectory)
-            return InstallResult(message: "Speech model download cancelled.")
+            return InstallResult(message: L10n.text("model.downloadCancelled", fallback: "Speech model download cancelled."))
         } catch {
             try? removeItemIfExists(IosSpeechModelPaths.stagingDirectory)
             restorePreviousInstallationIfNeeded()
-            return InstallResult(message: "Could not download speech model: \(error.localizedDescription)")
+            return InstallResult(message: L10n.format(
+                "model.downloadFailed",
+                fallback: "Could not download speech model: %@",
+                error.localizedDescription
+            ))
         }
     }
 
@@ -919,7 +951,7 @@ final class IosSpeechModelStore: ObservableObject {
 
             if fileBytes - lastReported >= 2 * 1024 * 1024 {
                 progress(IosSpeechModelDownloadProgress(
-                    message: "Downloading \(entry.name)",
+                    message: L10n.format("model.fileDownloading", fallback: "Downloading %@", entry.name),
                     bytesDownloaded: completedBytes + fileBytes,
                     totalBytes: totalBytes
                 ))
@@ -1079,11 +1111,11 @@ final class IosSpeechModelStore: ObservableObject {
         var errorDescription: String? {
             switch self {
             case .missingManifest:
-                return "voice-inbox-model.json is missing from the selected folder."
+                return L10n.text("model.packageManifestMissing", fallback: "voice-inbox-model.json is missing from the selected folder.")
             case .malformedManifest:
-                return "voice-inbox-model.json is malformed or contains unsupported fields."
+                return L10n.text("model.packageManifestMalformed", fallback: "voice-inbox-model.json is malformed or contains unsupported fields.")
             case .unsupportedIdentity:
-                return "This speech model package is not supported on iOS."
+                return L10n.text("model.packageUnsupported", fallback: "This speech model package is not supported on iOS.")
             }
         }
     }

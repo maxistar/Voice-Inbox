@@ -325,7 +325,10 @@ final class IosSingleFileTranscriptionController: ObservableObject {
             return SingleFileTranscriptionOutcome(
                 success: false,
                 result: nil,
-                errorMessage: transcriber.lastError ?? "iOS speech recognition is not available yet."
+                errorMessage: transcriber.lastError ?? L10n.text(
+                    "transcription.unavailable",
+                    fallback: "iOS speech recognition is not available yet."
+                )
             )
         }
         let staging = IosTranscriptStaging()
@@ -648,7 +651,7 @@ final class IosNativeTranscriber: PlatformNativeTranscriber {
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let text = object["text"] as? String
         else {
-            lastError = "Native transcription returned invalid JSON."
+            lastError = L10n.text("transcription.invalidResult", fallback: "Native transcription returned invalid data.")
             return nil
         }
         return text

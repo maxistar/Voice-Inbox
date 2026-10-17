@@ -237,14 +237,14 @@ final class IosAudioImportStore: ObservableObject {
             userDefaults.set(url.lastPathComponent, forKey: Self.inboxFolderDisplayNameKey)
             inboxFolderStatus = IosInboxFolderStatus(
                 displayName: url.lastPathComponent,
-                message: "Audio folder selected. Refresh to scan for notes.",
+                message: L10n.text("folder.selected", fallback: "Audio folder selected. Refresh to scan for notes."),
                 needsSelection: false
             )
             refreshInboxFolder()
         } catch {
             inboxFolderStatus = IosInboxFolderStatus(
                 displayName: url.lastPathComponent,
-                message: "Could not save access to this folder. Choose it again.",
+                message: L10n.text("folder.saveFailed", fallback: "Could not save access to this folder. Choose it again."),
                 needsSelection: true
             )
         }
@@ -261,7 +261,7 @@ final class IosAudioImportStore: ObservableObject {
         inboxFolderStatus = IosInboxFolderStatus(
             displayName: folder.url.lastPathComponent,
             message: summary.failed > 0
-                ? "Audio folder scan failed. Check folder access and try again."
+                ? L10n.text("folder.scanFailed", fallback: "Audio folder scan failed. Check folder access and try again.")
                 : summary.message,
             needsSelection: false,
             hasError: summary.failed > 0
@@ -328,13 +328,13 @@ final class IosAudioImportStore: ObservableObject {
         if resolveInboxFolder(updateStatusOnFailure: false) != nil {
             inboxFolderStatus = IosInboxFolderStatus(
                 displayName: displayName,
-                message: "Audio folder is ready to refresh.",
+                message: L10n.text("folder.ready", fallback: "Audio folder is ready to refresh."),
                 needsSelection: false
             )
         } else {
             inboxFolderStatus = IosInboxFolderStatus(
                 displayName: displayName,
-                message: "Folder access expired. Choose the folder again.",
+                message: L10n.text("folder.accessExpired", fallback: "Folder access expired. Choose the folder again."),
                 needsSelection: true
             )
         }
@@ -345,7 +345,7 @@ final class IosAudioImportStore: ObservableObject {
             if updateStatusOnFailure {
                 inboxFolderStatus = IosInboxFolderStatus(
                     displayName: nil,
-                    message: "Choose a folder to use it as your audio inbox.",
+                    message: L10n.text("folder.choose", fallback: "Choose a folder to use it as your audio inbox."),
                     needsSelection: true
                 )
             }
@@ -363,7 +363,7 @@ final class IosAudioImportStore: ObservableObject {
             if stale, updateStatusOnFailure {
                 inboxFolderStatus = IosInboxFolderStatus(
                     displayName: userDefaults.string(forKey: Self.inboxFolderDisplayNameKey),
-                    message: "Folder access needs to be refreshed. Choose the folder again.",
+                    message: L10n.text("folder.refreshAccess", fallback: "Folder access needs to be refreshed. Choose the folder again."),
                     needsSelection: true
                 )
             }
@@ -372,7 +372,7 @@ final class IosAudioImportStore: ObservableObject {
             if updateStatusOnFailure {
                 inboxFolderStatus = IosInboxFolderStatus(
                     displayName: userDefaults.string(forKey: Self.inboxFolderDisplayNameKey),
-                    message: "Could not access the selected folder. Choose it again.",
+                    message: L10n.text("folder.accessFailed", fallback: "Could not access the selected folder. Choose it again."),
                     needsSelection: true
                 )
             }

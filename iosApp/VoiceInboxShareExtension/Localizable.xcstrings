@@ -1,261 +1,351 @@
 {
-  "sourceLanguage" : "en",
-  "strings" : {
-    "share.done" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Done"
+  "sourceLanguage": "en",
+  "strings": {
+    "share.done": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Готово"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Готово"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fertig"
           }
         }
       }
     },
-    "share.failed.few" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d files failed"
+    "share.failed.few": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d files failed"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ошибка при добавлении %d файлов"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ошибка при добавлении %d файлов"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d Dateien fehlgeschlagen"
           }
         }
       }
     },
-    "share.failed.many" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d files failed"
+    "share.failed.many": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d files failed"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ошибка при добавлении %d файлов"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ошибка при добавлении %d файлов"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d Dateien fehlgeschlagen"
           }
         }
       }
     },
-    "share.failed.one" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d file failed"
+    "share.failed.one": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d file failed"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ошибка при добавлении %d файла"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ошибка при добавлении %d файла"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d Datei fehlgeschlagen"
           }
         }
       }
     },
-    "share.failed.other" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d files failed"
+    "share.failed.other": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d files failed"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ошибка при добавлении %d файлов"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ошибка при добавлении %d файлов"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d Dateien fehlgeschlagen"
           }
         }
       }
     },
-    "share.imported.few" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d files added to Voice Inbox"
+    "share.imported.few": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d files added to Voice Inbox"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d файла добавлено в Voice Inbox"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d файла добавлено в Voice Inbox"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d Dateien zu Voice Inbox hinzugefügt"
           }
         }
       }
     },
-    "share.imported.many" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d files added to Voice Inbox"
+    "share.imported.many": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d files added to Voice Inbox"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d файлов добавлено в Voice Inbox"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d файлов добавлено в Voice Inbox"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d Dateien zu Voice Inbox hinzugefügt"
           }
         }
       }
     },
-    "share.imported.one" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d file added to Voice Inbox"
+    "share.imported.one": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d file added to Voice Inbox"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d файл добавлен в Voice Inbox"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d файл добавлен в Voice Inbox"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d Datei zu Voice Inbox hinzugefügt"
           }
         }
       }
     },
-    "share.imported.other" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d files added to Voice Inbox"
+    "share.imported.other": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d files added to Voice Inbox"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d файлов добавлено в Voice Inbox"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d файлов добавлено в Voice Inbox"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d Dateien zu Voice Inbox hinzugefügt"
           }
         }
       }
     },
-    "share.importing" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Importing audio..."
+    "share.importing": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importing audio..."
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Импорт аудио..."
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Импорт аудио..."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Audio wird importiert…"
           }
         }
       }
     },
-    "share.noSupportedAudio" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No supported audio files found."
+    "share.noSupportedAudio": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No supported audio files found."
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Поддерживаемые аудиофайлы не найдены."
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Поддерживаемые аудиофайлы не найдены."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine unterstützten Audiodateien gefunden."
           }
         }
       }
     },
-    "share.skipped.few" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d files skipped"
+    "share.skipped.few": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d files skipped"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d файла пропущено"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d файла пропущено"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d Dateien übersprungen"
           }
         }
       }
     },
-    "share.skipped.many" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d files skipped"
+    "share.skipped.many": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d files skipped"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d файлов пропущено"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d файлов пропущено"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d Dateien übersprungen"
           }
         }
       }
     },
-    "share.skipped.one" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d file skipped"
+    "share.skipped.one": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d file skipped"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d файл пропущен"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d файл пропущен"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d Datei übersprungen"
           }
         }
       }
     },
-    "share.skipped.other" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d files skipped"
+    "share.skipped.other": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d files skipped"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d файлов пропущено"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d файлов пропущено"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d Dateien übersprungen"
           }
         }
       }
     }
   },
-  "version" : "1.0"
+  "version": "1.0"
 }

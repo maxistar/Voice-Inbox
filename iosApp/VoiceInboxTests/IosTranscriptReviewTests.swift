@@ -5,6 +5,31 @@ import XCTest
 @testable import VoiceInbox
 
 final class IosTranscriptReviewTests: XCTestCase {
+    func testPluralFormsForEnglishRussianAndGerman() {
+        XCTAssertEqual(L10n.pluralForm(for: 1, languageCode: "en"), "one")
+        XCTAssertEqual(L10n.pluralForm(for: 2, languageCode: "en"), "other")
+
+        XCTAssertEqual(L10n.pluralForm(for: 1, languageCode: "ru"), "one")
+        XCTAssertEqual(L10n.pluralForm(for: 2, languageCode: "ru"), "few")
+        XCTAssertEqual(L10n.pluralForm(for: 5, languageCode: "ru"), "many")
+        XCTAssertEqual(L10n.pluralForm(for: 21, languageCode: "ru"), "one")
+
+        XCTAssertEqual(L10n.pluralForm(for: 1, languageCode: "de"), "one")
+        XCTAssertEqual(L10n.pluralForm(for: 2, languageCode: "de"), "other")
+    }
+
+    func testShareExtensionPluralFormsForEnglishRussianAndGerman() {
+        XCTAssertEqual(ShareExtensionL10n.pluralForm(for: 1, languageCode: "en"), "one")
+        XCTAssertEqual(ShareExtensionL10n.pluralForm(for: 2, languageCode: "en"), "other")
+
+        XCTAssertEqual(ShareExtensionL10n.pluralForm(for: 1, languageCode: "ru"), "one")
+        XCTAssertEqual(ShareExtensionL10n.pluralForm(for: 3, languageCode: "ru"), "few")
+        XCTAssertEqual(ShareExtensionL10n.pluralForm(for: 11, languageCode: "ru"), "many")
+
+        XCTAssertEqual(ShareExtensionL10n.pluralForm(for: 1, languageCode: "de"), "one")
+        XCTAssertEqual(ShareExtensionL10n.pluralForm(for: 2, languageCode: "de"), "other")
+    }
+
     func testOutputAdapterAppendsAndReadsBoundedUtf8Tail() throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("VoiceInboxOutput-\(UUID().uuidString).txt")
