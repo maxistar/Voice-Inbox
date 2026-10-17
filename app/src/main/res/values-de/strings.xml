@@ -8,6 +8,8 @@
     <string name="voice_keyboard_listening_latched">Höre zu… Nach dem Ende auf Stopp tippen.</string>
     <string name="voice_keyboard_listening_held_countdown">Höre zu… Zum Transkribieren loslassen. Noch %1$s.</string>
     <string name="voice_keyboard_listening_latched_countdown">Höre zu… Nach dem Ende auf Stopp tippen. Noch %1$s.</string>
+    <string name="voice_keyboard_hardware_recording_started">Aufnahme gestartet · zum Stoppen %1$s erneut drücken</string>
+    <string name="voice_keyboard_hardware_recording_stopped">Aufnahme beendet</string>
     <string name="voice_keyboard_transcribing">Lokale Transkription…</string>
     <string name="voice_keyboard_result_pending">Der Text ist bereit. Zum Einfügen ein Textfeld auswählen oder verwerfen.</string>
     <string name="voice_keyboard_no_speech">Keine Sprache erkannt. Bitte erneut versuchen.</string>

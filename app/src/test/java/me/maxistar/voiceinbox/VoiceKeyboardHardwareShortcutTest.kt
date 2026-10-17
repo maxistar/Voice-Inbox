@@ -8,6 +8,38 @@ import org.junit.Test
 
 class VoiceKeyboardHardwareShortcutTest {
     @Test
+    fun physicalKeyFeedbackIsLimitedToSuccessfulTransitionsWhileInputViewIsHidden() {
+        assertTrue(
+            VoiceKeyboardHardwareShortcut.shouldShowPhysicalKeyFeedback(
+                physicalKeyTrigger = true,
+                inputViewActive = false,
+                transitionSucceeded = true,
+            ),
+        )
+        assertFalse(
+            VoiceKeyboardHardwareShortcut.shouldShowPhysicalKeyFeedback(
+                physicalKeyTrigger = true,
+                inputViewActive = true,
+                transitionSucceeded = true,
+            ),
+        )
+        assertFalse(
+            VoiceKeyboardHardwareShortcut.shouldShowPhysicalKeyFeedback(
+                physicalKeyTrigger = true,
+                inputViewActive = false,
+                transitionSucceeded = false,
+            ),
+        )
+        assertFalse(
+            VoiceKeyboardHardwareShortcut.shouldShowPhysicalKeyFeedback(
+                physicalKeyTrigger = false,
+                inputViewActive = false,
+                transitionSucceeded = true,
+            ),
+        )
+    }
+
+    @Test
     fun volumeDownStartsAndStopsOnlyWhenSelectedAndInputViewIsActive() {
         val selected = VoiceKeyboardTriggerSettings(VoiceKeyboardHardwareTrigger.VOLUME_DOWN)
         assertEquals(

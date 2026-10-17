@@ -20,6 +20,7 @@ import android.widget.Button
 import android.widget.ImageButton
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import java.io.File
@@ -152,9 +153,10 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        val triggerSettings = triggerSettingsStore.load()
         return when (
             VoiceKeyboardHardwareShortcut.action(
-                settings = triggerSettingsStore.load(),
+                settings = triggerSettings,
                 inputActive = inputActive,
                 inputViewActive = inputViewActive,
                 keyCode = keyCode,
@@ -168,7 +170,11 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
             VoiceKeyboardVolumeShortcutAction.START,
             VoiceKeyboardVolumeShortcutAction.STOP,
             -> {
-                handleRecordButtonActivation()
+                handleRecordButtonActivation(
+                    triggerSettings.physicalKeyCode.takeIf {
+                        triggerSettings.trigger == VoiceKeyboardHardwareTrigger.PHYSICAL_KEY
+                    },
+                )
                 true
             }
         }
@@ -268,9 +274,9 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
         super.onDestroy()
     }
 
-    private fun handleRecordButtonActivation() {
+    private fun handleRecordButtonActivation(physicalKeyCode: Int? = null) {
         when (controller.phase) {
-            VoiceKeyboardPhase.RECORDING -> stopRecording()
+            VoiceKeyboardPhase.RECORDING -> stopRecording(physicalKeyCode = physicalKeyCode)
             VoiceKeyboardPhase.WAITING_FOR_MODEL,
             VoiceKeyboardPhase.TRANSCRIBING,
             -> cancelCurrentRequest()
@@ -280,7 +286,11 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
             }
             VoiceKeyboardPhase.IDLE,
             VoiceKeyboardPhase.ERROR,
-            -> startRecordingAndPrepare(requestGeneration + 1, touchInitiated = false)
+            -> startRecordingAndPrepare(
+                requestGeneration + 1,
+                touchInitiated = false,
+                physicalKeyCode = physicalKeyCode,
+            )
         }
     }
 
@@ -367,7 +377,11 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
         if (!view.performClick()) suppressNextRecordClick = false
     }
 
-    private fun startRecordingAndPrepare(generation: Long, touchInitiated: Boolean) {
+    private fun startRecordingAndPrepare(
+        generation: Long,
+        touchInitiated: Boolean,
+        physicalKeyCode: Int? = null,
+    ) {
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             recordGestureCoordinator.finish(generation)
             controller.fail()
@@ -408,6 +422,15 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
                     R.string.voice_keyboard_listening_latched_countdown
                 }
             recordingCountdown.start(generation)
+            val keyLabel = physicalKeyCode?.let(VoiceKeyboardFunctionKeys::label)
+            if (keyLabel != null && VoiceKeyboardHardwareShortcut.shouldShowPhysicalKeyFeedback(
+                    physicalKeyTrigger = true,
+                    inputViewActive = inputViewActive,
+                    transitionSucceeded = true,
+                )
+            ) {
+                showRecordingToast(R.string.voice_keyboard_hardware_recording_started, keyLabel)
+            }
         }.onFailure {
             recordGestureCoordinator.finish(generation)
             requestPreparation = null
@@ -446,7 +469,10 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
         }
     }
 
-    private fun stopRecording(expectedGeneration: Long = requestGeneration) {
+    private fun stopRecording(
+        expectedGeneration: Long = requestGeneration,
+        physicalKeyCode: Int? = null,
+    ) {
         if (expectedGeneration != requestGeneration) return
         if (!controller.recordingStopped()) return
         recordGestureCoordinator.finish(expectedGeneration)
@@ -472,6 +498,19 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
                     render(R.string.voice_keyboard_transcription_failed)
                 }
                 return@execute
+            }
+            if (physicalKeyCode != null) {
+                mainHandler.post {
+                    if (generation != requestGeneration) return@post
+                    if (VoiceKeyboardHardwareShortcut.shouldShowPhysicalKeyFeedback(
+                            physicalKeyTrigger = true,
+                            inputViewActive = inputViewActive,
+                            transitionSucceeded = true,
+                        )
+                    ) {
+                        showRecordingToast(R.string.voice_keyboard_hardware_recording_stopped)
+                    }
+                }
             }
             if (samples.isEmpty()) {
                 mainHandler.post {
@@ -667,6 +706,10 @@ class VoiceKeyboardInputMethodService : InputMethodService() {
         spaceButton?.isEnabled = editorReady
         enterButton?.isEnabled = editorReady
         nextKeyboardButton?.isEnabled = phase != VoiceKeyboardPhase.RECORDING
+    }
+
+    private fun showRecordingToast(message: Int, vararg formatArgs: Any) {
+        Toast.makeText(this, getString(message, *formatArgs), Toast.LENGTH_SHORT).show()
     }
 
     private companion object {

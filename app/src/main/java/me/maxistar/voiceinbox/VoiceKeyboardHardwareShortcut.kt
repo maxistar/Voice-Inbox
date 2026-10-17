@@ -10,6 +10,12 @@ internal enum class VoiceKeyboardVolumeShortcutAction {
 }
 
 internal object VoiceKeyboardHardwareShortcut {
+    fun shouldShowPhysicalKeyFeedback(
+        physicalKeyTrigger: Boolean,
+        inputViewActive: Boolean,
+        transitionSucceeded: Boolean,
+    ): Boolean = physicalKeyTrigger && !inputViewActive && transitionSucceeded
+
     fun action(
         settings: VoiceKeyboardTriggerSettings,
         inputActive: Boolean,

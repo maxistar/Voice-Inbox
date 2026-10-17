@@ -8,6 +8,8 @@
     <string name="voice_keyboard_listening_latched">Слушаю… Нажмите «Стоп», когда закончите.</string>
     <string name="voice_keyboard_listening_held_countdown">Слушаю… Отпустите, чтобы расшифровать. Осталось: %1$s.</string>
     <string name="voice_keyboard_listening_latched_countdown">Слушаю… Нажмите «Стоп», когда закончите. Осталось: %1$s.</string>
+    <string name="voice_keyboard_hardware_recording_started">Запись началась · нажмите %1$s ещё раз, чтобы остановить</string>
+    <string name="voice_keyboard_hardware_recording_stopped">Запись остановлена</string>
     <string name="voice_keyboard_transcribing">Расшифровка на устройстве…</string>
     <string name="voice_keyboard_result_pending">Текст готов. Выберите поле для вставки или закройте результат.</string>
     <string name="voice_keyboard_no_speech">Речь не обнаружена. Попробуйте ещё раз.</string>
