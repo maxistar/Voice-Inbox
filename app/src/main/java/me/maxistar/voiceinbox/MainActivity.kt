@@ -160,6 +160,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     private var keyboardDiscoveryLifecycle = AndroidVoiceKeyboardDiscoveryLifecycle.SUPPRESSED
     private var keyboardStatus = AndroidVoiceKeyboardStatus.DISABLED
     private var keyboardStatusKnown = false
+    private var microphonePermissionGranted = false
+    private var microphonePermissionKnown = false
     private var pendingModelPackageUri: Uri? = null
     private var pendingModelPackageCatalogId: String? = null
     private var quickCaptureState = QuickCaptureUiState()
@@ -207,6 +209,9 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     ) { granted ->
         if (quickCapturePermissionRequested) {
             quickCapturePermissionRequested = false
+            microphonePermissionGranted = AndroidMicrophonePermission.isGranted(this)
+            microphonePermissionKnown = true
+            publishTaskState()
             if (granted) {
                 handleQuickCaptureAction()
             } else {
@@ -214,11 +219,17 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
             }
             return@registerForActivityResult
         }
+        microphonePermissionGranted = AndroidMicrophonePermission.isGranted(this)
+        microphonePermissionKnown = true
+        publishTaskState()
         Toast.makeText(
             this,
-            if (granted) R.string.voice_keyboard_permission_granted else R.string.voice_keyboard_permission_denied,
+            if (granted) R.string.microphone_permission_granted else R.string.microphone_permission_denied,
             Toast.LENGTH_LONG,
         ).show()
+        if (!granted && !shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)) {
+            showMicrophonePermissionSettingsDialog()
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -258,6 +269,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         keyboardStatusProvider = AndroidVoiceKeyboardStatusProvider(this)
         keyboardSystemGateway = AndroidVoiceKeyboardSystemGateway(this)
         refreshKeyboardStatus(publish = false)
+        refreshMicrophonePermission(publish = false)
         startupCoordinator = StartupProcessingCoordinator.restore(
             savedInstanceState?.getString(STATE_STARTUP_PROCESSING_STAGE),
         )
@@ -349,6 +361,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
     override fun onResume() {
         super.onResume()
         if (::keyboardStatusProvider.isInitialized) refreshKeyboardStatus(publish = true)
+        if (microphonePermissionKnown) refreshMicrophonePermission(publish = true)
     }
 
     override fun onStop() {
@@ -1784,6 +1797,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                 folderSnapshot,
                 keyboardStatus,
                 keyboardStatusKnown,
+                microphonePermissionGranted,
+                microphonePermissionKnown,
             )
         ) {
             onboardingHintLifecycle = AndroidOnboardingHintLifecycle.COMPLETED
@@ -1828,6 +1843,8 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
                 onboardingLifecycle = onboardingHintLifecycle,
                 keyboardStatus = keyboardStatus,
                 keyboardKnown = keyboardStatusKnown,
+                microphonePermissionGranted = microphonePermissionGranted,
+                microphonePermissionKnown = microphonePermissionKnown,
                 keyboardDiscoveryLifecycle = keyboardDiscoveryLifecycle,
             )
         }
@@ -1904,6 +1921,31 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
         if (publish) publishTaskState()
     }
 
+    private fun refreshMicrophonePermission(publish: Boolean) {
+        microphonePermissionGranted = AndroidMicrophonePermission.isGranted(this)
+        microphonePermissionKnown = true
+        if (publish) publishTaskState()
+    }
+
+    private fun requestMicrophonePermissionFromOnboarding() {
+        if (AndroidMicrophonePermission.isGranted(this)) {
+            refreshMicrophonePermission(publish = true)
+            return
+        }
+        microphonePermissionRequest.launch(Manifest.permission.RECORD_AUDIO)
+    }
+
+    private fun showMicrophonePermissionSettingsDialog() {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.microphone_permission_settings_title)
+            .setMessage(R.string.microphone_permission_settings_message)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.microphone_permission_open_settings) { _, _ ->
+                runCatching { startActivity(AndroidMicrophonePermission.appSettingsIntent(this)) }
+            }
+            .show()
+    }
+
     private fun performKeyboardSystemAction() {
         val action = AndroidVoiceKeyboardActionPresenter.systemAction(keyboardStatusProvider.current())
         if (!keyboardSystemGateway.perform(action)) {
@@ -1952,6 +1994,7 @@ class MainActivity : AppCompatActivity(), StartupProcessingDialogFragment.Listen
             TaskActionKind.CHOOSE_VOICE_KEYBOARD,
             -> performKeyboardSystemAction()
             TaskActionKind.OPEN_VOICE_KEYBOARD_DOCUMENTATION -> openVoiceKeyboardDocumentation()
+            TaskActionKind.REQUEST_MICROPHONE_PERMISSION -> requestMicrophonePermissionFromOnboarding()
         }
     }
 

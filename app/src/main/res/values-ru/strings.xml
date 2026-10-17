@@ -29,6 +29,12 @@
     <string name="voice_keyboard_return_to_previous">Вернуться к предыдущей клавиатуре</string>
     <string name="voice_keyboard_permission_granted">Доступ к микрофону предоставлен. Вернитесь к клавиатуре Voice Inbox.</string>
     <string name="voice_keyboard_permission_denied">Доступ к микрофону не предоставлен.</string>
+    <string name="microphone_permission_granted">Доступ к микрофону предоставлен.</string>
+    <string name="microphone_permission_denied">Доступ к микрофону не предоставлен.</string>
+    <string name="microphone_permission_settings_title">Разрешить доступ к микрофону в настройках Android?</string>
+    <string name="microphone_permission_settings_message">Android больше не показывает запрос разрешения на микрофон. Доступ можно включить в системных настройках приложения. Готовые аудиофайлы по-прежнему можно импортировать и расшифровывать без этого разрешения.</string>
+    <string name="microphone_permission_open_settings">Открыть настройки приложения</string>
+    <string name="microphone_permission_settings_error">Не удалось открыть системные настройки приложения.</string>
     <string name="voice_keyboard_discovery_dismiss">Скрыть предложение клавиатуры</string>
     <string name="voice_keyboard_system_action_error">Настройки клавиатуры Android недоступны на этом устройстве. Откройте руководство по клавиатуре, чтобы настроить её вручную.</string>
     <string name="menu_select_output">Выбрать файл вывода</string>
@@ -88,6 +94,11 @@
     <string name="unknown_error">неизвестная ошибка</string>
     <string name="settings_voice_keyboard_title">Голосовая клавиатура</string>
     <string name="settings_voice_keyboard_explanation">Компактная Android-клавиатура для диктовки в любом редактируемом поле. Распознавание работает локально после настройки модели; это не полноценная клавиатура для набора текста.</string>
+    <string name="settings_microphone_permission_title">Доступ к микрофону</string>
+    <string name="settings_microphone_permission_explanation">Нужен для записи аудио и диктовки голосовой клавиатурой. Импортировать и расшифровывать готовые аудиофайлы можно и без него.</string>
+    <string name="settings_microphone_permission_granted">Доступ к микрофону предоставлен</string>
+    <string name="settings_microphone_permission_not_granted">Доступ к микрофону не включён</string>
+    <string name="settings_microphone_permission_action">Разрешить доступ к микрофону</string>
     <string name="settings_voice_keyboard_disabled">Не включена</string>
     <string name="settings_voice_keyboard_enabled">Включена · Выберите её в переключателе клавиатур Android</string>
     <string name="settings_voice_keyboard_selected">Готова · Выбрана сейчас</string>
@@ -211,6 +222,8 @@
     <string name="onboarding_step_output">Экспорт · необязательно</string>
     <string name="onboarding_step_folder">Папка с аудио · необязательно</string>
     <string name="onboarding_step_keyboard">Клавиатура · необязательно</string>
+    <string name="onboarding_step_microphone">Доступ к микрофону · необязательно</string>
+    <string name="onboarding_microphone_explanation">Доступ к микрофону нужен для записи и диктовки голосовой клавиатурой. Готовые аудиофайлы можно импортировать и расшифровывать без него.</string>
     <string name="onboarding_action_installing">Установка речевой модели…</string>
     <string name="onboarding_action_retry">Повторить настройку</string>
     <string name="onboarding_action_start">Начать настройку</string>
@@ -218,6 +231,7 @@
     <string name="onboarding_action_select_output">Выбрать файл экспорта</string>
     <string name="onboarding_action_select_folder">Выбрать папку с аудио</string>
     <string name="onboarding_action_enable_keyboard">Включить голосовую клавиатуру</string>
+    <string name="onboarding_action_grant_microphone">Разрешить доступ к микрофону</string>
     <string name="onboarding_action_ready">Готово к расшифровке</string>
     <string name="voice_keyboard_discovery_title">Диктуйте в любом приложении</string>
     <string name="voice_keyboard_discovery_explanation">Используйте Voice Inbox как компактную голосовую клавиатуру. Распознавание работает локально после настройки модели.</string>

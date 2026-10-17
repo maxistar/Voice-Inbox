@@ -29,6 +29,12 @@
     <string name="voice_keyboard_return_to_previous">Return to previous keyboard</string>
     <string name="voice_keyboard_permission_granted">Microphone permission granted. Return to the Voice Inbox keyboard.</string>
     <string name="voice_keyboard_permission_denied">Microphone permission was not granted.</string>
+    <string name="microphone_permission_granted">Microphone access granted.</string>
+    <string name="microphone_permission_denied">Microphone access was not granted.</string>
+    <string name="microphone_permission_settings_title">Allow microphone access in Android settings?</string>
+    <string name="microphone_permission_settings_message">Android is no longer showing the microphone permission prompt. You can allow access in this app’s system settings. Existing audio files can still be imported and transcribed without it.</string>
+    <string name="microphone_permission_open_settings">Open app settings</string>
+    <string name="microphone_permission_settings_error">Could not open Android app settings.</string>
     <string name="voice_keyboard_discovery_dismiss">Dismiss voice keyboard suggestion</string>
     <string name="voice_keyboard_system_action_error">Android keyboard settings are unavailable on this device. See the keyboard guide for manual steps.</string>
     <string name="menu_select_output">Select output file</string>
@@ -88,6 +94,11 @@
     <string name="unknown_error">unknown error</string>
     <string name="settings_voice_keyboard_title">Voice keyboard</string>
     <string name="settings_voice_keyboard_explanation">Compact Android dictation for any editable field. Recognition runs locally after model setup; this is not a full typing keyboard.</string>
+    <string name="settings_microphone_permission_title">Microphone access</string>
+    <string name="settings_microphone_permission_explanation">Used for live recording and voice keyboard dictation. Importing and transcribing existing audio works without it.</string>
+    <string name="settings_microphone_permission_granted">Microphone access granted</string>
+    <string name="settings_microphone_permission_not_granted">Microphone access not enabled</string>
+    <string name="settings_microphone_permission_action">Allow microphone access</string>
     <string name="settings_voice_keyboard_disabled">Not enabled</string>
     <string name="settings_voice_keyboard_enabled">Enabled · Choose it from Android’s keyboard picker</string>
     <string name="settings_voice_keyboard_selected">Ready · Currently selected</string>
@@ -209,6 +220,8 @@
     <string name="onboarding_step_output">Configure automatic transcript export · Optional</string>
     <string name="onboarding_step_folder">Select audio folder · Optional</string>
     <string name="onboarding_step_keyboard">Enable voice keyboard · Optional</string>
+    <string name="onboarding_step_microphone">Allow microphone access · Optional</string>
+    <string name="onboarding_microphone_explanation">Microphone access enables live recording and voice keyboard dictation. You can still import and transcribe existing audio without it.</string>
     <string name="onboarding_action_installing">Installing speech model…</string>
     <string name="onboarding_action_retry">Retry setup</string>
     <string name="onboarding_action_start">Start setup</string>
@@ -216,6 +229,7 @@
     <string name="onboarding_action_select_output">Choose export document</string>
     <string name="onboarding_action_select_folder">Select audio folder</string>
     <string name="onboarding_action_enable_keyboard">Enable voice keyboard</string>
+    <string name="onboarding_action_grant_microphone">Allow microphone access</string>
     <string name="onboarding_action_ready">Ready to transcribe</string>
     <string name="voice_keyboard_discovery_title">Dictate in any app</string>
     <string name="voice_keyboard_discovery_explanation">Use Voice Inbox as a compact voice keyboard. Recognition runs locally after model setup.</string>

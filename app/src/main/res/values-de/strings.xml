@@ -29,6 +29,12 @@
     <string name="voice_keyboard_return_to_previous">Zur vorherigen Tastatur zurückkehren</string>
     <string name="voice_keyboard_permission_granted">Mikrofonzugriff gewährt. Zur Voice-Inbox-Tastatur zurückkehren.</string>
     <string name="voice_keyboard_permission_denied">Mikrofonzugriff wurde nicht gewährt.</string>
+    <string name="microphone_permission_granted">Mikrofonzugriff gewährt.</string>
+    <string name="microphone_permission_denied">Mikrofonzugriff wurde nicht gewährt.</string>
+    <string name="microphone_permission_settings_title">Mikrofonzugriff in den Android-Einstellungen erlauben?</string>
+    <string name="microphone_permission_settings_message">Android zeigt den Berechtigungsdialog nicht mehr an. Du kannst den Zugriff in den Systemeinstellungen dieser App erlauben. Vorhandene Audiodateien lassen sich weiterhin ohne diese Berechtigung importieren und transkribieren.</string>
+    <string name="microphone_permission_open_settings">App-Einstellungen öffnen</string>
+    <string name="microphone_permission_settings_error">Android-App-Einstellungen konnten nicht geöffnet werden.</string>
     <string name="voice_keyboard_discovery_dismiss">Tastaturvorschlag schließen</string>
     <string name="voice_keyboard_system_action_error">Die Android-Tastatureinstellungen sind auf diesem Gerät nicht verfügbar. Die Tastaturanleitung enthält manuelle Schritte.</string>
     <string name="menu_select_output">Ausgabedatei auswählen</string>
@@ -88,6 +94,11 @@
     <string name="unknown_error">unbekannter Fehler</string>
     <string name="settings_voice_keyboard_title">Voice-Inbox-Tastatur</string>
     <string name="settings_voice_keyboard_explanation">Kompaktes Android-Diktat für jedes bearbeitbare Feld. Die Erkennung läuft nach der Einrichtung des Modells lokal; dies ist keine vollständige Tastatur.</string>
+    <string name="settings_microphone_permission_title">Mikrofonzugriff</string>
+    <string name="settings_microphone_permission_explanation">Wird für Live-Aufnahmen und Diktate mit der Voice-Inbox-Tastatur verwendet. Vorhandene Audiodateien lassen sich auch ohne Zugriff importieren und transkribieren.</string>
+    <string name="settings_microphone_permission_granted">Mikrofonzugriff gewährt</string>
+    <string name="settings_microphone_permission_not_granted">Mikrofonzugriff nicht aktiviert</string>
+    <string name="settings_microphone_permission_action">Mikrofonzugriff erlauben</string>
     <string name="settings_voice_keyboard_disabled">Nicht aktiviert</string>
     <string name="settings_voice_keyboard_enabled">Aktiviert · In der Android-Tastaturauswahl auswählen</string>
     <string name="settings_voice_keyboard_selected">Bereit · Derzeit ausgewählt</string>
@@ -209,6 +220,8 @@
     <string name="onboarding_step_output">Automatischen Transkript-Export konfigurieren · Optional</string>
     <string name="onboarding_step_folder">Audioordner auswählen · Optional</string>
     <string name="onboarding_step_keyboard">Voice-Inbox-Tastatur aktivieren · Optional</string>
+    <string name="onboarding_step_microphone">Mikrofonzugriff erlauben · Optional</string>
+    <string name="onboarding_microphone_explanation">Mikrofonzugriff ermöglicht Live-Aufnahmen und Diktate mit der Voice-Inbox-Tastatur. Vorhandene Audiodateien kannst du auch ohne Zugriff importieren und transkribieren.</string>
     <string name="onboarding_action_installing">Sprachmodell wird installiert…</string>
     <string name="onboarding_action_retry">Einrichtung wiederholen</string>
     <string name="onboarding_action_start">Einrichtung starten</string>
@@ -216,6 +229,7 @@
     <string name="onboarding_action_select_output">Exportdokument auswählen</string>
     <string name="onboarding_action_select_folder">Audioordner auswählen</string>
     <string name="onboarding_action_enable_keyboard">Voice-Inbox-Tastatur aktivieren</string>
+    <string name="onboarding_action_grant_microphone">Mikrofonzugriff erlauben</string>
     <string name="onboarding_action_ready">Bereit zum Transkribieren</string>
     <string name="voice_keyboard_discovery_title">In jeder App diktieren</string>
     <string name="voice_keyboard_discovery_explanation">Voice Inbox als kompakte Sprachtastatur verwenden. Die Erkennung läuft nach der Einrichtung lokal.</string>

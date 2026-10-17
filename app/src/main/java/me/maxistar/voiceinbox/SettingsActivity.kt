@@ -2,6 +2,7 @@ package me.maxistar.voiceinbox
 
 import me.maxistar.voiceinbox.core.*
 
+import android.Manifest
 import android.app.TimePickerDialog
 import android.content.ActivityNotFoundException
 import android.content.DialogInterface
@@ -44,6 +45,8 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var scheduledTimeDetail: TextView
     private lateinit var keyboardStatusView: TextView
     private lateinit var keyboardActionView: TextView
+    private lateinit var microphoneStatusView: TextView
+    private lateinit var microphoneActionView: TextView
     private lateinit var keyboardStatusProvider: AndroidVoiceKeyboardStatusProvider
     private lateinit var keyboardSystemGateway: AndroidVoiceKeyboardSystemGateway
     private lateinit var keyboardTriggerStore: VoiceKeyboardTriggerSettingsStore
@@ -56,6 +59,15 @@ class SettingsActivity : AppCompatActivity() {
     private val selectionExecutor = Executors.newSingleThreadExecutor()
     private var settings = ScheduledTranscriptionSettings()
     private var activityDestroyed = false
+
+    private val microphonePermissionRequest = registerForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        renderMicrophonePermission()
+        if (!granted && !shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)) {
+            showMicrophonePermissionSettingsDialog()
+        }
+    }
 
     private val outputPicker = registerForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -115,6 +127,8 @@ class SettingsActivity : AppCompatActivity() {
         scheduledSwitch = findViewById(R.id.scheduledSwitch)
         keyboardStatusView = findViewById(R.id.settingsVoiceKeyboardStatus)
         keyboardActionView = findViewById(R.id.settingsVoiceKeyboardAction)
+        microphoneStatusView = findViewById(R.id.settingsMicrophoneStatus)
+        microphoneActionView = findViewById(R.id.settingsMicrophoneAction)
         keyboardTriggerGroup = findViewById(R.id.settingsVoiceKeyboardTriggerGroup)
         keyboardTriggerSummary = findViewById(R.id.settingsVoiceKeyboardTriggerSummary)
         keyboardPhysicalKeyRow = findViewById(R.id.settingsVoiceKeyboardPhysicalKeyRow)
@@ -140,6 +154,13 @@ class SettingsActivity : AppCompatActivity() {
             val action = AndroidVoiceKeyboardActionPresenter.systemAction(keyboardStatusProvider.current())
             if (!keyboardSystemGateway.perform(action)) {
                 Toast.makeText(this, R.string.voice_keyboard_system_action_error, Toast.LENGTH_LONG).show()
+            }
+        }
+        microphoneActionView.setOnClickListener {
+            if (AndroidMicrophonePermission.isGranted(this)) {
+                renderMicrophonePermission()
+            } else {
+                microphonePermissionRequest.launch(Manifest.permission.RECORD_AUDIO)
             }
         }
         keyboardTriggerGroup.setOnCheckedChangeListener { _, checkedId ->
@@ -205,12 +226,14 @@ class SettingsActivity : AppCompatActivity() {
         renderStorage()
         renderSchedule()
         renderVoiceKeyboard()
+        renderMicrophonePermission()
     }
 
     override fun onResume() {
         super.onResume()
         renderStorage()
         renderVoiceKeyboard()
+        renderMicrophonePermission()
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean =
@@ -334,6 +357,34 @@ class SettingsActivity : AppCompatActivity() {
             },
         )
         renderKeyboardTrigger()
+    }
+
+    private fun renderMicrophonePermission() {
+        val granted = AndroidMicrophonePermission.isGranted(this)
+        microphoneStatusView.setText(
+            if (granted) R.string.settings_microphone_permission_granted
+            else R.string.settings_microphone_permission_not_granted,
+        )
+        microphoneActionView.visibility = if (granted) View.GONE else View.VISIBLE
+        microphoneActionView.setText(R.string.settings_microphone_permission_action)
+    }
+
+    private fun showMicrophonePermissionSettingsDialog() {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.microphone_permission_settings_title)
+            .setMessage(R.string.microphone_permission_settings_message)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.microphone_permission_open_settings) { _, _ ->
+                runCatching { startActivity(AndroidMicrophonePermission.appSettingsIntent(this)) }
+                    .onFailure {
+                        Toast.makeText(
+                            this,
+                            R.string.microphone_permission_settings_error,
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
+            }
+            .show()
     }
 
     private fun renderKeyboardTrigger() {

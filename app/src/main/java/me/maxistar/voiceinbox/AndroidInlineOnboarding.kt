@@ -71,6 +71,7 @@ enum class AndroidOnboardingStepKind {
     OUTPUT,
     FOLDER,
     KEYBOARD,
+    MICROPHONE,
 }
 
 data class AndroidOnboardingChecklistStep(
@@ -91,6 +92,7 @@ data class AndroidOnboardingHintPresentation(
     val titleRes: Int = R.string.onboarding_title,
     val explanationRes: Int = R.string.onboarding_explanation,
     val downloadDisclosureRes: Int? = null,
+    val microphoneDisclosureRes: Int? = null,
     val steps: List<AndroidOnboardingChecklistStep> = emptyList(),
     val action: AndroidOnboardingHintAction? = null,
 ) {
@@ -109,12 +111,14 @@ object AndroidOnboardingHintPresenter {
         folder: FolderSetupSnapshot,
         keyboardStatus: AndroidVoiceKeyboardStatus,
         keyboardKnown: Boolean,
+        microphonePermissionGranted: Boolean,
+        microphonePermissionKnown: Boolean,
     ): AndroidOnboardingHintPresentation {
         if (
             lifecycle != AndroidOnboardingHintLifecycle.ACTIVE ||
             filter != TaskListFilter.NEW ||
-            !setupKnown(hydration, keyboardKnown) ||
-            allStepsComplete(model, output, folder, keyboardStatus)
+            !setupKnown(hydration, keyboardKnown, microphonePermissionKnown) ||
+            allStepsComplete(model, output, folder, keyboardStatus, microphonePermissionGranted)
         ) {
             return AndroidOnboardingHintPresentation.HIDDEN
         }
@@ -143,11 +147,19 @@ object AndroidOnboardingHintPresenter {
                 complete = keyboardStatus != AndroidVoiceKeyboardStatus.DISABLED,
                 optional = true,
             ),
+            AndroidOnboardingChecklistStep(
+                kind = AndroidOnboardingStepKind.MICROPHONE,
+                labelRes = R.string.onboarding_step_microphone,
+                complete = microphonePermissionGranted,
+                optional = true,
+            ),
         )
-        val action = nextAction(model, output, folder, keyboardStatus)
+        val action = nextAction(model, output, folder, keyboardStatus, microphonePermissionGranted)
         return AndroidOnboardingHintPresentation(
             visible = true,
             steps = steps,
+            microphoneDisclosureRes = R.string.onboarding_microphone_explanation
+                .takeUnless { microphonePermissionGranted },
             downloadDisclosureRes = R.string.onboarding_download_disclosure
                 .takeIf {
                     action.enabled && action.kind in setOf(
@@ -167,31 +179,37 @@ object AndroidOnboardingHintPresenter {
         folder: FolderSetupSnapshot,
         keyboardStatus: AndroidVoiceKeyboardStatus,
         keyboardKnown: Boolean,
+        microphonePermissionGranted: Boolean,
+        microphonePermissionKnown: Boolean,
     ): Boolean = lifecycle == AndroidOnboardingHintLifecycle.ACTIVE &&
-        setupKnown(hydration, keyboardKnown) &&
-        allStepsComplete(model, output, folder, keyboardStatus)
+        setupKnown(hydration, keyboardKnown, microphonePermissionKnown) &&
+        allStepsComplete(model, output, folder, keyboardStatus, microphonePermissionGranted)
 
     private fun setupKnown(
         hydration: AndroidMainScreenHydration,
         keyboardKnown: Boolean,
-    ): Boolean = hydration.modelKnown && hydration.outputKnown && hydration.folderKnown && keyboardKnown
+        microphonePermissionKnown: Boolean,
+    ): Boolean = hydration.modelKnown && hydration.outputKnown && hydration.folderKnown &&
+        keyboardKnown && microphonePermissionKnown
 
     private fun allStepsComplete(
         model: ModelSetupSnapshot,
         output: OutputSetupSnapshot,
         folder: FolderSetupSnapshot,
         keyboardStatus: AndroidVoiceKeyboardStatus,
+        microphonePermissionGranted: Boolean,
     ): Boolean =
         model.state == ModelSetupSnapshotState.READY &&
             output.state == OutputSetupSnapshotState.READY &&
             folder.state == FolderSetupSnapshotState.READY &&
-            keyboardStatus != AndroidVoiceKeyboardStatus.DISABLED
+            keyboardStatus != AndroidVoiceKeyboardStatus.DISABLED && microphonePermissionGranted
 
     private fun nextAction(
         model: ModelSetupSnapshot,
         output: OutputSetupSnapshot,
         folder: FolderSetupSnapshot,
         keyboardStatus: AndroidVoiceKeyboardStatus,
+        microphonePermissionGranted: Boolean,
     ): AndroidOnboardingHintAction = when {
         model.state == ModelSetupSnapshotState.INSTALLING -> AndroidOnboardingHintAction(
             labelRes = R.string.onboarding_action_installing,
@@ -226,6 +244,11 @@ object AndroidOnboardingHintPresenter {
             labelRes = R.string.onboarding_action_enable_keyboard,
             enabled = true,
             kind = TaskActionKind.ENABLE_VOICE_KEYBOARD,
+        )
+        !microphonePermissionGranted -> AndroidOnboardingHintAction(
+            labelRes = R.string.onboarding_action_grant_microphone,
+            enabled = true,
+            kind = TaskActionKind.REQUEST_MICROPHONE_PERMISSION,
         )
         else -> AndroidOnboardingHintAction(
             labelRes = R.string.onboarding_action_ready,

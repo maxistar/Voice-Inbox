@@ -75,6 +75,8 @@ class AndroidInlineOnboardingTest {
         assertTrue(presentation.steps.single { it.kind == AndroidOnboardingStepKind.OUTPUT }.optional)
         assertTrue(presentation.steps.single { it.kind == AndroidOnboardingStepKind.FOLDER }.optional)
         assertTrue(presentation.steps.single { it.kind == AndroidOnboardingStepKind.KEYBOARD }.optional)
+        assertTrue(presentation.steps.single { it.kind == AndroidOnboardingStepKind.MICROPHONE }.optional)
+        assertEquals(R.string.onboarding_microphone_explanation, presentation.microphoneDisclosureRes)
     }
 
     @Test
@@ -95,12 +97,21 @@ class AndroidInlineOnboardingTest {
                 folder = FolderSetupSnapshot(FolderSetupSnapshotState.READY),
             ).action?.kind,
         )
+        val microphoneStillNeeded = present(
+            model = readyModel(),
+            output = readyOutput(),
+            folder = FolderSetupSnapshot(FolderSetupSnapshotState.READY),
+            keyboardStatus = AndroidVoiceKeyboardStatus.ENABLED,
+        )
+        assertTrue(microphoneStillNeeded.visible)
+        assertEquals(TaskActionKind.REQUEST_MICROPHONE_PERMISSION, microphoneStillNeeded.action?.kind)
         assertFalse(
             present(
                 model = readyModel(),
                 output = readyOutput(),
                 folder = FolderSetupSnapshot(FolderSetupSnapshotState.READY),
                 keyboardStatus = AndroidVoiceKeyboardStatus.ENABLED,
+                microphonePermissionGranted = true,
             ).visible,
         )
         assertTrue(
@@ -112,6 +123,8 @@ class AndroidInlineOnboardingTest {
                 FolderSetupSnapshot(FolderSetupSnapshotState.READY),
                 AndroidVoiceKeyboardStatus.ENABLED,
                 true,
+                true,
+                true,
             ),
         )
         assertFalse(
@@ -123,6 +136,8 @@ class AndroidInlineOnboardingTest {
                 FolderSetupSnapshot(FolderSetupSnapshotState.UNSELECTED),
                 AndroidVoiceKeyboardStatus.DISABLED,
                 true,
+                false,
+                true,
             ),
         )
         assertFalse(
@@ -133,6 +148,8 @@ class AndroidInlineOnboardingTest {
                 OutputSetupSnapshot(OutputSetupSnapshotState.REQUIRED),
                 FolderSetupSnapshot(FolderSetupSnapshotState.UNSELECTED),
                 AndroidVoiceKeyboardStatus.DISABLED,
+                false,
+                false,
                 false,
             ),
         )
@@ -147,6 +164,8 @@ class AndroidInlineOnboardingTest {
         folder: FolderSetupSnapshot = FolderSetupSnapshot(FolderSetupSnapshotState.UNSELECTED),
         keyboardStatus: AndroidVoiceKeyboardStatus = AndroidVoiceKeyboardStatus.DISABLED,
         keyboardKnown: Boolean = true,
+        microphonePermissionGranted: Boolean = false,
+        microphonePermissionKnown: Boolean = true,
     ) = AndroidOnboardingHintPresenter.present(
         lifecycle,
         filter,
@@ -156,6 +175,8 @@ class AndroidInlineOnboardingTest {
         folder,
         keyboardStatus,
         keyboardKnown,
+        microphonePermissionGranted,
+        microphonePermissionKnown,
     )
 
     private fun hydrated() = AndroidMainScreenHydration(true, true, true, true)

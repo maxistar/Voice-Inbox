@@ -286,6 +286,7 @@ class AndroidTaskActionRouterTest {
         hydration = AndroidMainScreenHydration(true, true, true, true),
         onboardingLifecycle = lifecycle,
         keyboardKnown = true,
+        microphonePermissionKnown = true,
     )
 
     private fun request(stableId: String, entryId: Long?, kind: TaskActionKind) =

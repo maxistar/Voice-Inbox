@@ -80,6 +80,12 @@ class SettingsActivityInstrumentedTest {
             onView(withId(R.id.settingsVoiceKeyboardStatus)).check(matches(isDisplayed()))
             onView(withId(R.id.settingsVoiceKeyboardAction)).check(matches(isDisplayed()))
             onView(withId(R.id.settingsVoiceKeyboardDocumentation)).check(matches(isDisplayed()))
+            onView(withText(R.string.settings_microphone_permission_title))
+                .perform(scrollTo())
+                .check(matches(isDisplayed()))
+            onView(withText(R.string.settings_microphone_permission_explanation))
+                .check(matches(isDisplayed()))
+            onView(withId(R.id.settingsMicrophoneStatus)).perform(scrollTo()).check(matches(isDisplayed()))
         }
     }
 

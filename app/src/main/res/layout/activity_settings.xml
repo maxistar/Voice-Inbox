@@ -121,6 +121,36 @@
                 android:text="@string/settings_voice_keyboard_explanation" />
 
             <TextView
+                android:id="@+id/settingsMicrophoneTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/settings_microphone_permission_title"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/settingsMicrophoneExplanation"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/settings_microphone_permission_explanation" />
+
+            <TextView
+                android:id="@+id/settingsMicrophoneStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/settings_microphone_permission_not_granted" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/settingsMicrophoneAction"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/settings_microphone_permission_action" />
+
+            <TextView
                 android:id="@+id/settingsVoiceKeyboardStatus"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

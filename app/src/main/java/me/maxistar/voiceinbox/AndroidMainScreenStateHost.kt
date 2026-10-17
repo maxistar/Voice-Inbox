@@ -38,6 +38,8 @@ data class AndroidMainScreenInput(
     val onboardingLifecycle: AndroidOnboardingHintLifecycle = AndroidOnboardingHintLifecycle.DISMISSED,
     val keyboardStatus: AndroidVoiceKeyboardStatus = AndroidVoiceKeyboardStatus.DISABLED,
     val keyboardKnown: Boolean = false,
+    val microphonePermissionGranted: Boolean = false,
+    val microphonePermissionKnown: Boolean = false,
     val keyboardDiscoveryLifecycle: AndroidVoiceKeyboardDiscoveryLifecycle = AndroidVoiceKeyboardDiscoveryLifecycle.SUPPRESSED,
 )
 
@@ -137,6 +139,8 @@ object AndroidTaskListSnapshotMapper {
                 folder = input.folder,
                 keyboardStatus = input.keyboardStatus,
                 keyboardKnown = input.keyboardKnown,
+                microphonePermissionGranted = input.microphonePermissionGranted,
+                microphonePermissionKnown = input.microphonePermissionKnown,
             ),
             keyboardDiscovery = AndroidVoiceKeyboardDiscoveryPresenter.present(
                 lifecycle = input.keyboardDiscoveryLifecycle,

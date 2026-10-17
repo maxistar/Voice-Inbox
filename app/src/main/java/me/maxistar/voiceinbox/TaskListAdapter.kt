@@ -342,10 +342,12 @@ class TaskListAdapter(
         private val title: TextView = itemView.findViewById(R.id.onboardingTitle)
         private val explanation: TextView = itemView.findViewById(R.id.onboardingExplanation)
         private val disclosure: TextView = itemView.findViewById(R.id.onboardingDownloadDisclosure)
+        private val microphoneDisclosure: TextView = itemView.findViewById(R.id.onboardingMicrophoneDisclosure)
         private val modelStep: TextView = itemView.findViewById(R.id.onboardingModelStep)
         private val outputStep: TextView = itemView.findViewById(R.id.onboardingOutputStep)
         private val folderStep: TextView = itemView.findViewById(R.id.onboardingFolderStep)
         private val keyboardStep: TextView = itemView.findViewById(R.id.onboardingKeyboardStep)
+        private val microphoneStep: TextView = itemView.findViewById(R.id.onboardingMicrophoneStep)
         private val action: MaterialButton = itemView.findViewById(R.id.onboardingAction)
         private val close: ImageButton = itemView.findViewById(R.id.onboardingClose)
 
@@ -359,10 +361,13 @@ class TaskListAdapter(
             explanation.setText(presentation.explanationRes)
             presentation.downloadDisclosureRes?.let(disclosure::setText)
             disclosure.isVisible = presentation.downloadDisclosureRes != null
+            presentation.microphoneDisclosureRes?.let(microphoneDisclosure::setText)
+            microphoneDisclosure.isVisible = presentation.microphoneDisclosureRes != null
             bindStep(modelStep, presentation.steps.firstOrNull { it.kind == AndroidOnboardingStepKind.MODEL })
             bindStep(outputStep, presentation.steps.firstOrNull { it.kind == AndroidOnboardingStepKind.OUTPUT })
             bindStep(folderStep, presentation.steps.firstOrNull { it.kind == AndroidOnboardingStepKind.FOLDER })
             bindStep(keyboardStep, presentation.steps.firstOrNull { it.kind == AndroidOnboardingStepKind.KEYBOARD })
+            bindStep(microphoneStep, presentation.steps.firstOrNull { it.kind == AndroidOnboardingStepKind.MICROPHONE })
             presentation.action?.labelRes?.let(action::setText)
             action.isEnabled = presentation.action?.enabled == true
             action.isVisible = presentation.action != null

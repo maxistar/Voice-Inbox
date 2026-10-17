@@ -629,6 +629,8 @@ class MainActivityInstrumentedTest {
                 setField(activity, "folderPresentationKnown", true)
                 setField(activity, "keyboardStatus", AndroidVoiceKeyboardStatus.ENABLED)
                 setField(activity, "keyboardStatusKnown", true)
+                setField(activity, "microphonePermissionGranted", true)
+                setField(activity, "microphonePermissionKnown", true)
                 invoke(activity, "publishTaskState")
             }
             awaitActivity(scenario) { activity ->
@@ -747,6 +749,8 @@ class MainActivityInstrumentedTest {
         onboardingLifecycle = AndroidOnboardingHintLifecycle.ACTIVE,
         keyboardStatus = AndroidVoiceKeyboardStatus.DISABLED,
         keyboardKnown = true,
+        microphonePermissionGranted = false,
+        microphonePermissionKnown = true,
     )
 
     private fun seedCatalogEntry(

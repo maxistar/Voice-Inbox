@@ -96,6 +96,20 @@ class AndroidMainScreenStateHostTest {
     }
 
     @Test
+    fun missingMicrophonePermissionDoesNotBlockExistingAudioImportOrTranscription() {
+        val state = AndroidTaskListSnapshotMapper.state(
+            readyInput(entries = listOf(entry(1, AudioFileState.PENDING))).copy(
+                microphonePermissionKnown = true,
+                microphonePermissionGranted = false,
+            ),
+        )
+
+        assertTrue(state.importEnabled)
+        assertTrue(state.taskList.tasks.filterIsInstance<AudioTaskPresentation>()
+            .single { it.entryId == 1L }.actions.any { it.kind == TaskActionKind.TRANSCRIBE && it.enabled })
+    }
+
+    @Test
     fun mapperAssignsPreviewAndActiveTranscriptionToStableEntry() {
         val state = AndroidTaskListSnapshotMapper.state(
             readyInput(
@@ -222,6 +236,7 @@ class AndroidMainScreenStateHostTest {
                 hydration = hydrated(),
                 onboardingLifecycle = AndroidOnboardingHintLifecycle.ACTIVE,
                 keyboardKnown = true,
+                microphonePermissionKnown = true,
             ),
         )
         assertTrue(initial.onboardingHint.visible)
@@ -239,6 +254,7 @@ class AndroidMainScreenStateHostTest {
                 hydration = hydrated(),
                 onboardingLifecycle = AndroidOnboardingHintLifecycle.ACTIVE,
                 keyboardKnown = true,
+                microphonePermissionKnown = true,
             ),
         )
         assertTrue(directModelCompletion.onboardingHint.visible)
