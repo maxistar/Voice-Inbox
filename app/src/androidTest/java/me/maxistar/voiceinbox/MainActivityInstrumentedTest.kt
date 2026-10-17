@@ -105,9 +105,10 @@ class MainActivityInstrumentedTest {
                 activity.findViewById<FloatingActionButton>(R.id.importAudio).performClick()
             }
             awaitActivity(scenario) { activity ->
-                !MainActivity::class.java.getDeclaredField("audioActionFanExpanded")
+                MainActivity::class.java.getDeclaredField("audioActionFanState")
                     .apply { isAccessible = true }
-                    .getBoolean(activity)
+                    .get(activity)
+                    ?.toString() == "COLLAPSED"
             }
 
             scenario.onActivity { activity ->
@@ -115,6 +116,27 @@ class MainActivityInstrumentedTest {
                     activity.findViewById<FloatingActionButton>(R.id.audioActionsToggle).contentDescription)
                 assertEquals(android.view.View.GONE,
                     activity.findViewById<android.widget.TextView>(R.id.quickCaptureStatus).visibility)
+            }
+        }
+    }
+
+    @Test
+    fun expandingAudioActionFanTransfersInputBeforeThePlusFades() {
+        clearActivityState()
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                activity.findViewById<FloatingActionButton>(R.id.audioActionsToggle).performClick()
+
+                val toggle = activity.findViewById<FloatingActionButton>(R.id.audioActionsToggle)
+                val record = activity.findViewById<FloatingActionButton>(R.id.recordAudio)
+                val import = activity.findViewById<FloatingActionButton>(R.id.importAudio)
+                assertFalse(toggle.isEnabled)
+                assertFalse(toggle.isClickable)
+                assertFalse(toggle.isFocusable)
+                assertTrue(record.isEnabled)
+                assertTrue(record.isClickable)
+                assertTrue(import.isEnabled)
+                assertTrue(import.isClickable)
             }
         }
     }
