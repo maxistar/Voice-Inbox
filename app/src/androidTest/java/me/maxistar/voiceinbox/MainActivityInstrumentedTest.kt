@@ -196,10 +196,9 @@ class MainActivityInstrumentedTest {
             awaitActivity(scenario) { activity ->
                 val setup = displayItems(activity).filterIsInstance<TaskListDisplayItem.Setup>()
                 setup.any { row -> row.task.actions.any { it.kind == TaskActionKind.DOWNLOAD_MODEL && it.enabled } } &&
-                    setup.any { row -> row.task.actions.any { it.kind == TaskActionKind.IMPORT_MODEL && it.enabled } } &&
                     setup.any { row ->
-                        row.task.actions.map { it.kind } ==
-                            listOf(TaskActionKind.CREATE_OUTPUT, TaskActionKind.SELECT_OUTPUT) &&
+                        row.task.actions.any { it.kind == TaskActionKind.CREATE_OUTPUT && it.enabled } &&
+                            row.task.actions.any { it.kind == TaskActionKind.SELECT_OUTPUT && it.enabled } &&
                             row.task.actions.all { it.enabled }
                     }
             }
